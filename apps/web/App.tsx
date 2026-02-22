@@ -76,11 +76,7 @@ const AppRoutes: React.FC = () => {
   };
 
   return (
-    <>
-      <div className="px-4 py-2 text-xs font-mono text-slate-600 bg-yellow-50 border-b border-yellow-200">
-        APP BOOT OK ¡ª PATH: {window.location.pathname}
-      </div>
-      <Routes>
+    <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginView onLogin={handleLogin} />} />
         <Route
@@ -119,7 +115,6 @@ const AppRoutes: React.FC = () => {
                   onClose={() => setIsProfileModalOpen(false)}
                 />
               )}
-            </>
           }
         />
         <Route
