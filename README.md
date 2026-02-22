@@ -2,21 +2,28 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Monorepo Setup
 
-This contains everything you need to run your app locally.
+This repository uses npm as the package manager.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1DB89C85q7x860gCHV0Rw1wFFK9c2njNK
+## Frontend
 
-## Run Locally
+```bash
+cd apps/web
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+## Backend (placeholder)
 
+```bash
+cd apps/api
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `cd apps/web`
-   `npm install`
-2. Set the `GEMINI_API_KEY` in `apps/web/.env.local` to your Gemini API key
-3. Run the app:
-   `cd apps/web`
-   `npm run dev`
+## Database (placeholder)
+
+```bash
+docker compose up -d
+```
