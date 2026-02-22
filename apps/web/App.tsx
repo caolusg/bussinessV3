@@ -77,98 +77,98 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginView onLogin={handleLogin} />} />
-        <Route
-          path="/profile"
-          element={
-            <ProfileSetup
-              initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
-              onComplete={handleProfileComplete}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<LoginView onLogin={handleLogin} />} />
+      <Route
+        path="/profile"
+        element={
+          <ProfileSetup
+            initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
+            onComplete={handleProfileComplete}
+          />
+        }
+      />
+      <Route
+        path="/teacher"
+        element={
+          <TeacherDashboard
+            user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
+            onLogout={handleLogout}
+          />
+        }
+      />
+      <Route
+        path="/simulation"
+        element={
+          <>
+            <SimulationInterface
+              task={currentTaskDetail}
+              onExit={handleExitSimulation}
+              onTriggerCoaching={handleTriggerCoaching}
+              onTriggerGroupDiscussion={handleTriggerGroupDiscussion}
             />
-          }
-        />
-        <Route
-          path="/teacher"
-          element={
-            <TeacherDashboard
-              user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
+            {isProfileModalOpen && currentUser && (
+              <ProfileSetup
+                initialProfile={currentUser}
+                onComplete={handleProfileComplete}
+                isModal
+                onClose={() => setIsProfileModalOpen(false)}
+              />
+            )}
+          </>
+        }
+      />
+      <Route
+        path="/coach"
+        element={
+          <CoachingReview
+            onClose={() => navigate('/dashboard')}
+            onRetry={handleRetryFromOverlay}
+            onBackToResources={handleBackToResources}
+          />
+        }
+      />
+      <Route
+        path="/discussion"
+        element={
+          <GroupDiscussionRoom
+            onClose={() => navigate('/dashboard')}
+            onRetry={handleRetryFromOverlay}
+            onGoToCoaching={handleGoToCoachingFromDiscussion}
+          />
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+            <TopBar
+              user={currentUser ?? buildDefaultUser(role ?? UserRole.STUDENT)}
               onLogout={handleLogout}
+              onManageProfile={() => navigate('/profile')}
             />
-          }
-        />
-        <Route
-          path="/simulation"
-          element={
-            <>
-              <SimulationInterface
-                task={currentTaskDetail}
-                onExit={handleExitSimulation}
-                onTriggerCoaching={handleTriggerCoaching}
-                onTriggerGroupDiscussion={handleTriggerGroupDiscussion}
-              />
-              {isProfileModalOpen && currentUser && (
-                <ProfileSetup
-                  initialProfile={currentUser}
-                  onComplete={handleProfileComplete}
-                  isModal
-                  onClose={() => setIsProfileModalOpen(false)}
-                />
-              )}
-          }
-        />
-        <Route
-          path="/coach"
-          element={
-            <CoachingReview
-              onClose={() => navigate('/dashboard')}
-              onRetry={handleRetryFromOverlay}
-              onBackToResources={handleBackToResources}
-            />
-          }
-        />
-        <Route
-          path="/discussion"
-          element={
-            <GroupDiscussionRoom
-              onClose={() => navigate('/dashboard')}
-              onRetry={handleRetryFromOverlay}
-              onGoToCoaching={handleGoToCoachingFromDiscussion}
-            />
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-              <TopBar
-                user={currentUser ?? buildDefaultUser(role ?? UserRole.STUDENT)}
-                onLogout={handleLogout}
-                onManageProfile={() => navigate('/profile')}
-              />
-              <div className="flex pt-16">
-                <Sidebar onResourceSelect={handleResourceClick} />
-                <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
-                  <div className="max-w-6xl mx-auto space-y-6">
-                    <WorkflowMap
-                      currentStageId={selectedStageId}
-                      onStageSelect={setSelectedStageId}
-                    />
-                    <TaskCard
-                      data={currentTaskDetail}
-                      onStartSimulation={handleStartSimulation}
-                      onViewCoaching={handleTriggerCoaching}
-                      onNextStage={handleNextStage}
-                    />
-                  </div>
-                </main>
-              </div>
+            <div className="flex pt-16">
+              <Sidebar onResourceSelect={handleResourceClick} />
+              <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
+                <div className="max-w-6xl mx-auto space-y-6">
+                  <WorkflowMap
+                    currentStageId={selectedStageId}
+                    onStageSelect={setSelectedStageId}
+                  />
+                  <TaskCard
+                    data={currentTaskDetail}
+                    onStartSimulation={handleStartSimulation}
+                    onViewCoaching={handleTriggerCoaching}
+                    onNextStage={handleNextStage}
+                  />
+                </div>
+              </main>
             </div>
-          }
-        />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </>
+          </div>
+        }
+      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 };
 
