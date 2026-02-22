@@ -27,3 +27,27 @@ npm run dev
 ```bash
 docker compose up -d
 ```
+
+## API (apps/api)
+
+Install:
+
+```bash
+cd apps/api
+npm install
+```
+
+Dev server:
+
+```bash
+cd apps/api
+npm run dev
+```
+
+Default port: `8000`
+
+Health check:
+
+```bash
+curl http://localhost:8000/api/health
+```
