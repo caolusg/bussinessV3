@@ -37,7 +37,7 @@ cd apps/api
 npm install
 ```
 
-Dev server:
+Dev server (run inside `apps/api`):
 
 ```bash
 cd apps/api
