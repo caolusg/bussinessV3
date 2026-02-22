@@ -12,5 +12,15 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  api:
+    build: ./apps/api
+    environment:
+      PORT: 8000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bcai?schema=public
+    ports:
+      - '8000:8000'
+    depends_on:
+      - postgres
+
 volumes:
   pgdata:
