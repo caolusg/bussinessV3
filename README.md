@@ -81,15 +81,15 @@ curl http://localhost:8000/api/health/db
 Auth quick check:
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/register ^
+curl -X POST http://localhost:8000/api/auth/student/register_or_login ^
   -H "Content-Type: application/json" ^
-  -d "{\"email\":\"student@example.com\",\"password\":\"password123\",\"role\":\"student\"}"
+  -d "{\"username\":\"student001\",\"password\":\"password123\",\"confirmPassword\":\"password123\",\"mode\":\"register\"}"
 
-curl -X POST http://localhost:8000/api/auth/login ^
+curl -X POST http://localhost:8000/api/auth/student/register_or_login ^
   -H "Content-Type: application/json" ^
-  -d "{\"email\":\"student@example.com\",\"password\":\"password123\"}"
+  -d "{\"username\":\"student001\",\"password\":\"password123\",\"mode\":\"login\"}"
 
-curl http://localhost:8000/api/me ^
+curl http://localhost:8000/api/auth/me ^
   -H "Authorization: Bearer <token>"
 ```
 

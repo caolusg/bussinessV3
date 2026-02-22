@@ -4,7 +4,8 @@ import { Stage, StageStatus, UserProfile, TaskDetail, TaskMode, OpponentProfile,
 // Added missing required property 'username' to match UserProfile interface
 export const USER_PROFILE: UserProfile = {
   username: "zhangming",
-  name: "张明",
+  realName: "张明",
+  studentNo: "S0001",
   role: "销售",
   company: "ABC进出口公司",
   avatarUrl: "https://picsum.photos/id/64/100/100"
@@ -176,3 +177,4 @@ export const SCENARIO_DB: Record<number, TaskDetail> = {
     feedbackOrTipContent: "",
   }
 };
+

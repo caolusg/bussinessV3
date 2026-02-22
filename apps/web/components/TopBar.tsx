@@ -40,7 +40,7 @@ const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onManageProfile }) => {
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1 group-hover:text-blue-600">
-              {user.name} ({user.role})
+              {user.realName} ({user.role})
             </span>
             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
               {user.company || '系统模拟账户'}

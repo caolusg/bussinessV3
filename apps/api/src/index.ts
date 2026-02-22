@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import { prisma } from './prisma';
-import authRouter from './routes/auth';
-import { requireAuth } from './middleware/requireAuth';
+import { prisma } from './lib/prisma.js';
+import authRouter from './routes/auth.js';
+import profileRouter from './routes/profile.js';
 
 const app = express();
 
@@ -28,30 +28,8 @@ app.get('/api/health/db', async (_req, res) => {
   }
 });
 
-app.use('/api/auth', authRouter);
-
-app.get('/api/me', requireAuth, async (req, res) => {
-  const userId = req.user?.id;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      createdAt: true
-    }
-  });
-
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  return res.status(200).json(user);
-});
+app.use(authRouter);
+app.use(profileRouter);
 
 const port = Number(process.env.PORT ?? 8000);
 
