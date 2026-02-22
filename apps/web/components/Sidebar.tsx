@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+ï»¿import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Home, BookOpen, ChevronDown, ChevronRight, FileText, Globe, MessageSquare } from 'lucide-react';
 import { STAGES } from '../constants';
@@ -24,14 +24,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
           className="flex items-center gap-3 bg-blue-700/20 text-blue-400 px-4 py-3 rounded-lg cursor-pointer border border-blue-700/30 transition-all hover:bg-blue-700/30"
         >
           <Home size={20} />
-          <span className="font-medium text-sm">¹¤×÷Ì¨ / Ê×Ò³</span>
+          <span className="font-medium text-sm">å·¥ä½œå° / é¦–é¡µ</span>
         </Link>
       </div>
 
       {/* Resource Library Header */}
       <div className="px-6 py-4 flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider">
         <BookOpen size={14} />
-        <span>Ñ§Ï°×ÊÔ´¿â</span>
+        <span>å­¦ä¹ èµ„æºåº“</span>
       </div>
 
       {/* Accordion Menu */}
