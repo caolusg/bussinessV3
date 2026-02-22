@@ -51,3 +51,42 @@ Health check:
 ```bash
 curl http://localhost:8000/api/health
 ```
+
+Database setup:
+
+```bash
+docker compose up -d
+```
+
+Environment:
+
+```bash
+cd apps/api
+cp .env.example .env
+```
+
+Migrate:
+
+```bash
+cd apps/api
+npm run prisma:migrate -- --name init
+```
+
+DB health check:
+
+```bash
+curl http://localhost:8000/api/health/db
+```
+
+Docker (postgres + api):
+
+```bash
+docker compose up -d --build
+```
+
+Verify:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/api/health/db
+```

@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bcai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: ./apps/api
+    environment:
+      PORT: 8000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bcai?schema=public
+    ports:
+      - '8000:8000'
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
