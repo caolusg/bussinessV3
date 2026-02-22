@@ -78,6 +78,21 @@ DB health check:
 curl http://localhost:8000/api/health/db
 ```
 
+Auth quick check:
+
+```bash
+curl -X POST http://localhost:8000/api/auth/register ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"student@example.com\",\"password\":\"password123\",\"role\":\"student\"}"
+
+curl -X POST http://localhost:8000/api/auth/login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"student@example.com\",\"password\":\"password123\"}"
+
+curl http://localhost:8000/api/me ^
+  -H "Authorization: Bearer <token>"
+```
+
 Docker (postgres + api):
 
 ```bash
