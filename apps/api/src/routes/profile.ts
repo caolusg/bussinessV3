@@ -26,7 +26,7 @@ const getRoles = async (userId: string) => {
   return roles.map((r) => r.role.key);
 };
 
-router.get('/api/profile/student', requireAuth, async (req, res) => {
+router.get('/student', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -60,7 +60,7 @@ router.get('/api/profile/student', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/api/profile/student', requireAuth, async (req, res) => {
+router.post('/student', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {

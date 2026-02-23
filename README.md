@@ -46,10 +46,17 @@ npm run dev
 
 Default port: `8000`
 
+If you see `EADDRINUSE` (port 8000 in use) on Windows:
+
+```bash
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+```
+
 Health check:
 
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8000/health
 ```
 
 Database setup:
@@ -75,7 +82,7 @@ npm run prisma:migrate -- --name init
 DB health check:
 
 ```bash
-curl http://localhost:8000/api/health/db
+curl http://localhost:8000/health/db
 ```
 
 Auth quick check:
