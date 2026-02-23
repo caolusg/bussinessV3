@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Send, Bot, FileText, User, HelpCircle, Check, Lock, ChevronRight, Mic, Users } from 'lucide-react';
 import { TaskDetail, TaskMode, StageStatus, ChatMessage } from '../types';
 import { STAGES, OPPONENT_PROFILE, INITIAL_CHAT_MESSAGES } from '../constants';
@@ -11,35 +11,171 @@ interface SimulationInterfaceProps {
 }
 
 const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit, onTriggerCoaching, onTriggerGroupDiscussion }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [coachNote, setCoachNote] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const isFirstAttempt = task.attemptCount <= 1 && task.mode !== TaskMode.COMPLETED;
-  
-  // Auto-scroll to bottom
+  const sessionKey = 'simulation:quotation:sessionId';
+
+  const toChatMessage = (msg: {
+    id: string;
+    role: string;
+    content: string;
+    coachNote?: string | null;
+    turnIndex: number;
+    createdAt: string | Date;
+  }): ChatMessage => {
+    const sender = msg.role === 'user' ? 'USER' : msg.role === 'system' ? 'SYSTEM' : 'OPPONENT';
+    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return {
+      id: msg.id,
+      sender,
+      text: msg.content,
+      timestamp: time,
+      turnIndex: msg.turnIndex,
+      coachNote: msg.coachNote ?? undefined
+    };
+  };
+
+  const apiFetch = async <T,>(path: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('access_token');
+    const res = await fetch(path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers ?? {})
+      }
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = data?.error ?? data?.message ?? res.statusText ?? 'Request failed';
+      throw new Error(message);
+    }
+    if (data && typeof data === 'object' && 'ok' in data) {
+      if (data.ok === false) {
+        throw new Error(data.error ?? 'REQUEST_FAILED');
+      }
+      return (data.data ?? null) as T;
+    }
+    return data as T;
+  };
+
+  const loadMessages = async (id: string) => {
+    const result = await apiFetch<{ messages: Array<{
+      id: string;
+      role: string;
+      content: string;
+      coachNote?: string | null;
+      turnIndex: number;
+      createdAt: string;
+    }> }>(`/api/simulations/${id}/messages`);
+    const list = result.messages.map(toChatMessage);
+    setMessages(list);
+    const latestCoach = [...result.messages].reverse().find((m) => m.coachNote);
+    if (latestCoach?.coachNote) {
+      setCoachNote(latestCoach.coachNote);
+    }
+  };
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
+  useEffect(() => {
+    let active = true;
+    const init = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const cached = sessionStorage.getItem(sessionKey);
+        if (cached) {
+          try {
+            await loadMessages(cached);
+            if (!active) return;
+            setSessionId(cached);
+            setLoading(false);
+            return;
+          } catch {
+            sessionStorage.removeItem(sessionKey);
+          }
+        }
+
+        const created = await apiFetch<{ sessionId: string }>(`/api/simulations/session`, {
+          method: 'POST',
+          body: JSON.stringify({ stage: 'quotation' })
+        });
+        if (!active) return;
+        sessionStorage.setItem(sessionKey, created.sessionId);
+        setSessionId(created.sessionId);
+        await loadMessages(created.sessionId);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : '加载失败');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    init();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || sending || !sessionId) return;
+
+    const optimisticId = `tmp-${Date.now()}`;
+    const nextTurn = (messages[messages.length - 1]?.turnIndex ?? 0) + 1;
+    const optimistic: ChatMessage = {
+      id: optimisticId,
       sender: 'USER',
       text: inputValue,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      turnIndex: nextTurn
     };
-    
-    setMessages(prev => [...prev, newMsg]);
+
+    setMessages((prev) => [...prev, optimistic]);
     setInputValue('');
+    setSending(true);
+
+    try {
+      const result = await apiFetch<{ userMessage: any; aiMessage: any }>(
+        `/api/simulations/${sessionId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ content: optimistic.text })
+        }
+      );
+      const nextMessages = [
+        ...messages.filter((m) => m.id !== optimisticId),
+        toChatMessage(result.userMessage),
+        toChatMessage(result.aiMessage)
+      ].sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
+      setMessages(nextMessages);
+      if (result.aiMessage?.coachNote) {
+        setCoachNote(result.aiMessage.coachNote);
+      }
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      const message = err instanceof Error ? err.message : '发送失败，请稍后再试';
+      setError(message);
+      alert(message);
+    } finally {
+      setSending(false);
+    }
   };
+
+  const displayMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
-      
-      {/* 1. Simulation Top Bar */}
       <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-50 shadow-sm">
         <div className="flex items-center gap-4">
           <button 
@@ -51,20 +187,18 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
           </button>
           <div className="h-6 w-px bg-gray-200"></div>
           <div className="flex items-center gap-2">
-             <span className="font-bold text-slate-800 text-sm">📍 当前：第 {task.stageId} 环节 【{task.title.split(' ')[0]}】</span>
-             <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
-               第 {Math.max(1, task.attemptCount)}/{task.maxAttempts} 次尝试
-             </span>
+            <span className="font-bold text-slate-800 text-sm">当前：第 {task.stageId} 环节「{task.title.split(' ')[0]}」</span>
+            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
+              第 {Math.max(1, task.attemptCount)}/{task.maxAttempts} 次尝试
+            </span>
           </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        
-        {/* 2. Left Sidebar: Global Navigation */}
         <aside className="w-60 bg-white border-r border-gray-200 flex flex-col hidden md:flex shrink-0">
           <div className="p-4 border-b border-gray-100">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">🗺️ 外贸全流程地图</h3>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">全流程地图</h3>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {STAGES.map((stage) => {
@@ -98,10 +232,15 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
           </div>
         </aside>
 
-        {/* 3. Center Column: Chat Area */}
         <main className="flex-1 flex flex-col bg-slate-100/50 relative">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {messages.map((msg) => {
+            {loading && (
+              <div className="text-xs text-slate-400">加载中...</div>
+            )}
+            {error && (
+              <div className="text-xs text-red-500">{error}</div>
+            )}
+            {displayMessages.map((msg) => {
               const isMe = msg.sender === 'USER';
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -150,7 +289,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
                </button>
                <button 
                   onClick={handleSend}
-                  disabled={!inputValue.trim()}
+                  disabled={!inputValue.trim() || sending}
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200 transition-all transform active:scale-95"
                >
                   <Send size={18} />
@@ -159,23 +298,21 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
           </div>
         </main>
 
-        {/* 4. Right Sidebar: Dynamic Panel */}
         <aside className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto">
-           
-           {!isFirstAttempt && (
+           {(coachNote || !isFirstAttempt) && (
              <div className="p-5 border-b border-gray-100 bg-amber-50/40">
                 <div className="flex items-center gap-2 mb-3 text-amber-700 font-bold text-sm">
                    <Bot size={18} />
                    <h3>AI 教练复盘</h3>
                 </div>
                 <div className="bg-white border border-amber-200 rounded-lg p-3 shadow-sm text-xs text-slate-700 leading-5">
-                  "{task.feedbackOrTipContent}"
+                  "{coachNote ?? task.feedbackOrTipContent}"
                 </div>
              </div>
            )}
 
            <div className="p-5 border-b border-gray-100">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">🧑‍💼 对手信息</h3>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">对手信息</h3>
               <div className="flex items-center gap-3">
                  <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
                     {OPPONENT_PROFILE.avatarInitials}
@@ -188,7 +325,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
            </div>
 
            <div className="p-5 flex-1">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">📋 任务目标</h3>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">任务目标</h3>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm font-medium text-blue-900 leading-6">
                  {isFirstAttempt 
                    ? "任务目标：想办法让客户接受你的报价，不限手段。"
@@ -197,9 +334,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
               </div>
 
               <div className="mt-8 space-y-3">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">🆘 支援工具箱</h3>
+                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">支持工具箱</h3>
                  
-                 {/* Discussion Room Trigger */}
                  {!isFirstAttempt && (
                     <button 
                       onClick={onTriggerGroupDiscussion}

@@ -54,12 +54,62 @@ const AppRoutes: React.FC = () => {
 
     const data = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(data?.error ?? res.statusText);
+      const rawMessage = data?.error ?? data?.message ?? res.statusText ?? '';
+      let message =
+        typeof rawMessage === 'string' && rawMessage.trim().length > 0
+          ? rawMessage
+          : '\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
+      if (res.status === 401) {
+        message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
+      }
+      switch (message) {
+        case 'UNAUTHORIZED':
+        case 'INVALID_CREDENTIALS':
+        case 'Unauthorized':
+        case 'USER_NOT_FOUND':
+        case 'User not found':
+          message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
+          break;
+        case 'USERNAME_TAKEN':
+        case 'Username already exists':
+          message = '\u7528\u6237\u540d\u5df2\u5b58\u5728';
+          break;
+        default:
+          break;
+      }
+      const error = new Error(message) as Error & { status?: number };
+      error.status = res.status;
+      throw error;
     }
 
     if (data && typeof data === 'object' && 'ok' in data) {
       if (data.ok === false) {
-        throw new Error(data.error ?? 'REQUEST_FAILED');
+        const rawMessage = data?.error ?? data?.message ?? '';
+        let message =
+          typeof rawMessage === 'string' && rawMessage.trim().length > 0
+            ? rawMessage
+            : '\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
+        if (res.status === 401) {
+          message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
+        }
+        switch (message) {
+          case 'UNAUTHORIZED':
+          case 'INVALID_CREDENTIALS':
+          case 'Unauthorized':
+          case 'USER_NOT_FOUND':
+          case 'User not found':
+            message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
+            break;
+          case 'USERNAME_TAKEN':
+          case 'Username already exists':
+            message = '\u7528\u6237\u540d\u5df2\u5b58\u5728';
+            break;
+          default:
+            break;
+        }
+        const error = new Error(message) as Error & { status?: number };
+        error.status = res.status;
+        throw error;
       }
       return (data.data ?? null) as T;
     }
@@ -73,10 +123,16 @@ const AppRoutes: React.FC = () => {
       | { username: string; password: string; mode: 'login' | 'register'; confirmPassword?: string }
       | { username: string; password: string }
   ) => {
-    const endpoint =
-      selectedRole === UserRole.TEACHER
-        ? '/api/auth/teacher/login'
-        : '/api/auth/student/register_or_login';
+    let endpoint: string;
+    if (selectedRole === UserRole.TEACHER) {
+      endpoint = '/api/auth/teacher/login';
+    } else {
+      const mode = (payload as { mode?: 'login' | 'register' }).mode;
+      endpoint =
+        mode === 'register'
+          ? '/api/auth/student/register'
+          : '/api/auth/student/login';
+    }
 
     const tokenResult = await apiFetch<{ token: string }>(endpoint, {
       method: 'POST',

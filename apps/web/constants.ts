@@ -102,43 +102,43 @@ export const STAGES: Stage[] = [
     id: 2,
     title: "报价 (Quotation)",
     status: StageStatus.ACTIVE,
-    subResources: [{id: 'v2', title: '报价策略词汇'}, {id: 's2', title: 'FOB/CIF句式'}, {id: 'k2', title: '价格构成解析'}]
+    subResources: [{id: 'v2', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's2', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k2', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 3,
     title: "磋商 (Negotiation)",
     status: StageStatus.ACTIVE,
-    subResources: [{id: 'v3', title: '商务词汇'}, {id: 's3', title: '常用句式'}, {id: 'k3', title: '外贸常识'}]
+    subResources: [{id: 'v3', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's3', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k3', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 4,
     title: "合同 (Contract)",
     status: StageStatus.LOCKED,
-    subResources: [{id: 'v4', title: '商务词汇'}, {id: 's4', title: '常用句式'}, {id: 'k4', title: '外贸常识'}]
+    subResources: [{id: 'v4', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's4', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k4', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 5,
     title: "备货 (Preparation)",
     status: StageStatus.LOCKED,
-    subResources: [{id: 'v5', title: '商务词汇'}, {id: 's5', title: '常用句式'}, {id: 'k5', title: '外贸常识'}]
+    subResources: [{id: 'v5', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's5', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k5', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 6,
     title: "报关 (Customs)",
     status: StageStatus.LOCKED,
-    subResources: [{id: 'v6', title: '商务词汇'}, {id: 's6', title: '常用句式'}, {id: 'k6', title: '外贸常识'}]
+    subResources: [{id: 'v6', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's6', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k6', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 7,
     title: "结算 (Settlement)",
     status: StageStatus.LOCKED,
-    subResources: [{id: 'v7', title: '商务词汇'}, {id: 's7', title: '常用句式'}, {id: 'k7', title: '外贸常识'}]
+    subResources: [{id: 'v7', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's7', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k7', title: '\u5916\u8d38\u5e38\u8bc6'}]
   },
   {
     id: 8,
     title: "售后 (After-sales)",
     status: StageStatus.LOCKED,
-    subResources: [{id: 'v8', title: '商务词汇'}, {id: 's8', title: '常用句式'}, {id: 'k8', title: '外贸常识'}]
+    subResources: [{id: 'v8', title: '\u5546\u52a1\u8bcd\u6c47'}, {id: 's8', title: '\u5e38\u7528\u53e5\u5f0f'}, {id: 'k8', title: '\u5916\u8d38\u5e38\u8bc6'}]
   }
 ];
 

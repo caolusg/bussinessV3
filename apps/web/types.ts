@@ -64,6 +64,8 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   isError?: boolean;
+  turnIndex?: number;
+  coachNote?: string;
 }
 
 export interface OpponentProfile {
