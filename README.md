@@ -100,6 +100,15 @@ curl http://localhost:8000/api/auth/me ^
   -H "Authorization: Bearer <token>"
 ```
 
+Simulation (PR4-1):
+
+```bash
+curl -X POST http://localhost:8000/api/simulations/quotation/message ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer <token>" ^
+  -d "{\"content\":\"你好，我想练习报价\"}"
+```
+
 Docker (postgres + api):
 
 ```bash

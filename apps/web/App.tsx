@@ -10,6 +10,7 @@ import GroupDiscussionRoom from './components/GroupDiscussionRoom';
 import LoginView from './components/LoginView';
 import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
+import RequireAuth from './components/RequireAuth';
 import { SCENARIO_DB } from './constants';
 import { UserRole, UserProfile } from './types';
 
@@ -38,17 +39,23 @@ const AppRoutes: React.FC = () => {
   };
 
   const apiFetch = async <T,>(path: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('access_token');
+    const headers = new Headers(options.headers ?? {});
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
     const res = await fetch(path, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers ?? {})
-      }
+      headers
     });
 
     if (res.status === 401) {
       clearAuth();
-      navigate('/login/student');
+      navigate('/login', { replace: true });
       throw new Error('UNAUTHORIZED');
     }
 
@@ -167,7 +174,7 @@ const AppRoutes: React.FC = () => {
     const token = localStorage.getItem('access_token');
     if (!token) {
       clearAuth();
-      navigate('/login/student');
+      navigate('/login', { replace: true });
       return;
     }
 
@@ -193,9 +200,10 @@ const AppRoutes: React.FC = () => {
   const handleRetryFromOverlay = () => navigate('/simulation');
   const handleBackToResources = () => navigate('/dashboard');
   const handleLogout = () => {
+    clearAuth();
     setCurrentUser(null);
     setRole(null);
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const handleTriggerGroupDiscussion = () => navigate('/discussion');
@@ -211,7 +219,7 @@ const AppRoutes: React.FC = () => {
   };
 
   const handleResourceClick = (title: string) => {
-    alert(`\u6b63\u5728\u6253\u5f00\u5b66\u4e60\u8d44\u6e90\uff1a${title}\\n(\u8d44\u6e90\u5e93\u6a21\u5757\u6b63\u5728\u52a0\u8f7d\u4e2d...)`);
+    alert(`\u6b63\u5728\u6253\u5f00\u5b66\u4e60\u8d44\u6e90\uff1a${title}\n(\u8d44\u6e90\u5e93\u6a21\u5757\u6b63\u5728\u52a0\u8f7d\u4e2d...)`);
   };
 
   return (
@@ -220,94 +228,96 @@ const AppRoutes: React.FC = () => {
       <Route path="/login" element={<Navigate to="/login/student" replace />} />
       <Route path="/login/student" element={<LoginView onLogin={handleLogin} initialRole="student" />} />
       <Route path="/login/teacher" element={<LoginView onLogin={handleLogin} initialRole="teacher" />} />
-      <Route
-        path="/profile"
-        element={
-          <ProfileSetup
-            initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
-            onComplete={handleProfileComplete}
-          />
-        }
-      />
-      <Route
-        path="/teacher"
-        element={
-          <TeacherDashboard
-            user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
-            onLogout={handleLogout}
-          />
-        }
-      />
-      <Route
-        path="/simulation"
-        element={
-          <>
-            <SimulationInterface
-              task={currentTaskDetail}
-              onExit={handleExitSimulation}
-              onTriggerCoaching={handleTriggerCoaching}
-              onTriggerGroupDiscussion={handleTriggerGroupDiscussion}
+      <Route element={<RequireAuth />}>
+        <Route
+          path="/profile"
+          element={
+            <ProfileSetup
+              initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
+              onComplete={handleProfileComplete}
             />
-            {isProfileModalOpen && currentUser && (
-              <ProfileSetup
-                initialProfile={currentUser}
-                onComplete={handleProfileComplete}
-                isModal
-                onClose={() => setIsProfileModalOpen(false)}
-              />
-            )}
-          </>
-        }
-      />
-      <Route
-        path="/coach"
-        element={
-          <CoachingReview
-            onClose={() => navigate('/dashboard')}
-            onRetry={handleRetryFromOverlay}
-            onBackToResources={handleBackToResources}
-          />
-        }
-      />
-      <Route
-        path="/discussion"
-        element={
-          <GroupDiscussionRoom
-            onClose={() => navigate('/dashboard')}
-            onRetry={handleRetryFromOverlay}
-            onGoToCoaching={handleGoToCoachingFromDiscussion}
-          />
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-            <TopBar
-              user={currentUser ?? buildDefaultUser(role ?? UserRole.STUDENT)}
+          }
+        />
+        <Route
+          path="/teacher"
+          element={
+            <TeacherDashboard
+              user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
               onLogout={handleLogout}
-              onManageProfile={() => navigate('/profile')}
             />
-            <div className="flex pt-16">
-              <Sidebar onResourceSelect={handleResourceClick} />
-              <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
-                <div className="max-w-6xl mx-auto space-y-6">
-                  <WorkflowMap
-                    currentStageId={selectedStageId}
-                    onStageSelect={setSelectedStageId}
-                  />
-                  <TaskCard
-                    data={currentTaskDetail}
-                    onStartSimulation={handleStartSimulation}
-                    onViewCoaching={handleTriggerCoaching}
-                    onNextStage={handleNextStage}
-                  />
-                </div>
-              </main>
+          }
+        />
+        <Route
+          path="/simulation"
+          element={
+            <>
+              <SimulationInterface
+                task={currentTaskDetail}
+                onExit={handleExitSimulation}
+                onTriggerCoaching={handleTriggerCoaching}
+                onTriggerGroupDiscussion={handleTriggerGroupDiscussion}
+              />
+              {isProfileModalOpen && currentUser && (
+                <ProfileSetup
+                  initialProfile={currentUser}
+                  onComplete={handleProfileComplete}
+                  isModal
+                  onClose={() => setIsProfileModalOpen(false)}
+                />
+              )}
+            </>
+          }
+        />
+        <Route
+          path="/coach"
+          element={
+            <CoachingReview
+              onClose={() => navigate('/dashboard')}
+              onRetry={handleRetryFromOverlay}
+              onBackToResources={handleBackToResources}
+            />
+          }
+        />
+        <Route
+          path="/discussion"
+          element={
+            <GroupDiscussionRoom
+              onClose={() => navigate('/dashboard')}
+              onRetry={handleRetryFromOverlay}
+              onGoToCoaching={handleGoToCoachingFromDiscussion}
+            />
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+              <TopBar
+                user={currentUser ?? buildDefaultUser(role ?? UserRole.STUDENT)}
+                onLogout={handleLogout}
+                onManageProfile={() => navigate('/profile')}
+              />
+              <div className="flex pt-16">
+                <Sidebar onResourceSelect={handleResourceClick} />
+                <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
+                  <div className="max-w-6xl mx-auto space-y-6">
+                    <WorkflowMap
+                      currentStageId={selectedStageId}
+                      onStageSelect={setSelectedStageId}
+                    />
+                    <TaskCard
+                      data={currentTaskDetail}
+                      onStartSimulation={handleStartSimulation}
+                      onViewCoaching={handleTriggerCoaching}
+                      onNextStage={handleNextStage}
+                    />
+                  </div>
+                </main>
+              </div>
             </div>
-          </div>
-        }
-      />
+          }
+        />
+      </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -320,5 +330,3 @@ const App: React.FC = () => (
 );
 
 export default App;
-
-

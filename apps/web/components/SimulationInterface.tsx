@@ -1,7 +1,8 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Send, Bot, FileText, User, HelpCircle, Check, Lock, ChevronRight, Mic, Users } from 'lucide-react';
 import { TaskDetail, TaskMode, StageStatus, ChatMessage } from '../types';
 import { STAGES, OPPONENT_PROFILE, INITIAL_CHAT_MESSAGES } from '../constants';
+import { apiFetch } from '../utils/apiFetch';
 
 interface SimulationInterfaceProps {
   task: TaskDetail;
@@ -13,14 +14,12 @@ interface SimulationInterfaceProps {
 const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit, onTriggerCoaching, onTriggerGroupDiscussion }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [coachNote, setCoachNote] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentStage, setCurrentStage] = useState<'acquisition' | 'quotation' | 'negotiation' | 'contract' | 'preparation' | 'customs' | 'settlement' | 'after_sales'>('quotation');
   const [attemptNo, setAttemptNo] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const isDev = import.meta.env.DEV;
 
   const isFirstAttempt = attemptNo <= 1 && task.mode !== TaskMode.COMPLETED;
   const stageKeyMap: Record<number, typeof currentStage> = {
@@ -34,7 +33,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     8: 'after_sales'
   };
 
-  const sessionKey = `simulation:${currentStage}:sessionId`;
   const currentStageMeta = STAGES.find((s) => stageKeyMap[s.id] === currentStage) ?? STAGES[1];
 
   const toChatMessage = (msg: {
@@ -45,7 +43,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     turnIndex: number;
     createdAt: string | Date;
   }): ChatMessage => {
-    const sender = msg.role === 'user' ? 'USER' : msg.role === 'system' ? 'SYSTEM' : 'OPPONENT';
+    const sender = msg.role === 'user' || msg.role === 'student' ? 'USER' : msg.role === 'system' ? 'SYSTEM' : 'OPPONENT';
     const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return {
       id: msg.id,
@@ -57,78 +55,25 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     };
   };
 
-  const apiFetch = async <T,>(path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem('access_token');
-    const res = await fetch(path, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers ?? {})
-      }
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const message = data?.error ?? data?.message ?? res.statusText ?? 'Request failed';
-      throw new Error(message);
-    }
-    if (data && typeof data === 'object' && 'ok' in data) {
-      if (data.ok === false) {
-        throw new Error(data.error ?? 'REQUEST_FAILED');
-      }
-      return (data.data ?? null) as T;
-    }
-    return data as T;
-  };
-
-  const loadSession = async (stage: typeof currentStage) => {
-    const result = await apiFetch<{ session: { id: string; attemptNo: number }; messages: Array<{
-      id: string;
-      role: string;
-      content: string;
-      coachNote?: string | null;
-      turnIndex: number;
-      createdAt: string;
-    }> }>(`/api/simulations/session?stage=${stage}`);
-    setSessionId(result.session.id);
-    setAttemptNo(result.session.attemptNo ?? 1);
-    sessionStorage.setItem(`simulation:${stage}:sessionId`, result.session.id);
-    const list = result.messages.map(toChatMessage);
-    setMessages(list);
-    const latestCoach = [...result.messages].reverse().find((m) => m.coachNote);
-    if (latestCoach?.coachNote) {
-      setCoachNote(latestCoach.coachNote);
-    } else {
-      setCoachNote(null);
-    }
-  };
-
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    let active = true;
-    const init = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        await loadSession(currentStage);
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : '加载失败');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    init();
-    return () => {
-      active = false;
-    };
-  }, [currentStage]);
-
   const handleSend = async () => {
-    if (!inputValue.trim() || sending || !sessionId) return;
+    if (!inputValue.trim() || sending) return;
+
+    const token = localStorage.getItem('access_token');
+
+    if (isDev) {
+      console.log('[auth] localStorage keys', Object.keys(localStorage));
+      console.log('[auth] token length', token?.length);
+    }
+
+    if (!token) {
+      console.warn('[auth] token missing');
+      alert('未登录，请先登录');
+      return;
+    }
 
     const optimisticId = `tmp-${Date.now()}`;
     const nextTurn = (messages[messages.length - 1]?.turnIndex ?? 0) + 1;
@@ -145,26 +90,34 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     setSending(true);
 
     try {
-      const result = await apiFetch<{ userMessage: any; aiMessage: any }>(
-        `/api/simulations/message`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ sessionId, content: optimistic.text })
-        }
-      );
+      const url = `/api/simulations/${currentStage}/message`;
+      const { res, data, text } = await apiFetch<{ messages?: any[]; attemptNo?: number }>(url, {
+        method: 'POST',
+        body: JSON.stringify({ content: optimistic.text })
+      });
+
+      if (!res.ok) {
+        console.error('Simulation send failed', { url, status: res.status, body: text });
+        alert('发送失败，请查看控制台/Network');
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        return;
+      }
+
+      if (data?.attemptNo) setAttemptNo(data.attemptNo);
+      const returned = Array.isArray(data?.messages) ? data?.messages : [];
       const nextMessages = [
         ...messages.filter((m) => m.id !== optimisticId),
-        toChatMessage(result.userMessage),
-        toChatMessage(result.aiMessage)
+        ...returned.map(toChatMessage)
       ].sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
       setMessages(nextMessages);
-      if (result.aiMessage?.coachNote) {
-        setCoachNote(result.aiMessage.coachNote);
+      const latestCoach = [...returned].reverse().find((m: any) => m.role === 'coach');
+      if (latestCoach?.coachNote) {
+        setCoachNote(latestCoach.coachNote);
       }
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       const message = err instanceof Error ? err.message : '发送失败，请稍后再试';
-      setError(message);
+      console.error('Simulation send error', err);
       alert(message);
     } finally {
       setSending(false);
@@ -219,7 +172,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
                           setCurrentStage(key);
                           setMessages([]);
                           setCoachNote(null);
-                          setSessionId(null);
                         }
                       }}
                     >
@@ -248,12 +200,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
 
         <main className="flex-1 flex flex-col bg-slate-100/50 relative">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {loading && (
-              <div className="text-xs text-slate-400">加载中...</div>
-            )}
-            {error && (
-              <div className="text-xs text-red-500">{error}</div>
-            )}
             {displayMessages.map((msg) => {
               const isMe = msg.sender === 'USER';
               return (
