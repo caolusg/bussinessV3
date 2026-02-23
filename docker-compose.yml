@@ -16,7 +16,7 @@ services:
     build: ./apps/api
     environment:
       PORT: 8000
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/bussinessv3?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bcai?schema=public
     ports:
       - '8000:8000'
     depends_on:

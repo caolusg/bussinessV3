@@ -1,18 +1,31 @@
+﻿import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { prisma } from './lib/prisma.js';
-import authRouter from './routes/auth.js';
-import profileRouter from './routes/profile.js';
+import { prisma } from './prisma.js';
+import authRoutes from './routes/auth.js';
+import profileRoutes from './routes/profile.js';
 
 const app = express();
 
+app.use(express.json({ limit: '1mb' }));
+
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
+]);
+
 app.use(
   cors({
-    origin: 'http://localhost:3000'
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked origin: ${origin}`));
+    },
+    credentials: true
   })
 );
-
-app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -28,11 +41,11 @@ app.get('/api/health/db', async (_req, res) => {
   }
 });
 
-app.use(authRouter);
-app.use(profileRouter);
+app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
 
 const port = Number(process.env.PORT ?? 8000);
 
 app.listen(port, () => {
-  console.log(`API server listening on port ${port}`);
+  console.log(`API listening on http://localhost:${port}`);
 });
