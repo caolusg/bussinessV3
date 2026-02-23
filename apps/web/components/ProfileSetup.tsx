@@ -40,12 +40,24 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
       <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <UserIcon size={12} /> 真实姓名 / 学号
+            <UserIcon size={12} /> 真实姓名
           </label>
           <input 
             type="text" required
-            value={profile.name}
-            onChange={e => setProfile({...profile, name: e.target.value})}
+            value={profile.realName}
+            onChange={e => setProfile({...profile, realName: e.target.value})}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <UserIcon size={12} /> 学号
+          </label>
+          <input 
+            type="text" required
+            value={profile.studentNo}
+            onChange={e => setProfile({...profile, studentNo: e.target.value})}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           />
         </div>
@@ -153,3 +165,4 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
 };
 
 export default ProfileSetup;
+

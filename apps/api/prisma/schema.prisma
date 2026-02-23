@@ -1,5 +1,3 @@
-// Prisma schema for PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,8 +8,91 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
+  id           String         @id @default(uuid()) @db.Uuid
+  username     String         @unique
+  passwordHash String         @map("password_hash")
+  status       String         @default("ACTIVE")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  roles          UserRole[]
+  studentAuth    StudentAuth?
+  studentProfile StudentProfile?
+  conversations  Conversation[]
+
+  @@map("users")
+}
+
+model Role {
+  id   String @id @default(uuid()) @db.Uuid
+  key  String @unique
+  name String
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model StudentAuth {
+  userId   String @id @map("user_id") @db.Uuid
+  idOrName String @map("id_or_name")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_auth")
+}
+
+model StudentProfile {
+  userId       String   @id @map("user_id") @db.Uuid
+  name         String?
+  realName     String?  @map("real_name")
+  studentNo    String?  @map("student_no")
+  nationality  String?
+  age          Int?
+  gender       String?
+  hskLevel     String?  @map("hsk_level")
+  major        String?
+  completedAt  DateTime? @map("completed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profile")
+}
+
+model Conversation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  messages Message[]
+
+  @@index([userId, createdAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  role           String
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
 }

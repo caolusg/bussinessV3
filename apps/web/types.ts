@@ -30,7 +30,8 @@ export interface Stage {
 
 export interface UserProfile {
   username: string;
-  name: string;
+  realName: string;
+  studentNo: string;
   role: string;
   company: string;
   avatarUrl: string;
@@ -40,7 +41,6 @@ export interface UserProfile {
   gender?: string;
   hskLevel?: string;
   major?: string;
-  idNumber?: string;
 }
 
 export interface TaskDetail {

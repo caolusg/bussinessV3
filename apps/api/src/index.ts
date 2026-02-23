@@ -1,7 +1,8 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { prisma } from './prisma';
+import { prisma } from './lib/prisma.js';
+import authRouter from './routes/auth.js';
+import profileRouter from './routes/profile.js';
 
 const app = express();
 
@@ -10,6 +11,8 @@ app.use(
     origin: 'http://localhost:3000'
   })
 );
+
+app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -24,6 +27,9 @@ app.get('/api/health/db', async (_req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+app.use(authRouter);
+app.use(profileRouter);
 
 const port = Number(process.env.PORT ?? 8000);
 
