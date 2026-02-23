@@ -7,16 +7,34 @@ const router = Router();
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
 
+const stageSchema = z.enum([
+  'acquisition',
+  'quotation',
+  'negotiation',
+  'contract',
+  'preparation',
+  'customs',
+  'settlement',
+  'after_sales'
+]);
+
 const sessionSchema = z.object({
-  stage: z.string().min(1),
+  stage: stageSchema,
   attemptNo: z.number().int().positive().optional()
 });
 
 const messageSchema = z.object({
+  sessionId: z.string().uuid(),
   content: z.string().min(1)
 });
 
-const getUserId = (req: { user?: { id?: string } }) => req.user?.id ?? null;
+const getUserId = async (req: { user?: { id?: string }; headers?: Record<string, string> }) => {
+  if (req.user?.id) return req.user.id;
+  const headerId = req.headers?.['x-user-id'];
+  if (headerId) return headerId;
+  const fallback = await prisma.user.findFirst({ select: { id: true } });
+  return fallback?.id ?? null;
+};
 
 const generateMockReply = (content: string) => {
   const text = content.toLowerCase();
@@ -41,14 +59,17 @@ const generateMockReply = (content: string) => {
   };
 };
 
-router.post('/session', async (req, res) => {
+router.get('/session', async (req, res) => {
   try {
-    const parsed = sessionSchema.safeParse(req.body);
+    const parsed = sessionSchema.safeParse({
+      stage: req.query.stage,
+      attemptNo: req.query.attemptNo ? Number(req.query.attemptNo) : undefined
+    });
     if (!parsed.success) {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
     }
 
-    const userId = getUserId(req);
+    const userId = await getUserId(req);
     const stage = parsed.data.stage;
     const attemptNo = parsed.data.attemptNo ?? 1;
 
@@ -61,28 +82,51 @@ router.post('/session', async (req, res) => {
     });
 
     if (existing) {
+      const messages = await prisma.simulationMessage.findMany({
+        where: { sessionId: existing.id },
+        orderBy: { turnIndex: 'asc' }
+      });
       return res.status(200).json(ok({
-        sessionId: existing.id,
-        stage: existing.stage,
-        attemptNo: existing.attemptNo,
-        status: existing.status
+        session: {
+          id: existing.id,
+          userId: existing.userId,
+          stage: existing.stage,
+          attemptNo: existing.attemptNo,
+          status: existing.status,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt
+        },
+        messages
       }));
     }
 
-    const created = await prisma.simulationSession.create({
-      data: {
-        userId,
-        stage,
-        attemptNo,
-        status: 'active'
-      }
+    const created = await prisma.$transaction(async (tx) => {
+      const again = await tx.simulationSession.findFirst({
+        where: { userId, stage, status: 'active' },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (again) return again;
+      return tx.simulationSession.create({
+        data: {
+          userId,
+          stage,
+          attemptNo,
+          status: 'active'
+        }
+      });
     });
 
     return res.status(200).json(ok({
-      sessionId: created.id,
-      stage: created.stage,
-      attemptNo: created.attemptNo,
-      status: created.status
+      session: {
+        id: created.id,
+        userId: created.userId,
+        stage: created.stage,
+        attemptNo: created.attemptNo,
+        status: created.status,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt
+      },
+      messages: []
     }));
   } catch (error) {
     console.error('Create session failed:', error);
@@ -90,31 +134,31 @@ router.post('/session', async (req, res) => {
   }
 });
 
-router.get('/:sessionId/messages', async (req, res) => {
-  try {
-    const sessionId = req.params.sessionId;
-    const messages = await prisma.simulationMessage.findMany({
-      where: { sessionId },
-      orderBy: { turnIndex: 'asc' }
-    });
-    return res.status(200).json(ok({ messages }));
-  } catch (error) {
-    console.error('Get messages failed:', error);
-    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
-  }
-});
-
-router.post('/:sessionId/messages', async (req, res) => {
+router.post('/message', async (req, res) => {
   try {
     const parsed = messageSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
     }
 
-    const sessionId = req.params.sessionId;
+    const sessionId = parsed.data.sessionId;
     const session = await prisma.simulationSession.findUnique({ where: { id: sessionId } });
     if (!session) {
       return res.status(404).json(fail('NOT_FOUND', 'Session not found'));
+    }
+
+    const recent = await prisma.simulationMessage.findFirst({
+      where: { sessionId, role: 'user' },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (recent && recent.content === parsed.data.content) {
+      const lastTwo = await prisma.simulationMessage.findMany({
+        where: { sessionId, turnIndex: { gte: recent.turnIndex } },
+        orderBy: { turnIndex: 'asc' }
+      });
+      const userMessage = lastTwo.find((m) => m.role === 'user') ?? recent;
+      const aiMessage = lastTwo.find((m) => m.role === 'ai') ?? null;
+      return res.status(200).json(ok({ userMessage, aiMessage }));
     }
 
     const maxTurn = await prisma.simulationMessage.aggregate({
@@ -123,24 +167,27 @@ router.post('/:sessionId/messages', async (req, res) => {
     });
     const nextTurn = (maxTurn._max.turnIndex ?? 0) + 1;
 
-    const userMessage = await prisma.simulationMessage.create({
-      data: {
-        sessionId,
-        role: 'user',
-        content: parsed.data.content,
-        turnIndex: nextTurn
-      }
-    });
-
     const mock = generateMockReply(parsed.data.content);
-    const aiMessage = await prisma.simulationMessage.create({
-      data: {
-        sessionId,
-        role: 'ai',
-        content: mock.content,
-        coachNote: mock.coachNote,
-        turnIndex: nextTurn + 1
-      }
+
+    const [userMessage, aiMessage] = await prisma.$transaction(async (tx) => {
+      const user = await tx.simulationMessage.create({
+        data: {
+          sessionId,
+          role: 'user',
+          content: parsed.data.content,
+          turnIndex: nextTurn
+        }
+      });
+      const ai = await tx.simulationMessage.create({
+        data: {
+          sessionId,
+          role: 'ai',
+          content: mock.content,
+          coachNote: mock.coachNote,
+          turnIndex: nextTurn + 1
+        }
+      });
+      return [user, ai];
     });
 
     return res.status(200).json(ok({ userMessage, aiMessage }));

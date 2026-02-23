@@ -18,10 +18,24 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
   const [coachNote, setCoachNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentStage, setCurrentStage] = useState<'acquisition' | 'quotation' | 'negotiation' | 'contract' | 'preparation' | 'customs' | 'settlement' | 'after_sales'>('quotation');
+  const [attemptNo, setAttemptNo] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const isFirstAttempt = task.attemptCount <= 1 && task.mode !== TaskMode.COMPLETED;
-  const sessionKey = 'simulation:quotation:sessionId';
+  const isFirstAttempt = attemptNo <= 1 && task.mode !== TaskMode.COMPLETED;
+  const stageKeyMap: Record<number, typeof currentStage> = {
+    1: 'acquisition',
+    2: 'quotation',
+    3: 'negotiation',
+    4: 'contract',
+    5: 'preparation',
+    6: 'customs',
+    7: 'settlement',
+    8: 'after_sales'
+  };
+
+  const sessionKey = `simulation:${currentStage}:sessionId`;
+  const currentStageMeta = STAGES.find((s) => stageKeyMap[s.id] === currentStage) ?? STAGES[1];
 
   const toChatMessage = (msg: {
     id: string;
@@ -67,20 +81,25 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     return data as T;
   };
 
-  const loadMessages = async (id: string) => {
-    const result = await apiFetch<{ messages: Array<{
+  const loadSession = async (stage: typeof currentStage) => {
+    const result = await apiFetch<{ session: { id: string; attemptNo: number }; messages: Array<{
       id: string;
       role: string;
       content: string;
       coachNote?: string | null;
       turnIndex: number;
       createdAt: string;
-    }> }>(`/api/simulations/${id}/messages`);
+    }> }>(`/api/simulations/session?stage=${stage}`);
+    setSessionId(result.session.id);
+    setAttemptNo(result.session.attemptNo ?? 1);
+    sessionStorage.setItem(`simulation:${stage}:sessionId`, result.session.id);
     const list = result.messages.map(toChatMessage);
     setMessages(list);
     const latestCoach = [...result.messages].reverse().find((m) => m.coachNote);
     if (latestCoach?.coachNote) {
       setCoachNote(latestCoach.coachNote);
+    } else {
+      setCoachNote(null);
     }
   };
 
@@ -94,27 +113,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
       setLoading(true);
       setError(null);
       try {
-        const cached = sessionStorage.getItem(sessionKey);
-        if (cached) {
-          try {
-            await loadMessages(cached);
-            if (!active) return;
-            setSessionId(cached);
-            setLoading(false);
-            return;
-          } catch {
-            sessionStorage.removeItem(sessionKey);
-          }
-        }
-
-        const created = await apiFetch<{ sessionId: string }>(`/api/simulations/session`, {
-          method: 'POST',
-          body: JSON.stringify({ stage: 'quotation' })
-        });
-        if (!active) return;
-        sessionStorage.setItem(sessionKey, created.sessionId);
-        setSessionId(created.sessionId);
-        await loadMessages(created.sessionId);
+        await loadSession(currentStage);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : '加载失败');
@@ -126,7 +125,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentStage]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || sending || !sessionId) return;
@@ -147,10 +146,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
 
     try {
       const result = await apiFetch<{ userMessage: any; aiMessage: any }>(
-        `/api/simulations/${sessionId}/messages`,
+        `/api/simulations/message`,
         {
           method: 'POST',
-          body: JSON.stringify({ content: optimistic.text })
+          body: JSON.stringify({ sessionId, content: optimistic.text })
         }
       );
       const nextMessages = [
@@ -187,9 +186,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
           </button>
           <div className="h-6 w-px bg-gray-200"></div>
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800 text-sm">当前：第 {task.stageId} 环节「{task.title.split(' ')[0]}」</span>
+            <span className="font-bold text-slate-800 text-sm">当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」</span>
             <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
-              第 {Math.max(1, task.attemptCount)}/{task.maxAttempts} 次尝试
+              第 {Math.max(1, attemptNo)}/{task.maxAttempts} 次尝试
             </span>
           </div>
         </div>
@@ -202,14 +201,28 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {STAGES.map((stage) => {
-               const isActive = stage.id === task.stageId;
+               const isActive = stageKeyMap[stage.id] === currentStage;
                const isCompleted = stage.status === StageStatus.COMPLETED;
                const isLocked = stage.status === StageStatus.LOCKED;
 
                return (
-                 <div key={stage.id} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${
+                 <div
+                   key={stage.id}
+                   className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors cursor-pointer ${
                     isActive ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50'
                  }`}>
+                    <button
+                      className="flex items-center gap-3 w-full text-left"
+                      onClick={() => {
+                        const key = stageKeyMap[stage.id];
+                        if (key && key !== currentStage) {
+                          setCurrentStage(key);
+                          setMessages([]);
+                          setCoachNote(null);
+                          setSessionId(null);
+                        }
+                      }}
+                    >
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-[10px] shrink-0 ${
                       isCompleted ? 'bg-green-500 border-green-500 text-white' :
                       isActive ? 'bg-white border-blue-500 text-blue-600 font-bold' :
@@ -226,6 +239,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
                       <span className="text-[10px] text-gray-400 truncate">{stage.title.split('(')[1]?.replace(')', '')}</span>
                     </div>
                     {isActive && <div className="ml-auto w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+                    </button>
                  </div>
                );
             })}
