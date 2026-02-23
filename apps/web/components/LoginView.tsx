@@ -31,7 +31,29 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     setError(null);
   }, [initialRole]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const clearError = () => {
+    if (error) {
+      setError(null);
+    }
+  };
+
+  const normalizeErrorMessage = (raw: string) => {
+    switch (raw) {
+      case 'UNAUTHORIZED':
+      case 'Unauthorized':
+      case 'INVALID_CREDENTIALS':
+      case 'USER_NOT_FOUND':
+      case 'User not found':
+        return '用户名或密码错误';
+      case 'USERNAME_TAKEN':
+      case 'Username already exists':
+        return '用户名已存在';
+      default:
+        return raw;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (activeTab === UserRole.STUDENT && studentMode === 'register') {
       if (formData.password !== formData.confirmPassword) {
@@ -50,9 +72,17 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           }
         : {})
     };
-    onLogin(activeTab, payload).catch((error) => {
-      console.error('Login failed:', error);
-    });
+    try {
+      await onLogin(activeTab, payload);
+      setError(null);
+    } catch (error) {
+      let message = error instanceof Error ? error.message : '';
+      message = normalizeErrorMessage(message);
+      if (!message || !message.trim()) {
+        message = '登录失败，请稍后再试';
+      }
+      setError(message);
+    }
   };
 
   return (
@@ -132,7 +162,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 type="text"
                 required
                 value={formData.username}
-                onChange={e => setFormData({ ...formData, username: e.target.value })}
+                onChange={e => {
+                  clearError();
+                  setFormData({ ...formData, username: e.target.value });
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
                 placeholder="请输入用户名"
               />
@@ -147,7 +180,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 required
                 minLength={6}
                 value={formData.password}
-                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                onChange={e => {
+                  clearError();
+                  setFormData({ ...formData, password: e.target.value });
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
                 placeholder="至少六位，字母数字组合"
               />
@@ -163,7 +199,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   required
                   minLength={6}
                   value={formData.confirmPassword}
-                  onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  onChange={e => {
+                    clearError();
+                    setFormData({ ...formData, confirmPassword: e.target.value });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
                   placeholder="请再次输入密码"
                 />

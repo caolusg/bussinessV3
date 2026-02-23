@@ -7,6 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SimulationStage {
+  acquisition
+  quotation
+  negotiation
+  contract
+  preparation
+  customs
+  settlement
+  after_sales
+}
+
 model User {
   id           String         @id @default(uuid()) @db.Uuid
   username     String         @unique
@@ -19,6 +30,7 @@ model User {
   studentAuth    StudentAuth?
   studentProfile StudentProfile?
   conversations  Conversation[]
+  simulationSessions SimulationSession[]
 
   @@map("users")
 }
@@ -68,6 +80,37 @@ model StudentProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("student_profile")
+}
+
+model SimulationSession {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  stage     SimulationStage
+  attemptNo Int      @default(1) @map("attempt_no")
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  messages  SimulationMessage[]
+
+  @@index([userId, stage, status], map: "simulation_sessions_user_stage_status_idx")
+  @@map("simulation_sessions")
+}
+
+model SimulationMessage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId  String   @map("session_id") @db.Uuid
+  role       String
+  content    String
+  coachNote  String?  @map("coach_note")
+  turnIndex  Int      @map("turn_index")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([sessionId, turnIndex], map: "simulation_messages_session_turn_idx")
+  @@map("simulation_messages")
 }
 
 model Conversation {
