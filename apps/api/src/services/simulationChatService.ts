@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
+import { generateCoachReply } from '../ai/openaiClient.js';
 
-const COACH_REPLY =
+const FALLBACK_COACH_REPLY =
   '（系统提示）AI 暂时不可用，我先给你一个可执行的谈判建议：\n' +
   '1) 先共情并确认对方关注点；\n' +
   '2) 用数据解释价格差异（质量/交付/售后/合规）；\n' +
@@ -22,6 +23,11 @@ type SimulationStage =
   | 'customs'
   | 'settlement'
   | 'after_sales';
+
+type CoachHistoryMessage = {
+  role: 'student' | 'coach';
+  content: string;
+};
 
 export async function getOrCreateActiveSession(
   prisma: Db,
@@ -55,10 +61,15 @@ export async function getOrCreateActiveSession(
   });
 }
 
+function fallbackCoach() {
+  return FALLBACK_COACH_REPLY;
+}
+
 export async function appendStudentAndMockCoach(
   prisma: Db,
   sessionId: string,
-  content: string
+  content: string,
+  stage?: SimulationStage
 ) {
   return prisma.$transaction(async (tx) => {
     const maxTurn = await tx.simulationMessage.aggregate({
@@ -76,11 +87,33 @@ export async function appendStudentAndMockCoach(
       }
     });
 
+    const recent = await tx.simulationMessage.findMany({
+      where: { sessionId },
+      orderBy: { turnIndex: 'desc' },
+      take: 20
+    });
+
+    const history: CoachHistoryMessage[] = [...recent].reverse().map((m) => ({
+      role: m.role === 'coach' ? 'coach' : 'student',
+      content: m.content
+    }));
+
+    let coachContent = fallbackCoach();
+    try {
+      coachContent = await generateCoachReply({
+        stage: stage ?? 'quotation',
+        messages: history
+      });
+    } catch {
+      coachContent = fallbackCoach();
+    }
+
     const coachMessage = await tx.simulationMessage.create({
       data: {
         sessionId,
         role: 'coach',
-        content: COACH_REPLY,
+        content: coachContent,
+        coachNote: undefined,
         turnIndex: nextTurn + 1
       }
     });

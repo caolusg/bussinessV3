@@ -16,7 +16,14 @@ services:
     build: ./apps/api
     environment:
       PORT: 8000
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/bcai?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bussinessv3?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      AI_ENABLED: ${AI_ENABLED}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS}
     ports:
       - '8000:8000'
     depends_on:
