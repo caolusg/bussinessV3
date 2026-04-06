@@ -1,6 +1,12 @@
 {
   "scripts": {
-    "db:migrate": "node scripts/db-migrate.mjs"
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "npm --prefix apps/api run prisma:migrate",
+    "api:dev": "npm --prefix apps/api run dev",
+    "api:build": "npm --prefix apps/api run build",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
