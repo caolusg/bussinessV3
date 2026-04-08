@@ -23,7 +23,7 @@ const getRoles = async (userId: string) => {
     where: { userId },
     include: { role: true }
   });
-  return roles.map((r) => r.role.key);
+  return roles.map((r: { role: { key: string } }) => r.role.key);
 };
 
 router.get('/student', requireAuth, async (req, res) => {

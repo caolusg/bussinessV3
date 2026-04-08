@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -49,7 +50,7 @@ const getUserRoles = async (userId: string) => {
     where: { userId },
     include: { role: true }
   });
-  return roles.map((r) => r.role.key);
+  return roles.map((r: { role: { key: string } }) => r.role.key);
 };
 
 const ensureActiveUser = (status: string) => status === 'ACTIVE';
@@ -76,7 +77,7 @@ router.post('/student/register_or_login', async (req, res) => {
       }
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      const user = await prisma.$transaction(async (tx) => {
+      const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const created = await tx.user.create({
           data: {
             username,
@@ -148,7 +149,7 @@ router.post('/student/register', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.user.create({
         data: {
           username,

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { generateCoachReply } from '../ai/openaiClient.js';
 
 const FALLBACK_COACH_REPLY =
@@ -71,7 +71,7 @@ export async function appendStudentAndMockCoach(
   content: string,
   stage?: SimulationStage
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const maxTurn = await tx.simulationMessage.aggregate({
       where: { sessionId },
       _max: { turnIndex: true }

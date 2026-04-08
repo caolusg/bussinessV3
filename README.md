@@ -15,10 +15,12 @@ This repository uses npm as the package manager.
 
 ## Quick Start
 
-Install dependencies from the repo root:
+Install dependencies:
 
 ```bash
 npm install
+npm --prefix apps/api install
+npm --prefix apps/web install
 ```
 
 Create the root environment file:
@@ -37,6 +39,12 @@ Run backend migrations:
 
 ```bash
 npm run db:migrate -- --name init
+```
+
+Seed roles and the default teacher account:
+
+```bash
+npm run db:seed
 ```
 
 Start the API:
@@ -65,6 +73,7 @@ These commands work from the repository root:
 npm run db:up
 npm run db:down
 npm run db:migrate -- --name init
+npm run db:seed
 npm run api:dev
 npm run api:build
 npm run web:dev
@@ -81,6 +90,8 @@ Important variables:
 - `JWT_SECRET=change_me`
 - `JWT_EXPIRES_IN=7d`
 - `BCRYPT_ROUNDS=10`
+- `DEFAULT_TEACHER_USERNAME=teacher`
+- `DEFAULT_TEACHER_PASSWORD=password123`
 - `OPENAI_API_KEY=` optional; when empty, the API falls back to a mock coach reply
 - `AI_ENABLED=true`
 
@@ -100,7 +111,10 @@ Run Prisma commands inside `apps/api` if you need direct access:
 cd apps/api
 npm run prisma:generate
 npm run prisma:migrate -- --name init
+npm run db:seed
 ```
+
+Note: the active Prisma schema is under `apps/api/prisma`. The root-level `prisma/` directory is legacy and should not be used for current backend changes.
 
 ## API Checks
 
@@ -134,6 +148,8 @@ curl -X POST http://localhost:8000/api/auth/teacher/login ^
   -H "Content-Type: application/json" ^
   -d "{\"username\":\"teacher\",\"password\":\"password123\"}"
 ```
+
+The teacher login above only works after `npm run db:seed` has been executed.
 
 Get current user:
 

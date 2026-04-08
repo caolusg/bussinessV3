@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-04-06
+Last updated: 2026-04-08
 
 ## Purpose
 
@@ -122,28 +122,122 @@ The frontend currently loads Tailwind from CDN in `apps/web/index.html`, instead
 - fixed OpenAI SDK request typing in `apps/api/src/ai/openaiClient.ts`
 - fixed simulation message history typing in `apps/api/src/services/simulationChatService.ts`
 
+## What Was Fixed On 2026-04-08
+
+### Startup and seed flow
+
+- updated `README.md` to reflect the actual monorepo install flow:
+  - `npm install`
+  - `npm --prefix apps/api install`
+  - `npm --prefix apps/web install`
+- added root script `db:seed` in `package.json`
+- added API script `db:seed` in `apps/api/package.json`
+- added seed script `apps/api/scripts/seed.mjs`
+- seed now ensures:
+  - `student` role exists
+  - `teacher` role exists
+  - default teacher account exists
+
+### Environment files
+
+- updated `.env.example`
+- updated `apps/api/.env.example`
+- created local `.env`
+- created local `apps/api/.env`
+
+Added variables:
+
+- `DEFAULT_TEACHER_USERNAME=teacher`
+- `DEFAULT_TEACHER_PASSWORD=password123`
+
+### TypeScript build fixes
+
+The API had real compile errors on this machine. These were fixed by adding explicit transaction and map callback typing in:
+
+- `apps/api/src/routes/auth.ts`
+- `apps/api/src/routes/profile.ts`
+- `apps/api/src/services/simulationChatService.ts`
+
 ## Verified Commands
 
-These were verified on 2026-04-06:
+These were verified on 2026-04-08:
 
 ```bash
-npm run api:build
-npm run web:build
+npm.cmd run api:build
+npm.cmd run web:build
+node --check apps/api/scripts/seed.mjs
 ```
 
-The frontend build required running outside the sandbox because Vite/esbuild needed to spawn subprocesses. The build itself succeeded.
+Notes:
+
+- frontend build required running outside the sandbox because Vite/esbuild needed to spawn subprocesses
+- both API and web builds succeeded after the 2026-04-08 fixes
+- database startup and migration were not completed because Docker engine was not ready on this machine
 
 ## Current Recommended Startup Flow
 
 From repo root:
 
 ```bash
-copy .env.example .env
-npm run db:up
-npm run db:migrate -- --name init
-npm run api:dev
-npm run web:dev
+npm.cmd run db:up
+npm.cmd run db:migrate -- --name init
+npm.cmd run db:seed
+npm.cmd run api:dev
+npm.cmd run web:dev
 ```
+
+On Windows PowerShell in this environment, `npm` may be blocked by execution policy because `npm.ps1` cannot run. Use `npm.cmd` instead.
+
+## Machine State On 2026-04-08
+
+This session was run on a new Windows 11 machine.
+
+Confirmed:
+
+- `node` installed: `v24.13.1`
+- `npm.cmd` installed: `11.8.0`
+- project dependencies installed at root, `apps/api`, and `apps/web`
+- Docker Desktop installed via `winget`
+- Docker CLI exists at:
+  - `C:\Program Files\Docker\Docker\resources\bin\docker.exe`
+
+Blocked:
+
+- Docker engine was not ready
+- `docker info` against `dockerDesktopLinuxEngine` failed
+- `wsl` output indicated no usable Linux environment/distribution was available
+- `Get-CimInstance Win32_ComputerSystem` returned `HypervisorPresent = False`
+- `systeminfo` showed:
+  - `Virtualization Enabled In Firmware: Yes`
+  - `Hyper-V Requirements` all satisfied
+
+Interpretation:
+
+- BIOS virtualization is enabled
+- Windows virtualization/WSL runtime is not fully active yet
+- likely next step is enabling Windows features and rebooting:
+  - `Virtual Machine Platform`
+  - `Windows Subsystem for Linux`
+
+## Resume Checklist For Next Session
+
+Start by reading this file and then check Docker/WSL before touching app code.
+
+Recommended order:
+
+1. Verify Docker engine status:
+   - `& 'C:\Program Files\Docker\Docker\resources\bin\docker.exe' info`
+2. If Docker still fails, verify Windows features / WSL and reboot if needed.
+3. Once Docker engine is ready:
+   - `npm.cmd run db:up`
+   - `npm.cmd run db:migrate -- --name init`
+   - `npm.cmd run db:seed`
+   - `npm.cmd run api:dev`
+   - `npm.cmd run web:dev`
+4. Smoke test:
+   - `http://localhost:8000/api/health`
+   - `http://localhost:8000/api/health/db`
+   - teacher login with seeded credentials
 
 ## Known Risks / Follow-Up Items
 
@@ -151,7 +245,8 @@ npm run web:dev
 
 - Decide whether the root Prisma schema and migration tooling should be removed, archived, or aligned with `apps/api/prisma/schema.prisma`.
 - Confirm whether Docker-based API runs should execute Prisma migrations automatically or remain manual.
-- Review whether the current teacher account bootstrap flow exists; README includes teacher login, but credential provisioning path was not fully audited.
+- Root Prisma directory is still legacy noise and may be removed or archived later.
+- Docker Desktop on new Windows machines may require manual WSL/Virtual Machine Platform enablement plus reboot before `db:up` works.
 
 ### Medium priority
 
