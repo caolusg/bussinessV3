@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Purpose
 
@@ -158,6 +158,62 @@ The API had real compile errors on this machine. These were fixed by adding expl
 - `apps/api/src/routes/profile.ts`
 - `apps/api/src/services/simulationChatService.ts`
 
+## What Was Fixed On 2026-04-09
+
+### Startup recovery on this machine
+
+- confirmed Docker engine is now available
+- confirmed WSL 2 is active and Docker Desktop is reachable
+- started local Docker services successfully
+- verified PostgreSQL is reachable on `127.0.0.1:5433`
+
+### Environment repair
+
+The local runtime still had broken env state:
+
+- root `.env` was missing:
+  - `DATABASE_URL`
+  - `JWT_SECRET`
+  - `JWT_EXPIRES_IN`
+  - `BCRYPT_ROUNDS`
+  - default teacher credentials
+- `apps/api/.env` still contained placeholder values and no database URL
+
+These local env files were corrected so Prisma, Docker Compose, and the API could boot consistently.
+
+### Migration command fix
+
+The root command:
+
+- `npm run db:migrate`
+
+previously resolved Prisma from the wrong working directory and could hit the legacy root `prisma/` folder instead of `apps/api/prisma/`.
+
+This was corrected by:
+
+- adding `prisma:migrate:deploy` in `apps/api/package.json`
+- changing root `db:migrate` to:
+  - `cd apps/api && npm run prisma:migrate:deploy`
+
+README was updated to use the non-interactive deploy flow from the repo root.
+
+### Runtime verification
+
+Verified on 2026-04-09:
+
+- `docker compose up -d`
+- `npm.cmd run db:migrate`
+- `npm.cmd run db:seed`
+- `http://localhost:8000/api/health`
+- `http://localhost:8000/api/health/db`
+- teacher login at `POST /api/auth/teacher/login`
+- frontend dev server on `http://localhost:3000`
+- frontend proxy to backend via `http://localhost:3000/api/health`
+
+### Notable issue encountered
+
+During recovery, a stale Prisma advisory lock remained open in PostgreSQL from an earlier failed migration attempt. That lock blocked `migrate deploy` until the orphaned backend session was terminated.
+
 ## Verified Commands
 
 These were verified on 2026-04-08:
@@ -174,13 +230,21 @@ Notes:
 - both API and web builds succeeded after the 2026-04-08 fixes
 - database startup and migration were not completed because Docker engine was not ready on this machine
 
+Additional verified commands on 2026-04-09:
+
+```bash
+docker compose up -d
+npm.cmd run db:migrate
+npm.cmd run db:seed
+```
+
 ## Current Recommended Startup Flow
 
 From repo root:
 
 ```bash
 npm.cmd run db:up
-npm.cmd run db:migrate -- --name init
+npm.cmd run db:migrate
 npm.cmd run db:seed
 npm.cmd run api:dev
 npm.cmd run web:dev
@@ -201,42 +265,38 @@ Confirmed:
 - Docker CLI exists at:
   - `C:\Program Files\Docker\Docker\resources\bin\docker.exe`
 
-Blocked:
+Previously blocked:
 
 - Docker engine was not ready
 - `docker info` against `dockerDesktopLinuxEngine` failed
 - `wsl` output indicated no usable Linux environment/distribution was available
-- `Get-CimInstance Win32_ComputerSystem` returned `HypervisorPresent = False`
-- `systeminfo` showed:
-  - `Virtualization Enabled In Firmware: Yes`
-  - `Hyper-V Requirements` all satisfied
 
-Interpretation:
+Current status as of 2026-04-09:
 
-- BIOS virtualization is enabled
-- Windows virtualization/WSL runtime is not fully active yet
-- likely next step is enabling Windows features and rebooting:
-  - `Virtual Machine Platform`
-  - `Windows Subsystem for Linux`
+- Docker engine is ready
+- Docker Desktop server is reachable
+- WSL 2 is active
+- default WSL distribution reported was `docker-desktop`
 
 ## Resume Checklist For Next Session
 
-Start by reading this file and then check Docker/WSL before touching app code.
+Start by reading this file and then check Docker service state before touching app code.
 
 Recommended order:
 
 1. Verify Docker engine status:
    - `& 'C:\Program Files\Docker\Docker\resources\bin\docker.exe' info`
-2. If Docker still fails, verify Windows features / WSL and reboot if needed.
-3. Once Docker engine is ready:
+2. Start services and initialize the database:
    - `npm.cmd run db:up`
-   - `npm.cmd run db:migrate -- --name init`
+   - `npm.cmd run db:migrate`
    - `npm.cmd run db:seed`
+3. Start app servers if needed:
    - `npm.cmd run api:dev`
    - `npm.cmd run web:dev`
 4. Smoke test:
    - `http://localhost:8000/api/health`
    - `http://localhost:8000/api/health/db`
+   - `http://localhost:3000`
    - teacher login with seeded credentials
 
 ## Known Risks / Follow-Up Items

@@ -38,7 +38,7 @@ npm run db:up
 Run backend migrations:
 
 ```bash
-npm run db:migrate -- --name init
+npm run db:migrate
 ```
 
 Seed roles and the default teacher account:
@@ -72,7 +72,7 @@ These commands work from the repository root:
 ```bash
 npm run db:up
 npm run db:down
-npm run db:migrate -- --name init
+npm run db:migrate
 npm run db:seed
 npm run api:dev
 npm run api:build
@@ -110,6 +110,7 @@ Run Prisma commands inside `apps/api` if you need direct access:
 ```bash
 cd apps/api
 npm run prisma:generate
+npm run prisma:migrate:deploy
 npm run prisma:migrate -- --name init
 npm run db:seed
 ```
