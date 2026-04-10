@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-04-09
+Last updated: 2026-04-10
 
 ## Purpose
 
@@ -214,6 +214,352 @@ Verified on 2026-04-09:
 
 During recovery, a stale Prisma advisory lock remained open in PostgreSQL from an earlier failed migration attempt. That lock blocked `migrate deploy` until the orphaned backend session was terminated.
 
+## Product Direction Discussed On 2026-04-10
+
+### New idea: replace single-model reply generation with an orchestrated intelligent controller
+
+The current system already works as a stage-based business Chinese simulation product, but the AI layer is still very simple:
+
+- frontend posts to `/api/simulations/:stage/message`
+- backend route `apps/api/src/routes/simulations.ts` calls
+- `apps/api/src/services/simulationChatService.ts`
+- which directly calls `apps/api/src/ai/openaiClient.ts`
+
+This means the current product behavior is essentially:
+
+- student sends one message
+- backend generates one coach/opponent reply
+- response is stored
+
+The new direction is to introduce an OpenClaw-style orchestrated controller that can:
+
+- use more tools
+- coordinate more than one agent
+- optionally search the web
+- combine business knowledge, culture-aware reasoning, and teaching feedback
+- produce more personalized responses for students from different cultural backgrounds
+
+### Product interpretation confirmed in session
+
+The site is understood as a:
+
+- business Chinese AI simulation and training system
+
+Its main use is:
+
+- students practice business Chinese in international trade / commercial scenarios
+- the system simulates stage-based dialogue
+- AI acts as role-play counterpart and coach
+- the system should ideally adapt to the student profile and cultural background
+
+### Why this new direction makes sense
+
+The current model-only reply path is not enough for:
+
+- culture-aware guidance
+- differentiated feedback for students from different countries
+- stage-specific teaching strategy
+- combining role-play response with assessment and coaching
+
+An orchestrated controller is a better fit for the product because the product is not just a chat app. It is closer to:
+
+- AI coach
+- scenario engine
+- personalized business Chinese trainer
+
+### Recommended implementation approach
+
+Do not replace the whole site. Keep the current auth, profile, session, and simulation structure.
+
+Instead, replace only the AI generation layer behind the simulation service.
+
+Recommended architecture:
+
+1. user layer
+   - frontend pages
+   - student and teacher flows
+2. business layer
+   - auth
+   - profile
+   - simulation stage/session logic
+   - persistence
+3. orchestration layer
+   - OpenClaw-style controller
+   - decides whether to call tools / search / sub-agents
+   - combines role-play + coaching + assessment
+4. model and tools layer
+   - OpenAI
+   - web search
+   - business knowledge sources
+   - cultural analysis logic
+   - evaluation/scoring tools
+
+### Concrete codebase recommendation for next implementation session
+
+The best next step is not to directly wire in full OpenClaw complexity.
+
+Instead, first refactor the backend into a provider/orchestrator shape so the AI backend becomes replaceable.
+
+Recommended first-phase backend change:
+
+- keep current routes and frontend mostly unchanged
+- add a simulation orchestrator abstraction
+- move current OpenAI reply logic behind a provider interface
+- make `simulationChatService.ts` depend on the orchestrator instead of directly on `openaiClient.ts`
+- return structured AI results instead of only one freeform reply
+
+Suggested result shape:
+
+```ts
+type SimulationOrchestratorResult = {
+  roleplayReply: string;
+  coachNote?: string | null;
+  assessment?: {
+    score?: number;
+    strengths?: string[];
+    risks?: string[];
+    summary?: string;
+  };
+  personaSnapshot?: {
+    cultureHints?: string[];
+    difficultyAdjustment?: 'down' | 'keep' | 'up';
+  };
+  trace?: {
+    provider: 'openai' | 'openclaw';
+    usedTools?: string[];
+    usedWebSearch?: boolean;
+  };
+};
+```
+
+Recommended new backend files later:
+
+- `apps/api/src/ai/simulationOrchestrator.ts`
+- `apps/api/src/ai/providers/openaiSimulationProvider.ts`
+- `apps/api/src/ai/providers/openclawSimulationProvider.ts`
+
+### Data model gaps identified
+
+The current `StudentProfile` data is not rich enough for strong personalization.
+
+Current profile is mostly:
+
+- nationality
+- age
+- gender
+- hskLevel
+- major
+
+This is not enough for culture-aware adaptation.
+
+Likely future additions:
+
+- native language
+- cultural region
+- learning goal
+- business experience level
+- speaking confidence
+- preferred feedback style
+- common weaknesses
+- target scenario focus
+
+Recommended future schema direction:
+
+- keep `StudentProfile` for static profile data
+- add a new dynamic learning-profile model for evolving learner traits
+- extend `SimulationMessage` with structured metadata such as:
+  - AI source/provider
+  - tool trace
+  - structured assessment
+  - culture/feedback metadata
+
+### Important engineering constraints
+
+Two constraints were explicitly identified:
+
+1. The orchestrated controller must be degradable.
+   - If tool use, search, or multi-agent steps fail, the system must still fall back to ordinary OpenAI or mock reply behavior.
+
+2. Output must be structured.
+   - Do not let the orchestration layer return only freeform text.
+   - Backend and frontend need stable fields for role-play reply, coaching, scoring, and traces.
+
+### Recommended next coding step for the next session
+
+Start with phase 1 only:
+
+- introduce the simulation orchestrator abstraction
+- keep existing OpenAI as the first provider
+- refactor `simulationChatService.ts` to call the orchestrator
+- extend API response shape modestly
+- avoid major frontend redesign in the first pass
+
+Only after that foundation is stable should OpenClaw-specific tooling, web search, and multi-agent behaviors be added.
+
+## What Was Implemented On 2026-04-10
+
+### Phase-1 AI orchestration foundation
+
+The backend was refactored away from the previous direct single-call shape.
+
+Added:
+
+- `apps/api/src/ai/simulationOrchestrator.ts`
+- `apps/api/src/ai/providers/openaiSimulationProvider.ts`
+
+Current shape:
+
+- simulation service now depends on an orchestrator abstraction
+- OpenAI is wrapped behind the first provider implementation
+- backend returns structured orchestration data with:
+  - `roleplayReply`
+  - `coachNote`
+  - `assessment`
+  - `personaSnapshot`
+  - `trace`
+
+### Simulation message model extension
+
+Structured feedback is now persisted on simulation messages so the UI can recover state after refresh.
+
+Schema change:
+
+- added Prisma migration:
+  - `apps/api/prisma/migrations/20260410153000_add_simulation_message_metadata/`
+
+Added columns on `simulation_messages`:
+
+- `assessment_json`
+- `trace_json`
+- `persona_json`
+
+Corresponding Prisma fields were added to:
+
+- `apps/api/prisma/schema.prisma`
+
+### Simulation API behavior after today
+
+Updated route:
+
+- `apps/api/src/routes/simulations.ts`
+
+Current behavior:
+
+- `POST /api/simulations/:stage/message`
+  - stores the student message
+  - stores one structured reply message
+  - returns both plain messages and `orchestration`
+- `GET /api/simulations/session?stage=...`
+  - returns existing session messages
+  - returns the latest persisted structured orchestration payload for UI recovery
+
+### Current simulation semantics
+
+The system was adjusted so the main chat and the right-side coaching panel are separated conceptually.
+
+Current intent:
+
+- main chat area should display:
+  - student message
+  - opponent/role-play reply
+- right panel should display:
+  - coach note
+  - assessment
+  - provider/trace
+  - difficulty hint
+
+Important implementation note:
+
+- older session rows created earlier in the day may still contain `role='coach'`
+- new logic now writes the structured reply message as `role='opponent'`
+- frontend was updated to render:
+  - `student` as user bubble
+  - `opponent` as opponent bubble
+  - `coach/system` as AI coach/system bubble
+
+### Frontend simulation improvements
+
+Updated frontend files:
+
+- `apps/web/components/SimulationInterface.tsx`
+- `apps/web/types.ts`
+
+Implemented:
+
+- simulation page now reads current session history on initial load
+- switching stages loads that stage's persisted messages
+- right-side structured feedback now shows:
+  - coach note
+  - assessment summary
+  - strengths
+  - risks
+  - provider trace
+  - difficulty adjustment
+  - culture hints if present
+- persisted structured feedback is restored after refresh
+
+### Runtime verification completed today
+
+Verified during this session:
+
+- Docker Desktop started successfully on this machine
+- `docker compose up -d`
+- `npm.cmd run db:migrate`
+- `npm.cmd run db:seed`
+- `npm.cmd --prefix apps/api run prisma:generate`
+- `npm.cmd run api:build`
+- `npm.cmd run web:build`
+- local frontend reachable on:
+  - `http://localhost:3000`
+- local API reachable on:
+  - `http://localhost:8000/api/health`
+- teacher login verified with seeded account:
+  - username: `teacher`
+  - password: `password123`
+- student flow verified:
+  - register
+  - profile save
+  - session fetch
+  - simulation message send
+  - session reload with persisted structured feedback
+
+### Important local runtime detail
+
+During this session, the Docker API container on port `8000` was stopped and replaced by the local Node dev API process so the workspace code changes could be tested immediately.
+
+That means current local testing assumes:
+
+- database still runs in Docker
+- API runs locally from workspace code
+- frontend runs locally from workspace code
+
+### Current AI status
+
+The architecture is now AI-ready, but whether real OpenAI responses are returned depends on the local backend env.
+
+Important env location for local API:
+
+- `apps/api/.env`
+
+Current practical state at end of session:
+
+- if `apps/api/.env` has no valid `OPENAI_API_KEY`, the system falls back to mock/heuristic replies
+- the code path is integrated, but real model output is not guaranteed without a valid key
+
+### Recommended next step after this session
+
+Before doing deeper orchestration work:
+
+1. add a valid `OPENAI_API_KEY` to:
+   - `apps/api/.env`
+2. restart the local API
+3. verify that the returned role-play reply is truly model-generated instead of fallback text
+
+After that:
+
+- add a seeded/persisted opening opponent message for each stage so the simulation starts in a stronger scenario state
+- then iterate on richer role-play and coaching separation
+
 ## Verified Commands
 
 These were verified on 2026-04-08:
@@ -298,6 +644,10 @@ Recommended order:
    - `http://localhost:8000/api/health/db`
    - `http://localhost:3000`
    - teacher login with seeded credentials
+5. If continuing the AI upgrade work:
+   - inspect `apps/api/src/services/simulationChatService.ts`
+   - inspect `apps/api/src/ai/openaiClient.ts`
+   - begin phase-1 orchestrator refactor before any OpenClaw integration
 
 ## Known Risks / Follow-Up Items
 
@@ -313,6 +663,8 @@ Recommended order:
 - Replace CDN Tailwind with a standard package-based setup if frontend work becomes heavier.
 - Add test scripts or at least smoke-test scripts for API health and auth flows.
 - Clean up duplicated Prisma client files if both `apps/api/src/prisma.ts` and `apps/api/src/lib/prisma.ts` are not needed.
+- Refactor the AI generation path into an orchestrator/provider architecture before integrating OpenClaw.
+- Design schema changes for personalized learner modeling and structured simulation feedback.
 
 ### Workspace note
 

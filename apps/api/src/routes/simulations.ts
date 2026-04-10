@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
-  appendStudentAndMockCoach,
+  appendStudentAndOpponent,
   getOrCreateActiveSession
 } from '../services/simulationChatService.js';
 
@@ -35,6 +35,31 @@ const messageBodySchema = z.object({
   content: z.string().min(1).max(2000)
 });
 
+function buildOrchestrationFromMessage(message: {
+  content: string;
+  coachNote?: string | null;
+  assessmentJson?: unknown;
+  traceJson?: unknown;
+  personaJson?: unknown;
+}) {
+  if (
+    !message.coachNote &&
+    !message.assessmentJson &&
+    !message.traceJson &&
+    !message.personaJson
+  ) {
+    return null;
+  }
+
+  return {
+    roleplayReply: message.content,
+    coachNote: message.coachNote ?? null,
+    assessment: message.assessmentJson ?? undefined,
+    trace: message.traceJson ?? undefined,
+    personaSnapshot: message.personaJson ?? undefined
+  };
+}
+
 router.get('/session', requireAuth, async (req, res) => {
   try {
     const parsed = sessionSchema.safeParse({
@@ -57,6 +82,16 @@ router.get('/session', requireAuth, async (req, res) => {
       orderBy: { turnIndex: 'asc' }
     });
 
+    const latestStructuredMessage = [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          Boolean(message.coachNote) ||
+          Boolean(message.assessmentJson) ||
+          Boolean(message.traceJson) ||
+          Boolean(message.personaJson)
+      );
+
     return res.status(200).json(ok({
       session: {
         id: session.id,
@@ -67,6 +102,9 @@ router.get('/session', requireAuth, async (req, res) => {
         createdAt: session.createdAt,
         updatedAt: session.updatedAt
       },
+      orchestration: latestStructuredMessage
+        ? buildOrchestrationFromMessage(latestStructuredMessage)
+        : null,
       messages
     }));
   } catch (error) {
@@ -92,16 +130,18 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     const content = bodyParsed.data.content;
 
     const session = await getOrCreateActiveSession(prisma, userId, stage);
-    const { studentMessage, coachMessage } = await appendStudentAndMockCoach(
+    const { studentMessage, opponentMessage, orchestration } = await appendStudentAndOpponent(
       prisma,
       session.id,
-      content
+      content,
+      stage
     );
 
     return res.status(200).json({
       sessionId: session.id,
       stage: session.stage,
       attemptNo: session.attemptNo,
+      orchestration,
       messages: [
         {
           id: studentMessage.id,
@@ -111,11 +151,15 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
           createdAt: studentMessage.createdAt
         },
         {
-          id: coachMessage.id,
-          role: coachMessage.role,
-          content: coachMessage.content,
-          turnIndex: coachMessage.turnIndex,
-          createdAt: coachMessage.createdAt
+          id: opponentMessage.id,
+          role: opponentMessage.role,
+          content: opponentMessage.content,
+          coachNote: opponentMessage.coachNote,
+          assessmentJson: opponentMessage.assessmentJson,
+          traceJson: opponentMessage.traceJson,
+          personaJson: opponentMessage.personaJson,
+          turnIndex: opponentMessage.turnIndex,
+          createdAt: opponentMessage.createdAt
         }
       ]
     });

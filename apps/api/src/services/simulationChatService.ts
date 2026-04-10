@@ -1,33 +1,28 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { generateCoachReply } from '../ai/openaiClient.js';
+import { OpenAISimulationProvider } from '../ai/providers/openaiSimulationProvider.js';
+import {
+  SimulationOrchestrator,
+  type SimulationHistoryMessage,
+  type SimulationOrchestratorResult,
+  type SimulationStage
+} from '../ai/simulationOrchestrator.js';
 
 const FALLBACK_COACH_REPLY =
-  '（系统提示）AI 暂时不可用，我先给你一个可执行的谈判建议：\n' +
-  '1) 先共情并确认对方关注点；\n' +
-  '2) 用数据解释价格差异（质量/交付/售后/合规）；\n' +
-  '3) 给出两档方案（标准版/优化版）并引导对方选择；\n' +
-  '4) 以小让步换取对方承诺（数量/付款/长期合作）。\n' +
-  '你可以先回复：『理解你们的预算压力。我们这次报价包含XXX（交付/质保/服务），如果你们愿意把数量提升到X或将付款条款改为Y，我们可以把单价下调到Z。你更倾向哪一种？』';
+  '锛堢郴缁熸彁绀猴級AI 鏆傛椂涓嶅彲鐢紝鎴戝厛缁欎綘涓€涓彲鎵ц鐨勮皥鍒ゅ缓璁細\n' +
+  '1) 鍏堝叡鎯呭苟纭瀵规柟鍏虫敞鐐癸紱\n' +
+  '2) 鐢ㄦ暟鎹В閲婁环鏍煎樊寮傦紙璐ㄩ噺/浜や粯/鍞悗/鍚堣锛夛紱\n' +
+  '3) 缁欏嚭涓ゆ。鏂规锛堟爣鍑嗙増/浼樺寲鐗堬級骞跺紩瀵煎鏂归€夋嫨锛沑n' +
+  '4) 浠ュ皬璁╂鎹㈠彇瀵规柟鎵胯锛堟暟閲?浠樻/闀挎湡鍚堜綔锛夈€俓n' +
+  '浣犲彲浠ュ厛鍥炲锛氥€庣悊瑙ｄ綘浠殑棰勭畻鍘嬪姏銆傛垜浠繖娆℃姤浠峰寘鍚玐XX锛堜氦浠?璐ㄤ繚/鏈嶅姟锛夛紝濡傛灉浣犱滑鎰挎剰鎶婃暟閲忔彁鍗囧埌X鎴栧皢浠樻鏉℃鏀逛负Y锛屾垜浠彲浠ユ妸鍗曚环涓嬭皟鍒癦銆備綘鏇村€惧悜鍝竴绉嶏紵銆?';
 
 type Db = Pick<
   PrismaClient,
   'simulationSession' | 'simulationMessage' | '$transaction'
 >;
 
-type SimulationStage =
-  | 'acquisition'
-  | 'quotation'
-  | 'negotiation'
-  | 'contract'
-  | 'preparation'
-  | 'customs'
-  | 'settlement'
-  | 'after_sales';
-
-type CoachHistoryMessage = {
-  role: 'student' | 'coach';
-  content: string;
-};
+const simulationOrchestrator = new SimulationOrchestrator(
+  new OpenAISimulationProvider()
+);
 
 export async function getOrCreateActiveSession(
   prisma: Db,
@@ -65,7 +60,35 @@ function fallbackCoach() {
   return FALLBACK_COACH_REPLY;
 }
 
-export async function appendStudentAndMockCoach(
+function createFallbackOrchestration(): SimulationOrchestratorResult {
+  return {
+    roleplayReply: fallbackCoach(),
+    coachNote: null,
+    assessment: {
+      summary: 'AI 暂时不可用，已降级为基础建议。'
+    },
+    personaSnapshot: {
+      difficultyAdjustment: 'keep'
+    },
+    trace: {
+      provider: 'openai',
+      usedTools: [],
+      usedWebSearch: false,
+      degraded: true
+    }
+  };
+}
+
+function toJsonValue(
+  value: SimulationOrchestratorResult['assessment'] |
+    SimulationOrchestratorResult['trace'] |
+    SimulationOrchestratorResult['personaSnapshot']
+): Prisma.InputJsonValue | undefined {
+  if (value == null) return undefined;
+  return value as Prisma.InputJsonValue;
+}
+
+export async function appendStudentAndOpponent(
   prisma: Db,
   sessionId: string,
   content: string,
@@ -93,31 +116,35 @@ export async function appendStudentAndMockCoach(
       take: 20
     });
 
-    const history: CoachHistoryMessage[] = [...recent].reverse().map((m) => ({
-      role: m.role === 'coach' ? 'coach' : 'student',
+    const history: SimulationHistoryMessage[] = [...recent].reverse().map((m) => ({
+      role: m.role === 'student' ? 'student' : 'coach',
       content: m.content
     }));
 
-    let coachContent = fallbackCoach();
+    let orchestration = createFallbackOrchestration();
+
     try {
-      coachContent = await generateCoachReply({
+      orchestration = await simulationOrchestrator.generate({
         stage: stage ?? 'quotation',
         messages: history
       });
     } catch {
-      coachContent = fallbackCoach();
+      orchestration = createFallbackOrchestration();
     }
 
-    const coachMessage = await tx.simulationMessage.create({
+    const opponentMessage = await tx.simulationMessage.create({
       data: {
         sessionId,
-        role: 'coach',
-        content: coachContent,
-        coachNote: undefined,
+        role: 'opponent',
+        content: orchestration.roleplayReply,
+        coachNote: orchestration.coachNote ?? undefined,
+        assessmentJson: toJsonValue(orchestration.assessment),
+        traceJson: toJsonValue(orchestration.trace),
+        personaJson: toJsonValue(orchestration.personaSnapshot),
         turnIndex: nextTurn + 1
       }
     });
 
-    return { studentMessage, coachMessage };
+    return { studentMessage, opponentMessage, orchestration };
   });
 }

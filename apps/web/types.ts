@@ -66,6 +66,37 @@ export interface ChatMessage {
   isError?: boolean;
   turnIndex?: number;
   coachNote?: string;
+  assessment?: SimulationAssessment;
+  trace?: SimulationTrace;
+  personaSnapshot?: {
+    cultureHints?: string[];
+    difficultyAdjustment?: 'down' | 'keep' | 'up';
+  };
+}
+
+export interface SimulationAssessment {
+  score?: number;
+  strengths?: string[];
+  risks?: string[];
+  summary?: string;
+}
+
+export interface SimulationTrace {
+  provider: 'openai' | 'openclaw';
+  usedTools?: string[];
+  usedWebSearch?: boolean;
+  degraded?: boolean;
+}
+
+export interface SimulationOrchestration {
+  roleplayReply: string;
+  coachNote?: string | null;
+  assessment?: SimulationAssessment;
+  personaSnapshot?: {
+    cultureHints?: string[];
+    difficultyAdjustment?: 'down' | 'keep' | 'up';
+  };
+  trace?: SimulationTrace;
 }
 
 export interface OpponentProfile {
