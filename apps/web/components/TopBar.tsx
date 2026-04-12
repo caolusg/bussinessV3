@@ -16,7 +16,10 @@ const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onManageProfile }) => {
         <div className="bg-blue-700 text-white p-1.5 rounded-lg shadow-md shadow-blue-100">
           <Briefcase size={24} />
         </div>
-        <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+        <h1
+          className="text-xl font-bold text-slate-800 tracking-tight"
+          style={{ fontFamily: "'秦朝小篆', 'QinChaoXiaoZhuan', serif" }}
+        >
           商通中文
         </h1>
       </div>
