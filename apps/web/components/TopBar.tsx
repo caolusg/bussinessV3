@@ -17,7 +17,7 @@ const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onManageProfile }) => {
           <Briefcase size={24} />
         </div>
         <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-          商务汉语智能模拟系统
+          商通中文
         </h1>
       </div>
 

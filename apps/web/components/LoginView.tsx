@@ -173,10 +173,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             <div className="bg-blue-600 p-2 rounded-xl">
               <Briefcase size={28} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">商务汉语智能模拟系统</h1>
+            <h1 className="text-2xl font-bold tracking-tight">商通中文</h1>
           </div>
           <p className="text-slate-400 text-xs font-medium uppercase tracking-[0.2em]">
-            Intelligent Training Platform
+            BIZ Chinese
           </p>
         </div>
 
