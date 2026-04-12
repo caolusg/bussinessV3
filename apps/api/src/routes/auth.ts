@@ -9,6 +9,7 @@ import {
   APP_BASE_URL,
   BCRYPT_ROUNDS,
   EMAIL_VERIFICATION_EXPIRES_HOURS,
+  EMAIL_VERIFICATION_REQUIRED,
   JWT_EXPIRES_IN,
   JWT_SECRET,
   PASSWORD_RESET_EXPIRES_MINUTES
@@ -103,6 +104,9 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 const makeToken = () => randomBytes(32).toString('hex');
 const buildUrl = (path: string, token: string) =>
   `${APP_BASE_URL.replace(/\/$/, '')}${path}?token=${encodeURIComponent(token)}`;
+const shouldBlockUnverifiedLogin = (user: Pick<User, 'status' | 'emailVerifiedAt'>) =>
+  EMAIL_VERIFICATION_REQUIRED &&
+  (user.status === ACCOUNT_STATUS_PENDING || !user.emailVerifiedAt);
 
 const findUserByIdentifier = async (identifier: string) => {
   const normalized = identifier.trim();
@@ -172,7 +176,8 @@ const createStudentAccount = async ({
         username,
         email,
         passwordHash,
-        status: ACCOUNT_STATUS_PENDING
+        status: EMAIL_VERIFICATION_REQUIRED ? ACCOUNT_STATUS_PENDING : ACCOUNT_STATUS_ACTIVE,
+        emailVerifiedAt: EMAIL_VERIFICATION_REQUIRED ? undefined : new Date()
       }
     });
 
@@ -264,7 +269,8 @@ router.post('/student/register_or_login', async (req, res) => {
       return res.status(200).json(
         ok({
           user: { id: created.user.id, username: created.user.username, email: created.user.email },
-          verificationRequired: true,
+          verificationRequired: EMAIL_VERIFICATION_REQUIRED,
+          token: EMAIL_VERIFICATION_REQUIRED ? undefined : issueAuthToken(created.user.id),
           delivery
         })
       );
@@ -277,7 +283,7 @@ router.post('/student/register_or_login', async (req, res) => {
       return res.status(404).json(fail('USER_NOT_FOUND', 'User not found'));
     }
 
-    if (existing.status === ACCOUNT_STATUS_PENDING || !existing.emailVerifiedAt) {
+    if (shouldBlockUnverifiedLogin(existing)) {
       return res.status(403).json(fail('EMAIL_NOT_VERIFIED', 'Email verification required'));
     }
 
@@ -340,7 +346,8 @@ router.post('/student/register', async (req, res) => {
     return res.status(200).json(
       ok({
         user: { id: created.user.id, username: created.user.username, email: created.user.email },
-        verificationRequired: true,
+        verificationRequired: EMAIL_VERIFICATION_REQUIRED,
+        token: EMAIL_VERIFICATION_REQUIRED ? undefined : issueAuthToken(created.user.id),
         delivery
       })
     );
@@ -368,7 +375,7 @@ router.post('/student/login', async (req, res) => {
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
-    if (user.status === ACCOUNT_STATUS_PENDING || !user.emailVerifiedAt) {
+    if (shouldBlockUnverifiedLogin(user)) {
       return res.status(403).json(fail('EMAIL_NOT_VERIFIED', 'Email verification required'));
     }
 

@@ -203,7 +203,8 @@ const AppRoutes: React.FC = () => {
     if (selectedRole === UserRole.STUDENT && 'mode' in payload && payload.mode === 'register') {
       const registerResult = await apiRequest<{
         user: { id: string; username: string; email: string };
-        verificationRequired: true;
+        verificationRequired: boolean;
+        token?: string;
         delivery?: { mode: 'preview' | 'smtp'; previewUrl?: string };
       }>(
         endpoint,
@@ -213,6 +214,27 @@ const AppRoutes: React.FC = () => {
         },
         { redirectOnUnauthorized: false }
       );
+
+      if (!registerResult.verificationRequired && registerResult.token) {
+        localStorage.setItem('access_token', registerResult.token);
+
+        const me = await apiRequest<{
+          roles: Array<'student' | 'teacher'>;
+          profileCompleted: boolean;
+        }>('/api/auth/me', {
+          headers: { Authorization: `Bearer ${registerResult.token}` }
+        });
+
+        setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+
+        if (!me.profileCompleted) {
+          navigate('/profile');
+        } else {
+          navigate('/');
+        }
+
+        return { kind: 'logged_in' };
+      }
 
       return {
         kind: 'verification_required',
