@@ -9,9 +9,13 @@ import SimulationInterface from './components/SimulationInterface';
 import CoachingReview from './components/CoachingReview';
 import GroupDiscussionRoom from './components/GroupDiscussionRoom';
 import LoginView from './components/LoginView';
+import type { LoginActionPayload, LoginActionResult } from './components/LoginView';
 import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
 import RequireAuth from './components/RequireAuth';
+import VerifyEmailPage from './components/VerifyEmailPage';
+import ForgotPasswordPage from './components/ForgotPasswordPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
 import { SCENARIO_DB, STAGE_RESOURCES, STAGES } from './constants';
 import {
   UserRole,
@@ -183,10 +187,8 @@ const AppRoutes: React.FC = () => {
 
   const handleLogin = async (
     selectedRole: UserRole,
-    payload:
-      | { username: string; password: string; mode: 'login' | 'register'; confirmPassword?: string }
-      | { username: string; password: string }
-  ) => {
+    payload: LoginActionPayload
+  ): Promise<LoginActionResult> => {
     let endpoint: string;
     if (selectedRole === UserRole.TEACHER) {
       endpoint = '/api/auth/teacher/login';
@@ -196,6 +198,28 @@ const AppRoutes: React.FC = () => {
         mode === 'register'
           ? '/api/auth/student/register'
           : '/api/auth/student/login';
+    }
+
+    if (selectedRole === UserRole.STUDENT && 'mode' in payload && payload.mode === 'register') {
+      const registerResult = await apiRequest<{
+        user: { id: string; username: string; email: string };
+        verificationRequired: true;
+        delivery?: { mode: 'preview' | 'smtp'; previewUrl?: string };
+      }>(
+        endpoint,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        },
+        { redirectOnUnauthorized: false }
+      );
+
+      return {
+        kind: 'verification_required',
+        identifier: registerResult.user.username,
+        email: registerResult.user.email,
+        previewUrl: registerResult.delivery?.previewUrl
+      };
     }
 
     const tokenResult = await apiRequest<{ token: string }>(
@@ -226,6 +250,8 @@ const AppRoutes: React.FC = () => {
     } else {
       navigate('/');
     }
+
+    return { kind: 'logged_in' };
   };
 
   const handleProfileComplete = async (updatedProfile: UserProfile) => {
@@ -288,6 +314,9 @@ const AppRoutes: React.FC = () => {
       <Route path="/login" element={<Navigate to="/login/student" replace />} />
       <Route path="/login/student" element={<LoginView onLogin={handleLogin} initialRole="student" />} />
       <Route path="/login/teacher" element={<LoginView onLogin={handleLogin} initialRole="teacher" />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route
           path="/profile"

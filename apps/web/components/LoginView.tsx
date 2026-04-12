@@ -1,15 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { Briefcase, User, ShieldCheck, ArrowRight, Lock, UserPlus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Briefcase, Lock, Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
 
+type StudentLoginPayload = {
+  username: string;
+  password: string;
+  mode: 'login';
+};
+
+type StudentRegisterPayload = {
+  username: string;
+  email: string;
+  password: string;
+  mode: 'register';
+  confirmPassword: string;
+};
+
+type TeacherLoginPayload = {
+  username: string;
+  password: string;
+};
+
+export type LoginActionPayload =
+  | StudentLoginPayload
+  | StudentRegisterPayload
+  | TeacherLoginPayload;
+
+export type LoginActionResult =
+  | { kind: 'logged_in' }
+  | {
+      kind: 'verification_required';
+      identifier: string;
+      email: string;
+      previewUrl?: string;
+    };
+
 interface LoginViewProps {
-  onLogin: (
-    role: UserRole,
-    payload:
-      | { username: string; password: string; mode: 'login' | 'register'; confirmPassword?: string }
-      | { username: string; password: string }
-  ) => Promise<void>;
+  onLogin: (role: UserRole, payload: LoginActionPayload) => Promise<LoginActionResult>;
   initialRole: 'student' | 'teacher';
 }
 
@@ -21,20 +49,23 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   const [studentMode, setStudentMode] = useState<'login' | 'register'>('login');
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: '',
     confirmPassword: ''
   });
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setActiveTab(initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT);
     setError(null);
+    setMessage(null);
   }, [initialRole]);
 
-  const clearError = () => {
-    if (error) {
-      setError(null);
-    }
+  const clearNotice = () => {
+    if (error) setError(null);
+    if (message) setMessage(null);
   };
 
   const normalizeErrorMessage = (raw: string) => {
@@ -48,14 +79,23 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
       case 'USERNAME_TAKEN':
       case 'Username already exists':
         return '用户名已存在';
+      case 'EMAIL_TAKEN':
+      case 'Email already exists':
+        return '邮箱已被注册';
+      case 'EMAIL_NOT_VERIFIED':
+      case 'Email verification required':
+        return '该账号尚未完成邮箱验证，请先验证后再登录';
+      case 'INVALID_OR_EXPIRED_TOKEN':
+      case 'Invalid or expired token':
+        return '链接已失效，请重新获取';
+      case 'ROLE_FORBIDDEN':
+        return '当前账号没有这个入口的权限，请切换正确的登录入口';
       case 'INTERNAL_ERROR':
       case 'Internal error':
       case 'Internal Server Error':
       case 'Failed to fetch':
       case 'NetworkError':
-        return '服务暂时不可用，请确认 API 服务已启动后再试';
-      case 'ROLE_FORBIDDEN':
-        return '当前账号没有该入口权限，请切换登录入口';
+        return '服务暂时不可用，请确认 API 服务启动后再试';
       default:
         return raw;
     }
@@ -63,35 +103,67 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (activeTab === UserRole.STUDENT && studentMode === 'register') {
+      if (!formData.email.trim()) {
+        setError('请输入邮箱地址');
+        return;
+      }
       if (formData.password !== formData.confirmPassword) {
         setError('两次输入的密码不一致');
         return;
       }
     }
+
+    setIsSubmitting(true);
     setError(null);
-    const payload = {
-      username: formData.username,
-      password: formData.password,
-      ...(activeTab === UserRole.STUDENT
+    setMessage(null);
+
+    const payload: LoginActionPayload =
+      activeTab === UserRole.TEACHER
         ? {
-            mode: studentMode,
-            ...(studentMode === 'register' ? { confirmPassword: formData.confirmPassword } : {})
+            username: formData.username.trim(),
+            password: formData.password
           }
-        : {})
-    };
+        : studentMode === 'register'
+          ? {
+              username: formData.username.trim(),
+              email: formData.email.trim(),
+              password: formData.password,
+              confirmPassword: formData.confirmPassword,
+              mode: 'register'
+            }
+          : {
+              username: formData.username.trim(),
+              password: formData.password,
+              mode: 'login'
+            };
+
     try {
-      await onLogin(activeTab, payload);
-      setError(null);
-    } catch (error) {
-      let message = error instanceof Error ? error.message : '';
-      message = normalizeErrorMessage(message);
-      if (!message || !message.trim()) {
-        message = '登录失败，请稍后再试';
+      const result = await onLogin(activeTab, payload);
+      if (result.kind === 'verification_required') {
+        navigate('/verify-email', {
+          replace: true,
+          state: {
+            identifier: result.identifier,
+            email: result.email,
+            previewUrl: result.previewUrl
+          }
+        });
+        return;
       }
-      setError(message);
+
+      setMessage('登录成功');
+    } catch (err) {
+      let msg = err instanceof Error ? err.message : '';
+      msg = normalizeErrorMessage(msg);
+      setError(msg || '操作失败，请稍后再试');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const isStudentRegister = activeTab === UserRole.STUDENT && studentMode === 'register';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
@@ -103,7 +175,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             </div>
             <h1 className="text-2xl font-bold tracking-tight">商务汉语智能模拟系统</h1>
           </div>
-          <p className="text-slate-400 text-xs font-medium uppercase tracking-[0.2em]">Intelligent Training Platform</p>
+          <p className="text-slate-400 text-xs font-medium uppercase tracking-[0.2em]">
+            Intelligent Training Platform
+          </p>
         </div>
 
         <div className="p-8">
@@ -113,7 +187,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <User size={16} />
-              学员注册登录
+              学生注册登录
             </button>
             <button
               onClick={() => navigate('/login/teacher')}
@@ -125,7 +199,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           </div>
 
           <p className="text-xs text-slate-500 mb-4">
-            首次开通请选择【首次开通】；已有账号请选择【登录】。
+            首次开通请选择“首次开通”；已有账号请选择“登录”。
           </p>
 
           {activeTab === UserRole.STUDENT && (
@@ -138,7 +212,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   checked={studentMode === 'login'}
                   onChange={() => {
                     setStudentMode('login');
-                    setError(null);
+                    clearNotice();
                   }}
                   className="accent-blue-600"
                 />
@@ -152,7 +226,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   checked={studentMode === 'register'}
                   onChange={() => {
                     setStudentMode('register');
-                    setError(null);
+                    clearNotice();
                   }}
                   className="accent-blue-600"
                 />
@@ -170,14 +244,33 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 type="text"
                 required
                 value={formData.username}
-                onChange={e => {
-                  clearError();
+                onChange={(e) => {
+                  clearNotice();
                   setFormData({ ...formData, username: e.target.value });
                 }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
                 placeholder="请输入用户名"
               />
             </div>
+
+            {isStudentRegister && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                  <Mail size={14} className="text-slate-400" /> 邮箱
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => {
+                    clearNotice();
+                    setFormData({ ...formData, email: e.target.value });
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
+                  placeholder="请输入可接收邮件的邮箱"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
@@ -188,16 +281,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 required
                 minLength={6}
                 value={formData.password}
-                onChange={e => {
-                  clearError();
+                onChange={(e) => {
+                  clearNotice();
                   setFormData({ ...formData, password: e.target.value });
                 }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
-                placeholder="至少六位，字母数字组合"
+                placeholder="至少 6 位"
               />
             </div>
 
-            {activeTab === UserRole.STUDENT && studentMode === 'register' && (
+            {isStudentRegister && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
                   <Lock size={14} className="text-slate-400" /> 确认密码
@@ -207,8 +300,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   required
                   minLength={6}
                   value={formData.confirmPassword}
-                  onChange={e => {
-                    clearError();
+                  onChange={(e) => {
+                    clearNotice();
                     setFormData({ ...formData, confirmPassword: e.target.value });
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
@@ -217,28 +310,34 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               </div>
             )}
 
-            {error && (
-              <div className="text-xs text-red-600 font-semibold">{error}</div>
-            )}
+            {error && <div className="text-xs text-red-600 font-semibold">{error}</div>}
+            {message && <div className="text-xs text-emerald-700 font-semibold">{message}</div>}
 
             <button
               type="submit"
-              className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
+              disabled={isSubmitting}
+              className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
             >
-              {activeTab === UserRole.STUDENT
-                ? studentMode === 'register'
-                  ? '注册'
-                  : '登录'
-                : '管理员安全登录'}
+              {isStudentRegister ? '注册并发送验证邮件' : activeTab === UserRole.STUDENT ? '登录' : '管理员安全登录'}
               <ArrowRight size={18} />
             </button>
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Global Support</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+              Global Support
+            </span>
             <div className="flex gap-4">
-              <span className="text-[10px] text-slate-500 font-bold cursor-pointer hover:text-blue-600">忘记密码</span>
-              <span className="text-[10px] text-slate-500 font-bold cursor-pointer hover:text-blue-600">帮助中心</span>
+              {activeTab === UserRole.STUDENT ? (
+                <Link
+                  to="/forgot-password"
+                  className="text-[10px] text-slate-500 font-bold hover:text-blue-600"
+                >
+                  忘记密码
+                </Link>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-bold">教师入口不支持邮件找回</span>
+              )}
             </div>
           </div>
         </div>

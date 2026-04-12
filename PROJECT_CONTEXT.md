@@ -143,3 +143,31 @@ On Windows PowerShell in this environment, use `npm.cmd` instead of `npm` if scr
 - Decide whether API startup should run migrations automatically in Docker or keep migrations manual.
 - Add smoke tests for API health, auth, profile, and one simulation message round trip.
 - Consider adding a richer learner profile model for personalization beyond the current static student profile fields.
+
+## 2026-04-12 Email Auth Progress
+
+- Student auth now has a database foundation for email verification and password reset:
+  - `users.email`
+  - `users.email_verified_at`
+  - `email_verification_tokens`
+  - `password_reset_tokens`
+- Migration added:
+  - `apps/api/prisma/migrations/20260412170000_add_email_auth_tokens/migration.sql`
+- Backend auth routes now support:
+  - `POST /api/auth/student/register` with email
+  - `POST /api/auth/verify-email`
+  - `POST /api/auth/resend-verification`
+  - `POST /api/auth/forgot-password`
+  - `POST /api/auth/reset-password`
+- Student accounts created through the new flow start as `PENDING_VERIFICATION` and cannot log in until email verification succeeds.
+- Mail delivery supports two modes:
+  - `MAIL_MODE=preview` for local development, returning preview links in responses/logs
+  - `MAIL_MODE=smtp` for real delivery through SMTP
+- Frontend auth flow now includes:
+  - email field on student registration
+  - verification landing page
+  - forgot-password page
+  - reset-password page
+- Deployment note:
+  - production compose must pass `APP_BASE_URL`, `MAIL_MODE`, and `SMTP_*` variables to the API container
+  - real production email delivery still requires a verified mail provider/domain configuration

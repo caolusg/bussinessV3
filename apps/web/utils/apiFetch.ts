@@ -23,20 +23,31 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'USERNAME_TAKEN':
     case 'Username already exists':
       return '用户名已存在';
+    case 'EMAIL_TAKEN':
+    case 'Email already exists':
+      return '邮箱已被注册';
+    case 'EMAIL_NOT_VERIFIED':
+    case 'Email verification required':
+      return '该账号尚未完成邮箱验证，请先验证后再登录';
+    case 'INVALID_OR_EXPIRED_TOKEN':
+    case 'Invalid or expired token':
+      return '链接已失效，请重新获取';
     case 'FORBIDDEN':
     case 'Forbidden':
-      return '当前账号没有该入口权限，请使用教师/管理员账号登录';
+    case 'ROLE_FORBIDDEN':
+      return '当前账号没有这个入口的权限，请使用正确的身份登录';
     case 'INTERNAL_ERROR':
     case 'Internal error':
     case 'Internal Server Error':
-      return '服务暂时不可用，请确认 API 服务已启动后再试';
+      return '服务暂时不可用，请确认 API 服务启动后再试';
     default:
       break;
   }
 
   if (status && status >= 500) {
-    return '服务暂时不可用，请确认 API 服务已启动后再试';
+    return '服务暂时不可用，请确认 API 服务启动后再试';
   }
+
   return raw || '服务暂时不可用，请稍后再试';
 };
 
@@ -78,7 +89,7 @@ export async function apiRequest<T>(
   try {
     result = await apiFetch<ApiEnvelope<T> | T>(path, options);
   } catch {
-    throw new Error('服务暂时不可用，请确认 API 服务已启动后再试');
+    throw new Error('服务暂时不可用，请确认 API 服务启动后再试');
   }
 
   const { data, res, text } = result;

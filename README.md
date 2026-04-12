@@ -95,6 +95,9 @@ Important variables:
 - `JWT_SECRET=change_me`
 - `JWT_EXPIRES_IN=7d`
 - `BCRYPT_ROUNDS=10`
+- `APP_BASE_URL=http://127.0.0.1:3000`
+- `MAIL_MODE=preview` for local preview, or `smtp` for real email sending
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
 - `DEFAULT_TEACHER_USERNAME=teacher`
 - `DEFAULT_TEACHER_PASSWORD=password123`
 - `AI_ENABLED=true`
@@ -141,7 +144,7 @@ Student register:
 ```bash
 curl -X POST http://localhost:8000/api/auth/student/register ^
   -H "Content-Type: application/json" ^
-  -d "{\"username\":\"student001\",\"password\":\"password123\",\"confirmPassword\":\"password123\"}"
+  -d "{\"username\":\"student001\",\"email\":\"student001@example.com\",\"password\":\"password123\",\"confirmPassword\":\"password123\"}"
 ```
 
 Student login:
