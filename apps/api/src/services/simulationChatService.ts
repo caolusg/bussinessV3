@@ -9,6 +9,12 @@ import {
 
 const FALLBACK_OPPONENT_REPLY =
   '我理解你的说明，但目前这个报价对我们还是偏高。除非你能进一步解释价格构成，或者在数量、付款条件上给出更有竞争力的方案，否则我们很难继续推进。';
+const COMPATIBLE_CLIENT_FALLBACK_REPLY =
+  '我理解你的说明，但这个方案还需要更清楚的业务依据。请你进一步说明条件、风险边界和下一步安排。';
+const FALLBACK_REPLY_HISTORY = new Set([
+  FALLBACK_OPPONENT_REPLY,
+  COMPATIBLE_CLIENT_FALLBACK_REPLY
+]);
 
 type Db = Pick<
   PrismaClient,
@@ -118,6 +124,22 @@ function toJsonValue(
   return value as Prisma.InputJsonValue;
 }
 
+function isDegradedTrace(traceJson: Prisma.JsonValue | null) {
+  if (!traceJson || typeof traceJson !== 'object' || Array.isArray(traceJson)) {
+    return false;
+  }
+  return (traceJson as { degraded?: unknown }).degraded === true;
+}
+
+function shouldIncludeInAiHistory(message: {
+  role: string;
+  content: string;
+  traceJson: Prisma.JsonValue | null;
+}) {
+  if (message.role === 'student') return true;
+  return !isDegradedTrace(message.traceJson) && !FALLBACK_REPLY_HISTORY.has(message.content);
+}
+
 export async function appendStudentAndOpponent(
   prisma: Db,
   sessionId: string,
@@ -149,6 +171,7 @@ export async function appendStudentAndOpponent(
 
       const history: SimulationHistoryMessage[] = [...recent]
         .reverse()
+        .filter(shouldIncludeInAiHistory)
         .map((message) => ({
           role: message.role === 'student' ? 'student' : 'coach',
           content: message.content

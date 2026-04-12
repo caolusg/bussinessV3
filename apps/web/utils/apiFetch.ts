@@ -4,6 +4,42 @@ export type ApiFetchResult<T> = {
   text: string;
 };
 
+type ApiEnvelope<T> = {
+  ok?: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  code?: string;
+};
+
+const normalizeApiError = (raw: string, status?: number) => {
+  switch (raw) {
+    case 'UNAUTHORIZED':
+    case 'Unauthorized':
+    case 'INVALID_CREDENTIALS':
+    case 'USER_NOT_FOUND':
+    case 'User not found':
+      return '用户名或密码错误';
+    case 'USERNAME_TAKEN':
+    case 'Username already exists':
+      return '用户名已存在';
+    case 'FORBIDDEN':
+    case 'Forbidden':
+      return '当前账号没有该入口权限，请使用教师/管理员账号登录';
+    case 'INTERNAL_ERROR':
+    case 'Internal error':
+    case 'Internal Server Error':
+      return '服务暂时不可用，请确认 API 服务已启动后再试';
+    default:
+      break;
+  }
+
+  if (status && status >= 500) {
+    return '服务暂时不可用，请确认 API 服务已启动后再试';
+  }
+  return raw || '服务暂时不可用，请稍后再试';
+};
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -30,12 +66,50 @@ export async function apiFetch<T>(
     }
   }
 
-  if (res.status === 401) {
+  return { data, res, text };
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {},
+  config: { redirectOnUnauthorized?: boolean } = {}
+): Promise<T> {
+  let result: ApiFetchResult<ApiEnvelope<T> | T>;
+  try {
+    result = await apiFetch<ApiEnvelope<T> | T>(path, options);
+  } catch {
+    throw new Error('服务暂时不可用，请确认 API 服务已启动后再试');
+  }
+
+  const { data, res, text } = result;
+  const redirectOnUnauthorized = config.redirectOnUnauthorized ?? true;
+
+  if (res.status === 401 && redirectOnUnauthorized) {
     localStorage.removeItem('access_token');
     if (typeof window !== 'undefined') {
       window.location.replace('/login');
     }
+    throw new Error('UNAUTHORIZED');
   }
 
-  return { data, res, text };
+  if (!res.ok) {
+    const envelope = data as ApiEnvelope<T> | null;
+    const raw =
+      envelope && typeof envelope === 'object'
+        ? envelope.error ?? envelope.message ?? envelope.code ?? res.statusText
+        : text || res.statusText;
+    throw new Error(normalizeApiError(raw, res.status));
+  }
+
+  if (data && typeof data === 'object' && 'ok' in data) {
+    const envelope = data as ApiEnvelope<T>;
+    if (envelope.ok === false) {
+      throw new Error(
+        normalizeApiError(envelope.error ?? envelope.message ?? envelope.code ?? '', res.status)
+      );
+    }
+    return (envelope.data ?? null) as T;
+  }
+
+  return data as T;
 }

@@ -48,6 +48,14 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
       case 'USERNAME_TAKEN':
       case 'Username already exists':
         return '用户名已存在';
+      case 'INTERNAL_ERROR':
+      case 'Internal error':
+      case 'Internal Server Error':
+      case 'Failed to fetch':
+      case 'NetworkError':
+        return '服务暂时不可用，请确认 API 服务已启动后再试';
+      case 'ROLE_FORBIDDEN':
+        return '当前账号没有该入口权限，请切换登录入口';
       default:
         return raw;
     }
