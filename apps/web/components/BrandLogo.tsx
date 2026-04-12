@@ -20,7 +20,7 @@ const BrandLogo: React.FC<BrandLogoProps> = ({ inverse = false, compact = false 
           <rect x="5" y="5" width="38" height="38" rx="7" fill="#b91c1c" />
           <rect x="9" y="9" width="30" height="30" rx="3" fill="none" stroke="#fff7ed" strokeWidth="2.8" />
           <path
-            d="M24 12v6M16 18h16M18 23h12M18 23v5M30 23v5M18 28h12M15 33h18M18 33v5M24 33v5M30 33v5"
+            d="M15 13h18M14 18h20M18 22c3 2 9 2 12 0M18 22c0 5 2 8 6 10M30 22c0 5-2 8-6 10M15 36c0-8 2-13 9-13M33 36c0-8-2-13-9-13M20 32h8M20 32v5M28 32v5M20 37h8"
             fill="none"
             stroke="#fff7ed"
             strokeLinecap="round"
@@ -28,7 +28,7 @@ const BrandLogo: React.FC<BrandLogoProps> = ({ inverse = false, compact = false 
             strokeWidth="2.8"
           />
           <path
-            d="M19 12l2 3M29 12l-2 3M21 28l3 4 3-4"
+            d="M24 12v5M22 25c1 1 3 1 4 0"
             fill="none"
             stroke="#fbbf24"
             strokeLinecap="round"
