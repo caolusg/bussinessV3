@@ -1,13 +1,19 @@
 import React from 'react';
 import { Circle, Loader2 } from 'lucide-react';
 import { STAGES } from '../constants';
+import type { Stage } from '../types';
 
 interface WorkflowMapProps {
+  stages?: Stage[];
   currentStageId: number;
   onStageSelect: (id: number) => void;
 }
 
-const WorkflowMap: React.FC<WorkflowMapProps> = ({ currentStageId, onStageSelect }) => {
+const WorkflowMap: React.FC<WorkflowMapProps> = ({
+  stages = STAGES,
+  currentStageId,
+  onStageSelect
+}) => {
   return (
     <div className="mb-6 w-full overflow-x-auto rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
       <h2 className="mb-6 text-sm font-bold uppercase tracking-wide text-gray-500">
@@ -17,7 +23,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({ currentStageId, onStageSelect
       <div className="relative flex min-w-[800px] items-center justify-between px-4">
         <div className="absolute left-0 top-1/2 -z-0 h-1 w-full -translate-y-1/2 rounded-full bg-gray-100" />
 
-        {STAGES.map((stage) => {
+        {stages.map((stage) => {
           const isSelected = stage.id === currentStageId;
 
           return (

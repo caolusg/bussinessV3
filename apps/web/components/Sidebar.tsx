@@ -5,10 +5,11 @@ import { STAGES } from '../constants';
 import { Stage, SubResource } from '../types';
 
 interface SidebarProps {
+  stages?: Stage[];
   onResourceSelect?: (stageId: number, resource: SubResource) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
+const Sidebar: React.FC<SidebarProps> = ({ stages = STAGES, onResourceSelect }) => {
   const [expandedStageId, setExpandedStageId] = useState<number | null>(1);
 
   const toggleStage = (id: number) => {
@@ -36,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
 
       {/* Accordion Menu */}
       <div className="flex-1 px-2 space-y-1 pb-10">
-        {STAGES.map((stage: Stage) => {
+        {stages.map((stage: Stage) => {
           const isExpanded = expandedStageId === stage.id;
           return (
             <div key={stage.id} className="select-none">
@@ -59,9 +60,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
                       onClick={() => onResourceSelect?.(stage.id, res)}
                       className="pl-10 pr-4 py-2 text-xs text-slate-500 hover:text-blue-400 hover:bg-slate-900 cursor-pointer flex items-center gap-2 transition-colors"
                     >
-                      {res.id.startsWith('v') && <FileText size={12} />}
-                      {res.id.startsWith('s') && <MessageSquare size={12} />}
-                      {res.id.startsWith('k') && <Globe size={12} />}
+                      {res.type === 'vocabulary' && <FileText size={12} />}
+                      {res.type === 'phrases' && <MessageSquare size={12} />}
+                      {res.type === 'knowledge' && <Globe size={12} />}
                       {res.title}
                     </div>
                   ))}

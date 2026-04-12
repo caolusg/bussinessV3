@@ -6,6 +6,8 @@ import type { ResourceEntry, SubResource } from '../types';
 interface ResourcePanelProps {
   stageId: number;
   resource: SubResource;
+  entries?: ResourceEntry[];
+  stageTitle?: string;
   onClose: () => void;
 }
 
@@ -33,11 +35,17 @@ const typeConfig = {
   }
 } as const;
 
-const ResourcePanel: React.FC<ResourcePanelProps> = ({ stageId, resource, onClose }) => {
+const ResourcePanel: React.FC<ResourcePanelProps> = ({
+  stageId,
+  resource,
+  entries: providedEntries,
+  stageTitle,
+  onClose
+}) => {
   const stage = STAGES.find((item) => item.id === stageId);
   const config = typeConfig[resource.type];
   const Icon = config.icon;
-  const entries: ResourceEntry[] = STAGE_RESOURCES[stageId]?.[resource.type] ?? [];
+  const entries: ResourceEntry[] = providedEntries ?? STAGE_RESOURCES[stageId]?.[resource.type] ?? [];
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
@@ -52,7 +60,7 @@ const ResourcePanel: React.FC<ResourcePanelProps> = ({ stageId, resource, onClos
               学习资源
             </div>
             <h3 className="mt-1 text-xl font-bold text-slate-900">
-              {stage?.title ?? `第 ${stageId} 阶段`} / {config.title}
+              {stageTitle ?? stage?.title ?? `第 ${stageId} 阶段`} / {config.title}
             </h3>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
@@ -12,8 +12,18 @@ import LoginView from './components/LoginView';
 import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
 import RequireAuth from './components/RequireAuth';
-import { SCENARIO_DB } from './constants';
-import { UserRole, UserProfile, SubResource } from './types';
+import { SCENARIO_DB, STAGE_RESOURCES, STAGES } from './constants';
+import {
+  UserRole,
+  UserProfile,
+  SubResource,
+  Stage,
+  StageResourceSet,
+  TaskDetail,
+  TaskMode,
+  ResourceEntry
+} from './types';
+import { apiRequest } from './utils/apiFetch';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
@@ -23,6 +33,95 @@ const buildDefaultUser = (role: UserRole): UserProfile => ({
   company: '\u7cfb\u7edf\u6a21\u62df\u8d26\u6237',
   avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${role === UserRole.TEACHER ? 'teacher' : 'student'}`
 });
+
+type ContentTask = {
+  taskCode: string;
+  title: string;
+  goal: string;
+  subGoal?: string | null;
+  tipTitle?: string | null;
+  tipContent?: string | null;
+};
+
+type ContentResource = {
+  id: string;
+  type: 'vocabulary' | 'phrases' | 'knowledge';
+  term: string;
+  explanation: string;
+  example?: string | null;
+};
+
+type ContentStage = {
+  id: string;
+  key: string;
+  sortOrder: number;
+  titleZh: string;
+  titleEn?: string | null;
+  tasks?: ContentTask[];
+  resources?: ContentResource[];
+};
+
+const resourceTitleByType: Record<ContentResource['type'], string> = {
+  vocabulary: '商务词汇',
+  phrases: '常用句式',
+  knowledge: '外贸常识'
+};
+
+const makeEmptyResourceSet = (): StageResourceSet => ({
+  vocabulary: [],
+  phrases: [],
+  knowledge: []
+});
+
+const mapContentStages = (contentStages: ContentStage[]) => {
+  const stages: Stage[] = [];
+  const tasksByStage: Record<number, TaskDetail> = {};
+  const resourcesByStage: Record<number, StageResourceSet> = {};
+
+  for (const stage of contentStages) {
+    const stageId = stage.sortOrder;
+    const title = `${stage.titleZh}${stage.titleEn ? ` (${stage.titleEn})` : ''}`;
+
+    stages.push({
+      id: stageId,
+      title,
+      status: STAGES.find((item) => item.id === stageId)?.status ?? STAGES[0].status,
+      subResources: (['vocabulary', 'phrases', 'knowledge'] as const).map((type) => ({
+        id: `${type}-${stageId}`,
+        title: resourceTitleByType[type],
+        type
+      }))
+    });
+
+    const task = stage.tasks?.[0];
+    if (task) {
+      tasksByStage[stageId] = {
+        stageId,
+        mode: TaskMode.PENDING,
+        title,
+        taskId: task.taskCode,
+        description: task.goal,
+        subDescription: task.subGoal ?? undefined,
+        feedbackOrTipTitle: task.tipTitle ?? undefined,
+        feedbackOrTipContent: task.tipContent ?? ''
+      };
+    }
+
+    const resourceSet = makeEmptyResourceSet();
+    for (const resource of stage.resources ?? []) {
+      const entry: ResourceEntry = {
+        id: resource.id,
+        term: resource.term,
+        explanation: resource.explanation,
+        example: resource.example ?? undefined
+      };
+      resourceSet[resource.type].push(entry);
+    }
+    resourcesByStage[stageId] = resourceSet;
+  }
+
+  return { stages, tasksByStage, resourcesByStage };
+};
 
 const AppRoutes: React.FC = () => {
   // Global Auth State
@@ -35,99 +134,52 @@ const AppRoutes: React.FC = () => {
     stageId: number;
     resource: SubResource;
   } | null>(null);
+  const [contentStages, setContentStages] = useState<Stage[]>(STAGES);
+  const [contentTasks, setContentTasks] = useState<Record<number, TaskDetail>>({});
+  const [contentResources, setContentResources] =
+    useState<Record<number, StageResourceSet>>(STAGE_RESOURCES);
+  const [contentLoadError, setContentLoadError] = useState<string | null>(null);
 
-  const currentTaskDetail = SCENARIO_DB[selectedStageId] || SCENARIO_DB[1];
+  const currentTaskDetail = contentTasks[selectedStageId] || SCENARIO_DB[selectedStageId] || SCENARIO_DB[1];
+  const selectedResourceEntries = useMemo(() => {
+    if (!selectedResource) return undefined;
+    return contentResources[selectedResource.stageId]?.[selectedResource.resource.type];
+  }, [contentResources, selectedResource]);
   const navigate = useNavigate();
 
   const clearAuth = () => {
     localStorage.removeItem('access_token');
   };
 
-  const apiFetch = async <T,>(path: string, options: RequestInit = {}) => {
+  useEffect(() => {
     const token = localStorage.getItem('access_token');
-    const headers = new Headers(options.headers ?? {});
-    if (!headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
-    }
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+    if (!token) return;
 
-    const res = await fetch(path, {
-      ...options,
-      headers
-    });
+    let cancelled = false;
+    apiRequest<ContentStage[]>('/api/content/stages')
+      .then((stages) => {
+        if (cancelled) return;
+        const mapped = mapContentStages(stages);
+        setContentStages(mapped.stages.length ? mapped.stages : STAGES);
+        setContentTasks(mapped.tasksByStage);
+        setContentResources({
+          ...STAGE_RESOURCES,
+          ...mapped.resourcesByStage
+        });
+        setContentLoadError(null);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setContentLoadError(error instanceof Error ? error.message : '学习内容暂时不可用');
+        setContentStages(STAGES);
+        setContentTasks({});
+        setContentResources(STAGE_RESOURCES);
+      });
 
-    if (res.status === 401) {
-      clearAuth();
-      navigate('/login', { replace: true });
-      throw new Error('UNAUTHORIZED');
-    }
-
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const rawMessage = data?.error ?? data?.message ?? res.statusText ?? '';
-      let message =
-        typeof rawMessage === 'string' && rawMessage.trim().length > 0
-          ? rawMessage
-          : '\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
-      if (res.status === 401) {
-        message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
-      }
-      switch (message) {
-        case 'UNAUTHORIZED':
-        case 'INVALID_CREDENTIALS':
-        case 'Unauthorized':
-        case 'USER_NOT_FOUND':
-        case 'User not found':
-          message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
-          break;
-        case 'USERNAME_TAKEN':
-        case 'Username already exists':
-          message = '\u7528\u6237\u540d\u5df2\u5b58\u5728';
-          break;
-        default:
-          break;
-      }
-      const error = new Error(message) as Error & { status?: number };
-      error.status = res.status;
-      throw error;
-    }
-
-    if (data && typeof data === 'object' && 'ok' in data) {
-      if (data.ok === false) {
-        const rawMessage = data?.error ?? data?.message ?? '';
-        let message =
-          typeof rawMessage === 'string' && rawMessage.trim().length > 0
-            ? rawMessage
-            : '\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
-        if (res.status === 401) {
-          message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
-        }
-        switch (message) {
-          case 'UNAUTHORIZED':
-          case 'INVALID_CREDENTIALS':
-          case 'Unauthorized':
-          case 'USER_NOT_FOUND':
-          case 'User not found':
-            message = '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
-            break;
-          case 'USERNAME_TAKEN':
-          case 'Username already exists':
-            message = '\u7528\u6237\u540d\u5df2\u5b58\u5728';
-            break;
-          default:
-            break;
-        }
-        const error = new Error(message) as Error & { status?: number };
-        error.status = res.status;
-        throw error;
-      }
-      return (data.data ?? null) as T;
-    }
-
-    return data as T;
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   const handleLogin = async (
     selectedRole: UserRole,
@@ -146,15 +198,19 @@ const AppRoutes: React.FC = () => {
           : '/api/auth/student/login';
     }
 
-    const tokenResult = await apiFetch<{ token: string }>(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
+    const tokenResult = await apiRequest<{ token: string }>(
+      endpoint,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      },
+      { redirectOnUnauthorized: false }
+    );
 
     const token = tokenResult.token;
     localStorage.setItem('access_token', token);
 
-    const me = await apiFetch<{
+    const me = await apiRequest<{
       roles: Array<'student' | 'teacher'>;
       profileCompleted: boolean;
     }>('/api/auth/me', {
@@ -183,7 +239,7 @@ const AppRoutes: React.FC = () => {
       return;
     }
 
-    await apiFetch('/api/profile/student', {
+    await apiRequest('/api/profile/student', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -217,6 +273,13 @@ const AppRoutes: React.FC = () => {
   const handleResourceClick = (stageId: number, resource: SubResource) => {
     setSelectedStageId(stageId);
     setSelectedResource({ stageId, resource });
+    const resourceId = contentResources[stageId]?.[resource.type]?.[0]?.id;
+    if (resourceId) {
+      void apiRequest('/api/content/resources/viewed', {
+        method: 'POST',
+        body: JSON.stringify({ resourceId })
+      }).catch(() => undefined);
+    }
   };
 
   return (
@@ -295,10 +358,11 @@ const AppRoutes: React.FC = () => {
                 onManageProfile={() => navigate('/profile')}
               />
               <div className="flex pt-16">
-                <Sidebar onResourceSelect={handleResourceClick} />
+                <Sidebar stages={contentStages} onResourceSelect={handleResourceClick} />
                 <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
                   <div className="max-w-6xl mx-auto space-y-6">
                     <WorkflowMap
+                      stages={contentStages}
                       currentStageId={selectedStageId}
                       onStageSelect={(stageId) => {
                         setSelectedStageId(stageId);
@@ -309,8 +373,15 @@ const AppRoutes: React.FC = () => {
                       <ResourcePanel
                         stageId={selectedResource.stageId}
                         resource={selectedResource.resource}
+                        entries={selectedResourceEntries}
+                        stageTitle={contentStages.find((stage) => stage.id === selectedResource.stageId)?.title}
                         onClose={() => setSelectedResource(null)}
                       />
+                    )}
+                    {contentLoadError && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        学习内容接口暂时不可用，当前使用本地备用内容。
+                      </div>
                     )}
                     <TaskCard
                       data={currentTaskDetail}
