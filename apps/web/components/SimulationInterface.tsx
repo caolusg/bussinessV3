@@ -2,10 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Bot,
-  Check,
   ChevronRight,
   HelpCircle,
-  Lock,
   Mic,
   Send,
   User,
@@ -16,7 +14,6 @@ import type {
   SimulationOrchestration,
   TaskDetail
 } from '../types';
-import { TaskMode, StageStatus } from '../types';
 import { INITIAL_CHAT_MESSAGES, OPPONENT_PROFILE, STAGES } from '../constants';
 import { apiFetch } from '../utils/apiFetch';
 
@@ -61,9 +58,9 @@ const stageKeyMap: Record<number, SimulationStage> = {
 };
 
 const difficultyMap = {
-  down: 'Difficulty Down',
-  keep: 'Difficulty Keep',
-  up: 'Difficulty Up'
+  down: '降低难度',
+  keep: '保持难度',
+  up: '提高难度'
 } as const;
 
 function toChatMessage(msg: SimulationApiMessage): ChatMessage {
@@ -107,14 +104,17 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [traceLabel, setTraceLabel] = useState<string | null>(null);
   const [difficultyLabel, setDifficultyLabel] = useState<string | null>(null);
   const [cultureHints, setCultureHints] = useState<string[]>([]);
-  const [currentStage, setCurrentStage] = useState<SimulationStage>('quotation');
-  const [attemptNo, setAttemptNo] = useState(1);
+  const [currentStage, setCurrentStage] = useState<SimulationStage>(
+    stageKeyMap[task.stageId] ?? 'acquisition'
+  );
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const isDev = import.meta.env.DEV;
 
-  const isFirstAttempt = attemptNo <= 1 && task.mode !== TaskMode.COMPLETED;
   const currentStageMeta =
-    STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[1];
+    STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
+
+  useEffect(() => {
+    setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
+  }, [task.stageId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -153,7 +153,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       orchestration.trace.degraded ? 'Fallback' : null
     ].filter(Boolean);
 
-    setTraceLabel(parts.join(' · '));
+    setTraceLabel(parts.join(' / '));
   };
 
   useEffect(() => {
@@ -165,7 +165,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
       try {
         const { res, data } = await apiFetch<{
-          session?: { attemptNo?: number };
           orchestration?: SimulationOrchestration | null;
           messages?: SimulationApiMessage[];
         }>(`/api/simulations/session?stage=${currentStage}`);
@@ -177,13 +176,11 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           : [];
 
         setMessages(sessionMessages);
-        setAttemptNo(data?.session?.attemptNo ?? 1);
         updateStructuredFeedback(data?.orchestration ?? undefined);
       } catch (error) {
         if (cancelled) return;
         console.error('Load simulation session failed', error);
         setMessages([]);
-        setAttemptNo(1);
         resetStructuredFeedback();
       } finally {
         if (!cancelled) {
@@ -203,23 +200,18 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     if (!inputValue.trim() || sending) return;
 
     const token = localStorage.getItem('access_token');
-
-    if (isDev) {
-      console.log('[auth] localStorage keys', Object.keys(localStorage));
-      console.log('[auth] token length', token?.length);
-    }
-
     if (!token) {
       alert('未登录，请先登录');
       return;
     }
 
     const optimisticId = `tmp-${Date.now()}`;
+    const optimisticText = inputValue.trim();
     const nextTurn = (messages[messages.length - 1]?.turnIndex ?? 0) + 1;
     const optimistic: ChatMessage = {
       id: optimisticId,
       sender: 'USER',
-      text: inputValue,
+      text: optimisticText,
       timestamp: new Date().toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit'
@@ -234,11 +226,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     try {
       const { res, data, text } = await apiFetch<{
         messages?: SimulationApiMessage[];
-        attemptNo?: number;
         orchestration?: SimulationOrchestration;
       }>(`/api/simulations/${currentStage}/message`, {
         method: 'POST',
-        body: JSON.stringify({ content: optimistic.text })
+        body: JSON.stringify({ content: optimisticText })
       });
 
       if (!res.ok) {
@@ -246,10 +237,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
         alert('发送失败，请稍后重试');
         return;
-      }
-
-      if (data?.attemptNo) {
-        setAttemptNo(data.attemptNo);
       }
 
       const returnedMessages = Array.isArray(data?.messages) ? data.messages : [];
@@ -263,7 +250,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     } catch (error) {
       console.error('Simulation send error', error);
       setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
-      alert(error instanceof Error ? error.message : '发送失败，请稍后再试');
+      alert(error instanceof Error ? error.message : '发送失败，请稍后重试');
     } finally {
       setSending(false);
     }
@@ -281,15 +268,15 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
           >
             <ArrowLeft size={16} />
-            结束/退出谈判
+            结束/退出练习
           </button>
           <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-800">
-              当前: 第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
+              当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
             </span>
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-              第 {Math.max(1, attemptNo)}/{task.maxAttempts} 次尝试
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              无限练习
             </span>
           </div>
         </div>
@@ -305,8 +292,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           <div className="flex-1 space-y-1 overflow-y-auto p-2">
             {STAGES.map((stage) => {
               const isActive = stageKeyMap[stage.id] === currentStage;
-              const isCompleted = stage.status === StageStatus.COMPLETED;
-              const isLocked = stage.status === StageStatus.LOCKED;
 
               return (
                 <div
@@ -327,23 +312,17 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   >
                     <div
                       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] ${
-                        isCompleted
-                          ? 'border-green-500 bg-green-500 text-white'
-                          : isActive
-                            ? 'border-blue-500 bg-white font-bold text-blue-600'
-                            : 'border-gray-200 bg-gray-50 text-gray-400'
+                        isActive
+                          ? 'border-blue-500 bg-white font-bold text-blue-600'
+                          : 'border-slate-200 bg-white text-slate-500'
                       }`}
                     >
-                      {isCompleted ? <Check size={12} /> : isLocked ? <Lock size={10} /> : stage.id}
+                      {stage.id}
                     </div>
                     <div className="flex min-w-0 flex-col">
                       <span
                         className={`truncate font-medium ${
-                          isActive
-                            ? 'text-blue-800'
-                            : isCompleted
-                              ? 'text-green-700'
-                              : 'text-gray-400'
+                          isActive ? 'text-blue-800' : 'text-slate-600'
                         }`}
                       >
                         {stage.title.split(' ')[0]}
@@ -400,7 +379,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                       <div className="mb-1 flex items-center gap-2">
                         <span className="text-xs font-medium text-gray-400">
-                          {isMe ? '我方: 张明' : isSystem ? 'AI 教练' : `对方: ${OPPONENT_PROFILE.name}`}
+                          {isMe ? '我方：张明' : isSystem ? 'AI 教练' : `对方：${OPPONENT_PROFILE.name}`}
                         </span>
                         <span className="text-[10px] text-gray-300">{msg.timestamp}</span>
                       </div>
@@ -436,7 +415,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                       void handleSend();
                     }
                   }}
-                  placeholder="输入消息，尝试与客户沟通..."
+                  placeholder="输入消息，与客户进行业务沟通..."
                   className="h-10 max-h-32 w-full resize-none border-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0"
                   rows={1}
                 />
@@ -456,15 +435,17 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         </main>
 
         <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white">
-          {(coachNote || assessmentSummary || !isFirstAttempt) && (
+          {(coachNote || assessmentSummary) && (
             <div className="border-b border-gray-100 bg-amber-50/40 p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">
                 <Bot size={18} />
                 <h3>AI 教练复盘</h3>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs leading-5 text-slate-700 shadow-sm">
-                {coachNote ?? task.feedbackOrTipContent}
-              </div>
+              {coachNote && (
+                <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs leading-5 text-slate-700 shadow-sm">
+                  {coachNote}
+                </div>
+              )}
               {assessmentSummary && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
                   {assessmentSummary}
@@ -551,12 +532,13 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
           <div className="flex-1 p-5">
             <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-400">
-              任务目标
+              练习目标
             </h3>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
-              {isFirstAttempt
-                ? '任务目标：想办法让客户接受你的报价，不限手段。'
-                : '任务目标：请结合 FOB 术语的风险划分，再次向客户解释报价的合理性。'}
+              <div>{task.description}</div>
+              {task.subDescription && (
+                <div className="mt-2 text-xs font-normal text-blue-700">{task.subDescription}</div>
+              )}
             </div>
 
             <div className="mt-8 space-y-3">
@@ -564,22 +546,20 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                 支持工具箱
               </h3>
 
-              {!isFirstAttempt && (
-                <button
-                  onClick={onTriggerGroupDiscussion}
-                  className="group w-full rounded-lg border-2 border-indigo-100 bg-indigo-50/50 p-3 text-left transition-all hover:border-indigo-300 hover:bg-indigo-100"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-md bg-indigo-600 p-1.5 text-white">
-                        <Users size={16} />
-                      </div>
-                      <span className="text-xs font-bold text-indigo-800">进入小组复盘讨论室</span>
+              <button
+                onClick={onTriggerGroupDiscussion}
+                className="group w-full rounded-lg border-2 border-indigo-100 bg-indigo-50/50 p-3 text-left transition-all hover:border-indigo-300 hover:bg-indigo-100"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-md bg-indigo-600 p-1.5 text-white">
+                      <Users size={16} />
                     </div>
-                    <ChevronRight size={14} className="text-indigo-400" />
+                    <span className="text-xs font-bold text-indigo-800">进入小组复盘讨论室</span>
                   </div>
-                </button>
-              )}
+                  <ChevronRight size={14} className="text-indigo-400" />
+                </div>
+              </button>
 
               <button
                 onClick={onTriggerCoaching}
@@ -591,7 +571,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                       <HelpCircle size={16} />
                     </div>
                     <span className="text-xs font-medium text-slate-700 group-hover:text-blue-700">
-                      {isFirstAttempt ? '请求提示' : '请求 AI 教练当前指导'}
+                      请求 AI 教练指导
                     </span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400" />

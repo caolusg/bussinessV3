@@ -2,14 +2,14 @@
 import { Link } from 'react-router-dom';
 import { Home, BookOpen, ChevronDown, ChevronRight, FileText, Globe, MessageSquare } from 'lucide-react';
 import { STAGES } from '../constants';
-import { Stage } from '../types';
+import { Stage, SubResource } from '../types';
 
 interface SidebarProps {
-  onResourceSelect?: (title: string) => void;
+  onResourceSelect?: (stageId: number, resource: SubResource) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
-  const [expandedStageId, setExpandedStageId] = useState<number | null>(2); // Default open active stage
+  const [expandedStageId, setExpandedStageId] = useState<number | null>(1);
 
   const toggleStage = (id: number) => {
     setExpandedStageId(expandedStageId === id ? null : id);
@@ -56,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onResourceSelect }) => {
                   {stage.subResources.map((res) => (
                     <div
                       key={res.id}
-                      onClick={() => onResourceSelect?.(res.title)}
+                      onClick={() => onResourceSelect?.(stage.id, res)}
                       className="pl-10 pr-4 py-2 text-xs text-slate-500 hover:text-blue-400 hover:bg-slate-900 cursor-pointer flex items-center gap-2 transition-colors"
                     >
                       {res.id.startsWith('v') && <FileText size={12} />}

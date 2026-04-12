@@ -1,14 +1,10 @@
 
 export enum StageStatus {
-  COMPLETED = 'COMPLETED',
   ACTIVE = 'ACTIVE',
-  LOCKED = 'LOCKED',
 }
 
 export enum TaskMode {
-  PENDING = 'PENDING',
-  IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED'
+  PENDING = 'PENDING'
 }
 
 export enum UserRole {
@@ -19,6 +15,7 @@ export enum UserRole {
 export interface SubResource {
   id: string;
   title: string;
+  type: 'vocabulary' | 'phrases' | 'knowledge';
 }
 
 export interface Stage {
@@ -48,13 +45,24 @@ export interface TaskDetail {
   mode: TaskMode;
   title: string;
   taskId: string;
-  attemptCount: number;
-  maxAttempts: number;
   description: string;
   subDescription?: string;
   feedbackOrTipTitle?: string;
   feedbackOrTipContent: string;
   score?: number; 
+}
+
+export interface ResourceEntry {
+  id?: string;
+  term: string;
+  explanation: string;
+  example?: string;
+}
+
+export interface StageResourceSet {
+  vocabulary: ResourceEntry[];
+  phrases: ResourceEntry[];
+  knowledge: ResourceEntry[];
 }
 
 // --- Simulation Types ---
@@ -82,7 +90,7 @@ export interface SimulationAssessment {
 }
 
 export interface SimulationTrace {
-  provider: 'openai' | 'openclaw';
+  provider: 'deepseek' | 'compatible' | 'openclaw';
   usedTools?: string[];
   usedWebSearch?: boolean;
   degraded?: boolean;

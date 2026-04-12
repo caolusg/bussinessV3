@@ -4,6 +4,7 @@
     "db:down": "docker compose down",
     "db:migrate": "cd apps/api && npm run prisma:migrate:deploy",
     "db:seed": "npm --prefix apps/api run db:seed",
+    "db:seed:content": "npm --prefix apps/api run db:seed:content",
     "api:dev": "npm --prefix apps/api run dev",
     "api:build": "npm --prefix apps/api run build",
     "web:dev": "npm --prefix apps/web run dev",

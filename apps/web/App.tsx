@@ -4,6 +4,7 @@ import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import WorkflowMap from './components/WorkflowMap';
 import TaskCard from './components/TaskCard';
+import ResourcePanel from './components/ResourcePanel';
 import SimulationInterface from './components/SimulationInterface';
 import CoachingReview from './components/CoachingReview';
 import GroupDiscussionRoom from './components/GroupDiscussionRoom';
@@ -12,7 +13,7 @@ import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
 import RequireAuth from './components/RequireAuth';
 import { SCENARIO_DB } from './constants';
-import { UserRole, UserProfile } from './types';
+import { UserRole, UserProfile, SubResource } from './types';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
@@ -29,9 +30,13 @@ const AppRoutes: React.FC = () => {
   const [role, setRole] = useState<UserRole | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  const [selectedStageId, setSelectedStageId] = useState<number>(2);
+  const [selectedStageId, setSelectedStageId] = useState<number>(1);
+  const [selectedResource, setSelectedResource] = useState<{
+    stageId: number;
+    resource: SubResource;
+  } | null>(null);
 
-  const currentTaskDetail = SCENARIO_DB[selectedStageId] || SCENARIO_DB[2];
+  const currentTaskDetail = SCENARIO_DB[selectedStageId] || SCENARIO_DB[1];
   const navigate = useNavigate();
 
   const clearAuth = () => {
@@ -209,17 +214,9 @@ const AppRoutes: React.FC = () => {
   const handleTriggerGroupDiscussion = () => navigate('/discussion');
   const handleGoToCoachingFromDiscussion = () => navigate('/coach');
 
-  const handleNextStage = () => {
-    const nextId = selectedStageId + 1;
-    if (SCENARIO_DB[nextId]) {
-      setSelectedStageId(nextId);
-    } else {
-      alert("\u606d\u559c\uff01\u60a8\u5df2\u5b8c\u6210\u6240\u6709\u73b0\u6709\u5b9e\u8bad\u9636\u6bb5\u3002");
-    }
-  };
-
-  const handleResourceClick = (title: string) => {
-    alert(`\u6b63\u5728\u6253\u5f00\u5b66\u4e60\u8d44\u6e90\uff1a${title}\n(\u8d44\u6e90\u5e93\u6a21\u5757\u6b63\u5728\u52a0\u8f7d\u4e2d...)`);
+  const handleResourceClick = (stageId: number, resource: SubResource) => {
+    setSelectedStageId(stageId);
+    setSelectedResource({ stageId, resource });
   };
 
   return (
@@ -303,13 +300,22 @@ const AppRoutes: React.FC = () => {
                   <div className="max-w-6xl mx-auto space-y-6">
                     <WorkflowMap
                       currentStageId={selectedStageId}
-                      onStageSelect={setSelectedStageId}
+                      onStageSelect={(stageId) => {
+                        setSelectedStageId(stageId);
+                        setSelectedResource(null);
+                      }}
                     />
+                    {selectedResource && (
+                      <ResourcePanel
+                        stageId={selectedResource.stageId}
+                        resource={selectedResource.resource}
+                        onClose={() => setSelectedResource(null)}
+                      />
+                    )}
                     <TaskCard
                       data={currentTaskDetail}
                       onStartSimulation={handleStartSimulation}
                       onViewCoaching={handleTriggerCoaching}
-                      onNextStage={handleNextStage}
                     />
                   </div>
                 </main>
