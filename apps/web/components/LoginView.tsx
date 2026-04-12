@@ -198,40 +198,42 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             </button>
           </div>
 
-          <p className="text-xs text-slate-500 mb-4">
-            首次开通请选择“首次开通”；已有账号请选择“登录”。
-          </p>
+          <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-5 text-slate-600">
+            {activeTab === UserRole.STUDENT
+              ? '学生可以直接登录已有账号，或创建一个新的试用账号。'
+              : '教师和管理员请使用学校分配的账号登录。'}
+          </div>
 
           {activeTab === UserRole.STUDENT && (
-            <div className="flex items-center gap-3 mb-6">
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <input
-                  type="radio"
-                  name="student-mode"
-                  value="login"
-                  checked={studentMode === 'login'}
-                  onChange={() => {
-                    setStudentMode('login');
-                    clearNotice();
-                  }}
-                  className="accent-blue-600"
-                />
-                登录
-              </label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <input
-                  type="radio"
-                  name="student-mode"
-                  value="register"
-                  checked={studentMode === 'register'}
-                  onChange={() => {
-                    setStudentMode('register');
-                    clearNotice();
-                  }}
-                  className="accent-blue-600"
-                />
-                首次开通
-              </label>
+            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentMode('login');
+                  clearNotice();
+                }}
+                className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${
+                  studentMode === 'login'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                登录已有账号
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentMode('register');
+                  clearNotice();
+                }}
+                className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${
+                  studentMode === 'register'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                注册新账号
+              </button>
             </div>
           )}
 
@@ -318,7 +320,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               disabled={isSubmitting}
               className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
             >
-              {isStudentRegister ? '注册并发送验证邮件' : activeTab === UserRole.STUDENT ? '登录' : '管理员安全登录'}
+              {isStudentRegister ? '创建学生账号' : activeTab === UserRole.STUDENT ? '登录' : '管理员安全登录'}
               <ArrowRight size={18} />
             </button>
           </form>
