@@ -96,7 +96,9 @@ const getUserRoles = async (userId: string) => {
   return roles.map((r: { role: { key: string } }) => r.role.key);
 };
 
-const ensureActiveUser = (status: string) => status === ACCOUNT_STATUS_ACTIVE;
+const ensureActiveUser = (status: string) =>
+  status === ACCOUNT_STATUS_ACTIVE ||
+  (!EMAIL_VERIFICATION_REQUIRED && status === ACCOUNT_STATUS_PENDING);
 
 const normalizeUsername = (username: string) => username.trim();
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
