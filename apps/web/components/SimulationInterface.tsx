@@ -1,7 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Send, Bot, FileText, User, HelpCircle, Check, Lock, ChevronRight, Mic, Users } from 'lucide-react';
-import { TaskDetail, TaskMode, StageStatus, ChatMessage } from '../types';
-import { STAGES, OPPONENT_PROFILE, INITIAL_CHAT_MESSAGES } from '../constants';
+import {
+  ArrowLeft,
+  Bot,
+  ChevronRight,
+  HelpCircle,
+  Mic,
+  Send,
+  User,
+  Users
+} from 'lucide-react';
+import type {
+  ChatMessage,
+  SimulationOrchestration,
+  TaskDetail
+} from '../types';
+import { INITIAL_CHAT_MESSAGES, OPPONENT_PROFILE, STAGES } from '../constants';
 import { apiFetch } from '../utils/apiFetch';
 
 interface SimulationInterfaceProps {
@@ -11,77 +24,198 @@ interface SimulationInterfaceProps {
   onTriggerGroupDiscussion: () => void;
 }
 
-const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit, onTriggerCoaching, onTriggerGroupDiscussion }) => {
+type SimulationStage =
+  | 'acquisition'
+  | 'quotation'
+  | 'negotiation'
+  | 'contract'
+  | 'preparation'
+  | 'customs'
+  | 'settlement'
+  | 'after_sales';
+
+type SimulationApiMessage = {
+  id: string;
+  role: string;
+  content: string;
+  coachNote?: string | null;
+  assessmentJson?: SimulationOrchestration['assessment'];
+  traceJson?: SimulationOrchestration['trace'];
+  personaJson?: SimulationOrchestration['personaSnapshot'];
+  turnIndex: number;
+  createdAt: string | Date;
+};
+
+const stageKeyMap: Record<number, SimulationStage> = {
+  1: 'acquisition',
+  2: 'quotation',
+  3: 'negotiation',
+  4: 'contract',
+  5: 'preparation',
+  6: 'customs',
+  7: 'settlement',
+  8: 'after_sales'
+};
+
+const difficultyMap = {
+  down: '降低难度',
+  keep: '保持难度',
+  up: '提高难度'
+} as const;
+
+function toChatMessage(msg: SimulationApiMessage): ChatMessage {
+  const sender =
+    msg.role === 'user' || msg.role === 'student'
+      ? 'USER'
+      : msg.role === 'system' || msg.role === 'coach'
+        ? 'SYSTEM'
+        : 'OPPONENT';
+
+  return {
+    id: msg.id,
+    sender,
+    text: msg.content,
+    timestamp: new Date(msg.createdAt).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    turnIndex: msg.turnIndex,
+    coachNote: msg.coachNote ?? undefined,
+    assessment: msg.assessmentJson ?? undefined,
+    trace: msg.traceJson ?? undefined,
+    personaSnapshot: msg.personaJson ?? undefined
+  };
+}
+
+const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
+  task,
+  onExit,
+  onTriggerCoaching,
+  onTriggerGroupDiscussion
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(false);
   const [coachNote, setCoachNote] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState<'acquisition' | 'quotation' | 'negotiation' | 'contract' | 'preparation' | 'customs' | 'settlement' | 'after_sales'>('quotation');
-  const [attemptNo, setAttemptNo] = useState(1);
+  const [assessmentSummary, setAssessmentSummary] = useState<string | null>(null);
+  const [assessmentStrengths, setAssessmentStrengths] = useState<string[]>([]);
+  const [assessmentRisks, setAssessmentRisks] = useState<string[]>([]);
+  const [traceLabel, setTraceLabel] = useState<string | null>(null);
+  const [difficultyLabel, setDifficultyLabel] = useState<string | null>(null);
+  const [cultureHints, setCultureHints] = useState<string[]>([]);
+  const [currentStage, setCurrentStage] = useState<SimulationStage>(
+    stageKeyMap[task.stageId] ?? 'acquisition'
+  );
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const isDev = import.meta.env.DEV;
 
-  const isFirstAttempt = attemptNo <= 1 && task.mode !== TaskMode.COMPLETED;
-  const stageKeyMap: Record<number, typeof currentStage> = {
-    1: 'acquisition',
-    2: 'quotation',
-    3: 'negotiation',
-    4: 'contract',
-    5: 'preparation',
-    6: 'customs',
-    7: 'settlement',
-    8: 'after_sales'
-  };
+  const currentStageMeta =
+    STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
 
-  const currentStageMeta = STAGES.find((s) => stageKeyMap[s.id] === currentStage) ?? STAGES[1];
-
-  const toChatMessage = (msg: {
-    id: string;
-    role: string;
-    content: string;
-    coachNote?: string | null;
-    turnIndex: number;
-    createdAt: string | Date;
-  }): ChatMessage => {
-    const sender = msg.role === 'user' || msg.role === 'student' ? 'USER' : msg.role === 'system' ? 'SYSTEM' : 'OPPONENT';
-    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return {
-      id: msg.id,
-      sender,
-      text: msg.content,
-      timestamp: time,
-      turnIndex: msg.turnIndex,
-      coachNote: msg.coachNote ?? undefined
-    };
-  };
+  useEffect(() => {
+    setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
+  }, [task.stageId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const resetStructuredFeedback = () => {
+    setCoachNote(null);
+    setAssessmentSummary(null);
+    setAssessmentStrengths([]);
+    setAssessmentRisks([]);
+    setTraceLabel(null);
+    setDifficultyLabel(null);
+    setCultureHints([]);
+  };
+
+  const updateStructuredFeedback = (orchestration?: SimulationOrchestration) => {
+    setCoachNote(orchestration?.coachNote ?? null);
+    setAssessmentSummary(orchestration?.assessment?.summary ?? null);
+    setAssessmentStrengths(orchestration?.assessment?.strengths ?? []);
+    setAssessmentRisks(orchestration?.assessment?.risks ?? []);
+    setCultureHints(orchestration?.personaSnapshot?.cultureHints ?? []);
+    setDifficultyLabel(
+      orchestration?.personaSnapshot?.difficultyAdjustment
+        ? difficultyMap[orchestration.personaSnapshot.difficultyAdjustment]
+        : null
+    );
+
+    if (!orchestration?.trace) {
+      setTraceLabel(null);
+      return;
+    }
+
+    const parts = [
+      orchestration.trace.provider.toUpperCase(),
+      orchestration.trace.usedWebSearch ? 'Web Search' : null,
+      orchestration.trace.degraded ? 'Fallback' : null
+    ].filter(Boolean);
+
+    setTraceLabel(parts.join(' / '));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSession = async () => {
+      setLoadingSession(true);
+      resetStructuredFeedback();
+
+      try {
+        const { res, data } = await apiFetch<{
+          orchestration?: SimulationOrchestration | null;
+          messages?: SimulationApiMessage[];
+        }>(`/api/simulations/session?stage=${currentStage}`);
+
+        if (!res.ok || cancelled) return;
+
+        const sessionMessages = Array.isArray(data?.messages)
+          ? data.messages.map(toChatMessage)
+          : [];
+
+        setMessages(sessionMessages);
+        updateStructuredFeedback(data?.orchestration ?? undefined);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Load simulation session failed', error);
+        setMessages([]);
+        resetStructuredFeedback();
+      } finally {
+        if (!cancelled) {
+          setLoadingSession(false);
+        }
+      }
+    };
+
+    void loadSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStage]);
+
   const handleSend = async () => {
     if (!inputValue.trim() || sending) return;
 
     const token = localStorage.getItem('access_token');
-
-    if (isDev) {
-      console.log('[auth] localStorage keys', Object.keys(localStorage));
-      console.log('[auth] token length', token?.length);
-    }
-
     if (!token) {
-      console.warn('[auth] token missing');
       alert('未登录，请先登录');
       return;
     }
 
     const optimisticId = `tmp-${Date.now()}`;
+    const optimisticText = inputValue.trim();
     const nextTurn = (messages[messages.length - 1]?.turnIndex ?? 0) + 1;
     const optimistic: ChatMessage = {
       id: optimisticId,
       sender: 'USER',
-      text: inputValue,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: optimisticText,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
       turnIndex: nextTurn
     };
 
@@ -90,246 +224,361 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({ task, onExit,
     setSending(true);
 
     try {
-      const url = `/api/simulations/${currentStage}/message`;
-      const { res, data, text } = await apiFetch<{ messages?: any[]; attemptNo?: number }>(url, {
+      const { res, data, text } = await apiFetch<{
+        messages?: SimulationApiMessage[];
+        orchestration?: SimulationOrchestration;
+      }>(`/api/simulations/${currentStage}/message`, {
         method: 'POST',
-        body: JSON.stringify({ content: optimistic.text })
+        body: JSON.stringify({ content: optimisticText })
       });
 
       if (!res.ok) {
-        console.error('Simulation send failed', { url, status: res.status, body: text });
-        alert('发送失败，请查看控制台/Network');
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        console.error('Simulation send failed', { status: res.status, body: text });
+        setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+        alert('发送失败，请稍后重试');
         return;
       }
 
-      if (data?.attemptNo) setAttemptNo(data.attemptNo);
-      const returned = Array.isArray(data?.messages) ? data?.messages : [];
+      const returnedMessages = Array.isArray(data?.messages) ? data.messages : [];
       const nextMessages = [
-        ...messages.filter((m) => m.id !== optimisticId),
-        ...returned.map(toChatMessage)
+        ...messages.filter((message) => message.id !== optimisticId),
+        ...returnedMessages.map(toChatMessage)
       ].sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
+
       setMessages(nextMessages);
-      const latestCoach = [...returned].reverse().find((m: any) => m.role === 'coach');
-      if (latestCoach?.coachNote) {
-        setCoachNote(latestCoach.coachNote);
-      }
-    } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      const message = err instanceof Error ? err.message : '发送失败，请稍后再试';
-      console.error('Simulation send error', err);
-      alert(message);
+      updateStructuredFeedback(data?.orchestration);
+    } catch (error) {
+      console.error('Simulation send error', error);
+      setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+      alert(error instanceof Error ? error.message : '发送失败，请稍后重试');
     } finally {
       setSending(false);
     }
   };
 
-  const displayMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
+  const displayMessages =
+    messages.length > 0 || loadingSession ? messages : INITIAL_CHAT_MESSAGES;
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
-      <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-50 shadow-sm">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900">
+      <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onExit}
-            className="flex items-center gap-1 text-slate-500 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors text-sm font-medium"
+            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
           >
             <ArrowLeft size={16} />
-            结束/退出谈判
+            结束/退出练习
           </button>
-          <div className="h-6 w-px bg-gray-200"></div>
+          <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800 text-sm">当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」</span>
-            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
-              第 {Math.max(1, attemptNo)}/{task.maxAttempts} 次尝试
+            <span className="text-sm font-bold text-slate-800">
+              当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
+            </span>
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              无限练习
             </span>
           </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-60 bg-white border-r border-gray-200 flex flex-col hidden md:flex shrink-0">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">全流程地图</h3>
+        <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
+          <div className="border-b border-gray-100 p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              全流程地图
+            </h3>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 space-y-1 overflow-y-auto p-2">
             {STAGES.map((stage) => {
-               const isActive = stageKeyMap[stage.id] === currentStage;
-               const isCompleted = stage.status === StageStatus.COMPLETED;
-               const isLocked = stage.status === StageStatus.LOCKED;
+              const isActive = stageKeyMap[stage.id] === currentStage;
 
-               return (
-                 <div
-                   key={stage.id}
-                   className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors cursor-pointer ${
-                    isActive ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50'
-                 }`}>
-                    <button
-                      className="flex items-center gap-3 w-full text-left"
-                      onClick={() => {
-                        const key = stageKeyMap[stage.id];
-                        if (key && key !== currentStage) {
-                          setCurrentStage(key);
-                          setMessages([]);
-                          setCoachNote(null);
-                        }
-                      }}
+              return (
+                <div
+                  key={stage.id}
+                  className={`rounded-lg px-3 py-3 text-sm transition-colors ${
+                    isActive ? 'border border-blue-100 bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <button
+                    className="flex w-full items-center gap-3 text-left"
+                    onClick={() => {
+                      const key = stageKeyMap[stage.id];
+                      if (key && key !== currentStage) {
+                        setCurrentStage(key);
+                        resetStructuredFeedback();
+                      }
+                    }}
+                  >
+                    <div
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                        isActive
+                          ? 'border-blue-500 bg-white font-bold text-blue-600'
+                          : 'border-slate-200 bg-white text-slate-500'
+                      }`}
                     >
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-[10px] shrink-0 ${
-                      isCompleted ? 'bg-green-500 border-green-500 text-white' :
-                      isActive ? 'bg-white border-blue-500 text-blue-600 font-bold' :
-                      'bg-gray-50 border-gray-200 text-gray-400'
-                    }`}>
-                       {isCompleted ? <Check size={12} /> : isLocked ? <Lock size={10} /> : stage.id}
+                      {stage.id}
                     </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className={`font-medium truncate ${
-                        isActive ? 'text-blue-800' : isCompleted ? 'text-green-700' : 'text-gray-400'
-                      }`}>
+                    <div className="flex min-w-0 flex-col">
+                      <span
+                        className={`truncate font-medium ${
+                          isActive ? 'text-blue-800' : 'text-slate-600'
+                        }`}
+                      >
                         {stage.title.split(' ')[0]}
                       </span>
-                      <span className="text-[10px] text-gray-400 truncate">{stage.title.split('(')[1]?.replace(')', '')}</span>
+                      <span className="truncate text-[10px] text-gray-400">
+                        {stage.title.split('(')[1]?.replace(')', '')}
+                      </span>
                     </div>
-                    {isActive && <div className="ml-auto w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                    </button>
-                 </div>
-               );
+                    {isActive && <div className="ml-auto h-2 w-2 rounded-full bg-blue-500" />}
+                  </button>
+                </div>
+              );
             })}
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col bg-slate-100/50 relative">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="relative flex flex-1 flex-col bg-slate-100/50">
+          <div className="flex-1 space-y-6 overflow-y-auto p-6">
+            {loadingSession && messages.length === 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+                正在加载当前环节会话...
+              </div>
+            )}
+
             {displayMessages.map((msg) => {
               const isMe = msg.sender === 'USER';
+              const isSystem = msg.sender === 'SYSTEM';
+
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex max-w-[80%] md:max-w-[70%] gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                      isMe ? 'bg-blue-600 text-white' : 'bg-white text-indigo-600 border border-indigo-100'
-                    }`}>
-                      {isMe ? <User size={16} /> : <span className="font-bold text-xs">{OPPONENT_PROFILE.avatarInitials}</span>}
+                  <div
+                    className={`flex max-w-[80%] gap-3 md:max-w-[70%] ${
+                      isMe ? 'flex-row-reverse' : 'flex-row'
+                    }`}
+                  >
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm ${
+                        isMe
+                          ? 'bg-blue-600 text-white'
+                          : isSystem
+                            ? 'border border-amber-200 bg-amber-100 text-amber-700'
+                            : 'border border-indigo-100 bg-white text-indigo-600'
+                      }`}
+                    >
+                      {isMe ? (
+                        <User size={16} />
+                      ) : isSystem ? (
+                        <Bot size={16} />
+                      ) : (
+                        <span className="text-xs font-bold">{OPPONENT_PROFILE.avatarInitials}</span>
+                      )}
                     </div>
+
                     <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                       <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-gray-400 font-medium">
-                            {isMe ? '我方: 张明' : `对方: ${OPPONENT_PROFILE.name}`}
-                          </span>
-                          <span className="text-[10px] text-gray-300">{msg.timestamp}</span>
-                       </div>
-                       <div className={`px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${
-                         isMe 
-                           ? 'bg-blue-600 text-white rounded-tr-sm' 
-                           : 'bg-white text-slate-700 border border-gray-200 rounded-tl-sm'
-                       }`}>
-                         {msg.text}
-                       </div>
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-400">
+                          {isMe ? '我方：张明' : isSystem ? 'AI 教练' : `对方：${OPPONENT_PROFILE.name}`}
+                        </span>
+                        <span className="text-[10px] text-gray-300">{msg.timestamp}</span>
+                      </div>
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                          isMe
+                            ? 'rounded-tr-sm bg-blue-600 text-white'
+                            : isSystem
+                              ? 'rounded-tl-sm border border-amber-200 bg-amber-50 text-amber-900'
+                              : 'rounded-tl-sm border border-gray-200 bg-white text-slate-700'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
                     </div>
                   </div>
                 </div>
               );
             })}
+
             <div ref={chatEndRef} />
           </div>
 
-          <div className="p-4 bg-white border-t border-gray-200 shrink-0">
-             <div className="max-w-4xl mx-auto flex items-end gap-3">
-               <div className="flex-1 bg-gray-50 border border-gray-300 rounded-xl p-3 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
-                  <textarea 
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="输入消息，尝试与客户沟通..."
-                    className="w-full bg-transparent border-none focus:ring-0 text-sm resize-none h-10 max-h-32 text-slate-700 placeholder:text-slate-400"
-                    rows={1}
-                  />
-               </div>
-               <button className="p-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-                  <Mic size={20} />
-               </button>
-               <button 
-                  onClick={handleSend}
-                  disabled={!inputValue.trim() || sending}
-                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200 transition-all transform active:scale-95"
-               >
-                  <Send size={18} />
-               </button>
-             </div>
+          <div className="shrink-0 border-t border-gray-200 bg-white p-4">
+            <div className="mx-auto flex max-w-4xl items-end gap-3">
+              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                <textarea
+                  value={inputValue}
+                  onChange={(event) => setInputValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  placeholder="输入消息，与客户进行业务沟通..."
+                  className="h-10 max-h-32 w-full resize-none border-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                  rows={1}
+                />
+              </div>
+              <button className="rounded-full p-3 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+                <Mic size={20} />
+              </button>
+              <button
+                onClick={() => void handleSend()}
+                disabled={!inputValue.trim() || sending}
+                className="rounded-xl bg-blue-600 p-3 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         </main>
 
-        <aside className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto">
-           {(coachNote || !isFirstAttempt) && (
-             <div className="p-5 border-b border-gray-100 bg-amber-50/40">
-                <div className="flex items-center gap-2 mb-3 text-amber-700 font-bold text-sm">
-                   <Bot size={18} />
-                   <h3>AI 教练复盘</h3>
-                </div>
-                <div className="bg-white border border-amber-200 rounded-lg p-3 shadow-sm text-xs text-slate-700 leading-5">
-                  "{coachNote ?? task.feedbackOrTipContent}"
-                </div>
-             </div>
-           )}
-
-           <div className="p-5 border-b border-gray-100">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">对手信息</h3>
-              <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
-                    {OPPONENT_PROFILE.avatarInitials}
-                 </div>
-                 <div>
-                    <div className="text-sm font-bold text-slate-800">{OPPONENT_PROFILE.name}</div>
-                    <div className="text-xs text-slate-500">{OPPONENT_PROFILE.role}</div>
-                 </div>
+        <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white">
+          {(coachNote || assessmentSummary) && (
+            <div className="border-b border-gray-100 bg-amber-50/40 p-5">
+              <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">
+                <Bot size={18} />
+                <h3>AI 教练复盘</h3>
               </div>
-           </div>
-
-           <div className="p-5 flex-1">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">任务目标</h3>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm font-medium text-blue-900 leading-6">
-                 {isFirstAttempt 
-                   ? "任务目标：想办法让客户接受你的报价，不限手段。"
-                   : "任务目标：请结合 FOB 术语的风险划分，再次向客户解释报价的合理性。"
-                 }
-              </div>
-
-              <div className="mt-8 space-y-3">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">支持工具箱</h3>
-                 
-                 {!isFirstAttempt && (
-                    <button 
-                      onClick={onTriggerGroupDiscussion}
-                      className="w-full flex items-center justify-between p-3 rounded-lg border-2 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-300 transition-all text-left group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="bg-indigo-600 text-white p-1.5 rounded-md">
-                            <Users size={16} />
-                        </div>
-                        <span className="text-xs font-bold text-indigo-800">
-                            进入小组复盘讨论室
-                        </span>
+              {coachNote && (
+                <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs leading-5 text-slate-700 shadow-sm">
+                  {coachNote}
+                </div>
+              )}
+              {assessmentSummary && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                  {assessmentSummary}
+                </div>
+              )}
+              {traceLabel && (
+                <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {traceLabel}
+                </div>
+              )}
+              {difficultyLabel && (
+                <div className="mt-3 inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                  {difficultyLabel}
+                </div>
+              )}
+              {assessmentStrengths.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                    Strengths
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {assessmentStrengths.map((item) => (
+                      <div
+                        key={item}
+                        className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+                      >
+                        {item}
                       </div>
-                      <ChevronRight size={14} className="text-indigo-400" />
-                    </button>
-                 )}
+                    ))}
+                  </div>
+                </div>
+              )}
+              {assessmentRisks.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-rose-600">
+                    Risks
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {assessmentRisks.map((item) => (
+                      <div
+                        key={item}
+                        className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {cultureHints.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                    Culture Hints
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {cultureHints.map((item) => (
+                      <div
+                        key={item}
+                        className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] text-indigo-700"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-                 <button 
-                    onClick={onTriggerCoaching}
-                    className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-all text-left group"
-                 >
-                    <div className="flex items-center gap-3">
-                       <div className="bg-yellow-100 text-yellow-600 p-1.5 rounded-md">
-                          <HelpCircle size={16} />
-                       </div>
-                       <span className="text-xs font-medium text-slate-700 group-hover:text-blue-700">
-                          {isFirstAttempt ? "请求提示" : "请求 AI 教练当前指导"}
-                       </span>
-                    </div>
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400" />
-                 </button>
+          <div className="border-b border-gray-100 p-5">
+            <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-400">
+              对手信息
+            </h3>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-600">
+                {OPPONENT_PROFILE.avatarInitials}
               </div>
-           </div>
+              <div>
+                <div className="text-sm font-bold text-slate-800">{OPPONENT_PROFILE.name}</div>
+                <div className="text-xs text-slate-500">{OPPONENT_PROFILE.role}</div>
+              </div>
+            </div>
+          </div>
 
+          <div className="flex-1 p-5">
+            <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-400">
+              练习目标
+            </h3>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
+              <div>{task.description}</div>
+              {task.subDescription && (
+                <div className="mt-2 text-xs font-normal text-blue-700">{task.subDescription}</div>
+              )}
+            </div>
+
+            <div className="mt-8 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                支持工具箱
+              </h3>
+
+              <button
+                onClick={onTriggerGroupDiscussion}
+                className="group w-full rounded-lg border-2 border-indigo-100 bg-indigo-50/50 p-3 text-left transition-all hover:border-indigo-300 hover:bg-indigo-100"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-md bg-indigo-600 p-1.5 text-white">
+                      <Users size={16} />
+                    </div>
+                    <span className="text-xs font-bold text-indigo-800">进入小组复盘讨论室</span>
+                  </div>
+                  <ChevronRight size={14} className="text-indigo-400" />
+                </div>
+              </button>
+
+              <button
+                onClick={onTriggerCoaching}
+                className="group w-full rounded-lg border border-gray-200 p-3 text-left transition-all hover:border-blue-300 hover:bg-gray-50"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-md bg-yellow-100 p-1.5 text-yellow-600">
+                      <HelpCircle size={16} />
+                    </div>
+                    <span className="text-xs font-medium text-slate-700 group-hover:text-blue-700">
+                      请求 AI 教练指导
+                    </span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400" />
+                </div>
+              </button>
+            </div>
+          </div>
         </aside>
       </div>
     </div>

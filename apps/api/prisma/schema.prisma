@@ -31,8 +31,100 @@ model User {
   studentProfile StudentProfile?
   conversations  Conversation[]
   simulationSessions SimulationSession[]
+  createdAiScenarios StageAiScenario[] @relation("StageAiScenarioCreator")
+  practiceEvents PracticeEvent[]
+  aiInteractionLogs AiInteractionLog[]
+  messageAnalysisResults MessageAnalysisResult[]
+  learningSnapshots StudentLearningSnapshot[]
 
   @@map("users")
+}
+
+model BusinessStage {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         SimulationStage @unique
+  sortOrder   Int             @map("sort_order")
+  titleZh     String          @map("title_zh")
+  titleEn     String?         @map("title_en")
+  description String?
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tasks                  StageTask[]
+  resources              LearningResource[]
+  aiScenarios            StageAiScenario[]
+  simulationSessions     SimulationSession[]
+  practiceEvents         PracticeEvent[]
+  aiInteractionLogs      AiInteractionLog[]
+  messageAnalysisResults MessageAnalysisResult[]
+
+  @@index([sortOrder], map: "business_stages_sort_order_idx")
+  @@map("business_stages")
+}
+
+model StageTask {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId    String        @map("stage_id") @db.Uuid
+  taskCode   String        @unique @map("task_code")
+  title      String
+  goal       String
+  subGoal    String?       @map("sub_goal")
+  tipTitle   String?       @map("tip_title")
+  tipContent String?       @map("tip_content")
+  isDefault  Boolean       @default(true) @map("is_default")
+  isActive   Boolean       @default(true) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stage              BusinessStage       @relation(fields: [stageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  simulationSessions SimulationSession[]
+
+  @@index([stageId, isDefault, isActive], map: "stage_tasks_stage_default_active_idx")
+  @@map("stage_tasks")
+}
+
+model LearningResource {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId     String   @map("stage_id") @db.Uuid
+  type        String
+  term        String
+  explanation String
+  example     String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stage          BusinessStage  @relation(fields: [stageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  practiceEvents PracticeEvent[]
+
+  @@unique([stageId, type, term], map: "learning_resources_stage_type_term_unique")
+  @@index([stageId, type, sortOrder], map: "learning_resources_stage_type_sort_idx")
+  @@map("learning_resources")
+}
+
+model StageAiScenario {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId      String   @map("stage_id") @db.Uuid
+  name         String
+  opponentName String?  @map("opponent_name")
+  opponentRole String?  @map("opponent_role")
+  systemPrompt String   @map("system_prompt")
+  difficulty   String   @default("standard")
+  promptVersion String  @default("v1") @map("prompt_version")
+  isDefault    Boolean  @default(true) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stage              BusinessStage       @relation(fields: [stageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  creator            User?               @relation("StageAiScenarioCreator", fields: [createdBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  simulationSessions SimulationSession[]
+
+  @@index([stageId, isDefault, isActive], map: "stage_ai_scenarios_stage_default_active_idx")
+  @@map("stage_ai_scenarios")
 }
 
 model Role {
@@ -85,32 +177,138 @@ model StudentProfile {
 model SimulationSession {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String?  @map("user_id") @db.Uuid
+  stageId   String?  @map("stage_id") @db.Uuid
+  taskId    String?  @map("task_id") @db.Uuid
+  scenarioId String? @map("scenario_id") @db.Uuid
   stage     SimulationStage
   attemptNo Int      @default(1) @map("attempt_no")
   status    String   @default("active")
+  title     String?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  businessStage BusinessStage?  @relation(fields: [stageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  task      StageTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  scenario  StageAiScenario?    @relation(fields: [scenarioId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages  SimulationMessage[]
+  practiceEvents PracticeEvent[]
+  aiInteractionLogs AiInteractionLog[]
+  messageAnalysisResults MessageAnalysisResult[]
 
   @@index([userId, stage, status], map: "simulation_sessions_user_stage_status_idx")
+  @@index([stageId], map: "simulation_sessions_stage_id_idx")
   @@map("simulation_sessions")
 }
 
 model SimulationMessage {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId  String   @map("session_id") @db.Uuid
-  role       String
-  content    String
-  coachNote  String?  @map("coach_note")
-  turnIndex  Int      @map("turn_index")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId       String   @map("session_id") @db.Uuid
+  role            String
+  content         String
+  coachNote       String?  @map("coach_note")
+  assessmentJson  Json?    @map("assessment_json")
+  traceJson       Json?    @map("trace_json")
+  personaJson     Json?    @map("persona_json")
+  turnIndex       Int      @map("turn_index")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   session SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  aiInteractionLogs AiInteractionLog[]
+  messageAnalysisResults MessageAnalysisResult[]
 
   @@index([sessionId, turnIndex], map: "simulation_messages_session_turn_idx")
   @@map("simulation_messages")
+}
+
+model PracticeEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  stageId      String?  @map("stage_id") @db.Uuid
+  sessionId    String?  @map("session_id") @db.Uuid
+  resourceId   String?  @map("resource_id") @db.Uuid
+  eventType    String   @map("event_type")
+  metadataJson Json?    @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     User?              @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stage    BusinessStage?     @relation(fields: [stageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  session  SimulationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  resource LearningResource?  @relation(fields: [resourceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, createdAt], map: "practice_events_user_created_idx")
+  @@index([stageId, eventType, createdAt], map: "practice_events_stage_event_created_idx")
+  @@map("practice_events")
+}
+
+model AiInteractionLog {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String?  @map("user_id") @db.Uuid
+  sessionId         String?  @map("session_id") @db.Uuid
+  messageId         String?  @map("message_id") @db.Uuid
+  stageId           String?  @map("stage_id") @db.Uuid
+  provider          String?
+  model             String?
+  promptVersion     String?  @map("prompt_version")
+  systemPrompt      String?  @map("system_prompt")
+  inputMessagesJson Json?    @map("input_messages_json")
+  outputText        String?  @map("output_text")
+  outputJson        Json?    @map("output_json")
+  latencyMs         Int?     @map("latency_ms")
+  degraded          Boolean  @default(false)
+  errorCode         String?  @map("error_code")
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User?              @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  session SimulationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  message SimulationMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stage   BusinessStage?     @relation(fields: [stageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, createdAt], map: "ai_interaction_logs_user_created_idx")
+  @@index([sessionId, createdAt], map: "ai_interaction_logs_session_created_idx")
+  @@index([stageId, createdAt], map: "ai_interaction_logs_stage_created_idx")
+  @@map("ai_interaction_logs")
+}
+
+model MessageAnalysisResult {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId            String   @map("message_id") @db.Uuid
+  userId               String?  @map("user_id") @db.Uuid
+  sessionId            String?  @map("session_id") @db.Uuid
+  stageId              String?  @map("stage_id") @db.Uuid
+  analysisVersion      String   @map("analysis_version")
+  languageQualityJson  Json?    @map("language_quality_json")
+  businessStrategyJson Json?    @map("business_strategy_json")
+  tradeTermUsageJson   Json?    @map("trade_term_usage_json")
+  errorTagsJson        Json?    @map("error_tags_json")
+  scoreJson            Json?    @map("score_json")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  message SimulationMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user    User?              @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  session SimulationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stage   BusinessStage?     @relation(fields: [stageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, createdAt], map: "message_analysis_results_user_created_idx")
+  @@index([stageId, createdAt], map: "message_analysis_results_stage_created_idx")
+  @@map("message_analysis_results")
+}
+
+model StudentLearningSnapshot {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                   String   @map("user_id") @db.Uuid
+  summaryJson              Json?    @map("summary_json")
+  strengthsJson            Json?    @map("strengths_json")
+  weaknessesJson           Json?    @map("weaknesses_json")
+  stagePreferencesJson     Json?    @map("stage_preferences_json")
+  resourceUsageSummaryJson Json?    @map("resource_usage_summary_json")
+  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId], map: "student_learning_snapshots_user_unique")
+  @@map("student_learning_snapshots")
 }
 
 model Conversation {

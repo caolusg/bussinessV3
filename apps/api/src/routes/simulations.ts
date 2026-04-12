@@ -3,9 +3,14 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
-  appendStudentAndMockCoach,
+  appendStudentAndOpponent,
   getOrCreateActiveSession
 } from '../services/simulationChatService.js';
+import {
+  logAiInteraction,
+  logMessageAnalysis,
+  logPracticeEvent
+} from '../services/researchLogService.js';
 
 const router = Router();
 
@@ -35,6 +40,31 @@ const messageBodySchema = z.object({
   content: z.string().min(1).max(2000)
 });
 
+function buildOrchestrationFromMessage(message: {
+  content: string;
+  coachNote?: string | null;
+  assessmentJson?: unknown;
+  traceJson?: unknown;
+  personaJson?: unknown;
+}) {
+  if (
+    !message.coachNote &&
+    !message.assessmentJson &&
+    !message.traceJson &&
+    !message.personaJson
+  ) {
+    return null;
+  }
+
+  return {
+    roleplayReply: message.content,
+    coachNote: message.coachNote ?? null,
+    assessment: message.assessmentJson ?? undefined,
+    trace: message.traceJson ?? undefined,
+    personaSnapshot: message.personaJson ?? undefined
+  };
+}
+
 router.get('/session', requireAuth, async (req, res) => {
   try {
     const parsed = sessionSchema.safeParse({
@@ -52,10 +82,31 @@ router.get('/session', requireAuth, async (req, res) => {
     const stage = parsed.data.stage;
     const session = await getOrCreateActiveSession(prisma, userId, stage);
 
+    await logPracticeEvent(prisma, {
+      userId,
+      stageId: session.stageId,
+      sessionId: session.id,
+      eventType: 'practice_session_opened',
+      metadata: {
+        stage,
+        status: session.status
+      }
+    });
+
     const messages = await prisma.simulationMessage.findMany({
       where: { sessionId: session.id },
       orderBy: { turnIndex: 'asc' }
     });
+
+    const latestStructuredMessage = [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          Boolean(message.coachNote) ||
+          Boolean(message.assessmentJson) ||
+          Boolean(message.traceJson) ||
+          Boolean(message.personaJson)
+      );
 
     return res.status(200).json(ok({
       session: {
@@ -67,6 +118,9 @@ router.get('/session', requireAuth, async (req, res) => {
         createdAt: session.createdAt,
         updatedAt: session.updatedAt
       },
+      orchestration: latestStructuredMessage
+        ? buildOrchestrationFromMessage(latestStructuredMessage)
+        : null,
       messages
     }));
   } catch (error) {
@@ -92,16 +146,67 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     const content = bodyParsed.data.content;
 
     const session = await getOrCreateActiveSession(prisma, userId, stage);
-    const { studentMessage, coachMessage } = await appendStudentAndMockCoach(
+    const { studentMessage, opponentMessage, orchestration } = await appendStudentAndOpponent(
       prisma,
       session.id,
-      content
+      content,
+      stage
     );
+
+    await logPracticeEvent(prisma, {
+      userId,
+      stageId: session.stageId,
+      sessionId: session.id,
+      eventType: 'student_message_sent',
+      metadata: {
+        stage,
+        messageId: studentMessage.id,
+        characterCount: content.length
+      }
+    });
+
+    await logAiInteraction(prisma, {
+      userId,
+      stageId: session.stageId,
+      sessionId: session.id,
+      messageId: opponentMessage.id,
+      provider: orchestration.trace.provider,
+      promptVersion: 'v1',
+      inputMessages: {
+        latestStudentMessage: content,
+        stage
+      },
+      outputText: orchestration.roleplayReply,
+      outputJson: {
+        coachNote: orchestration.coachNote ?? null,
+        assessment: orchestration.assessment ?? null,
+        personaSnapshot: orchestration.personaSnapshot ?? null,
+        trace: orchestration.trace
+      },
+      degraded: orchestration.trace.degraded ?? false
+    });
+
+    await logMessageAnalysis(prisma, {
+      messageId: studentMessage.id,
+      userId,
+      stageId: session.stageId,
+      sessionId: session.id,
+      analysisVersion: 'v1',
+      languageQuality: orchestration.assessment ?? undefined,
+      businessStrategy: {
+        coachNote: orchestration.coachNote ?? null,
+        stage
+      },
+      score: orchestration.assessment?.score
+        ? { score: orchestration.assessment.score }
+        : undefined
+    });
 
     return res.status(200).json({
       sessionId: session.id,
       stage: session.stage,
       attemptNo: session.attemptNo,
+      orchestration,
       messages: [
         {
           id: studentMessage.id,
@@ -111,11 +216,15 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
           createdAt: studentMessage.createdAt
         },
         {
-          id: coachMessage.id,
-          role: coachMessage.role,
-          content: coachMessage.content,
-          turnIndex: coachMessage.turnIndex,
-          createdAt: coachMessage.createdAt
+          id: opponentMessage.id,
+          role: opponentMessage.role,
+          content: opponentMessage.content,
+          coachNote: opponentMessage.coachNote,
+          assessmentJson: opponentMessage.assessmentJson,
+          traceJson: opponentMessage.traceJson,
+          personaJson: opponentMessage.personaJson,
+          turnIndex: opponentMessage.turnIndex,
+          createdAt: opponentMessage.createdAt
         }
       ]
     });

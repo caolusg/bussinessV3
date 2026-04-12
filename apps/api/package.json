@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "node scripts/seed.mjs"
+    "db:seed": "node scripts/seed.mjs",
+    "db:seed:content": "node scripts/seed-content.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
@@ -19,8 +20,8 @@
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
     "express": "^4.21.2",
+    "https-proxy-agent": "^9.0.0",
     "jsonwebtoken": "^9.0.2",
-    "openai": "^4.77.0",
     "prisma": "^5.20.0",
     "zod": "^3.24.2"
   },

@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-04-09
+Last updated: 2026-04-12
 
 ## Purpose
 
@@ -10,7 +10,7 @@ This repository is a monorepo for a business Chinese AI simulation system.
 - Backend API: `apps/api`
 - Database: PostgreSQL via Docker Compose
 - ORM: Prisma
-- AI integration: OpenAI SDK with fallback mock reply
+- AI provider: DeepSeek-compatible chat completion API
 
 ## Current Architecture
 
@@ -40,205 +40,70 @@ This repository is a monorepo for a business Chinese AI simulation system.
 - Docker service file: `docker-compose.yml`
 - Active Prisma schema: `apps/api/prisma/schema.prisma`
 - Local DB port: `5433`
-- DB name currently standardized to: `bussinessv3`
+- DB name: `bussinessv3`
 
-## Important Findings From Initial Scan
+## Current AI Flow
 
-### 1. Repository is not a placeholder anymore
+- Simulation route calls `apps/api/src/services/simulationChatService.ts`
+- The service calls `apps/api/src/ai/simulationOrchestrator.ts`
+- The orchestrator uses `apps/api/src/ai/providers/compatibleSimulationProvider.ts`
+- The provider uses `apps/api/src/ai/compatibleAiClient.ts`
+- The client calls the configured chat completion endpoint with `AI_*` variables
 
-The README previously suggested placeholder backend/database sections, but the backend is already implemented enough to support:
+Current AI environment variables:
 
-- student register/login
-- teacher login
-- current user lookup
-- student profile save/load
-- simulation session fetch
-- simulation message send
+- `AI_ENABLED=true`
+- `AI_PROVIDER=deepseek`
+- `AI_BASE_URL=https://api.deepseek.com`
+- `AI_MODEL=deepseek-chat`
+- `AI_API_KEY=`
+- `AI_TIMEOUT_MS=15000`
+- `AI_PROXY_URL=` optional local proxy
 
-### 2. There are two Prisma schema locations
+If AI is disabled, no key is present, or the provider call fails, the simulation falls back to a local heuristic opponent reply and marks the trace as degraded.
 
-- Root schema: `prisma/schema.prisma`
-- Active backend schema: `apps/api/prisma/schema.prisma`
+## Current Simulation Semantics
 
-The backend currently uses the schema inside `apps/api`. The root Prisma schema looks older and much simpler, so future work should avoid assuming the root schema is the active one.
+- Main chat area displays student and opponent messages.
+- Right panel displays structured coaching metadata.
+- New generated reply messages are stored with `role='opponent'`.
+- The frontend stage map now has all 8 business stages available: acquisition, quotation, negotiation, contract, preparation, customs, settlement, after-sales.
+- There is no sequential unlock rule. Students can freely choose any stage for practice.
+- There is no task completion rule in the student practice flow. All tasks can be practiced indefinitely; dashboard status is only an entry-point label, not a pass/fail gate.
+- The dashboard defaults to stage 1, acquisition. The resource sidebar also defaults to stage 1.
+- The simulation entry page has scenario cards for all 8 stages.
+- The AI role-play prompt is stage-aware, so each stage asks the model to respond from the matching customer/procurement context.
+- The simulation page, task card, workflow map, AI coach review, and group discussion pages were cleaned to remove old mojibake text and old completion/attempt-count wording.
+- Frontend static stage, task, discussion, and resource-panel content in `apps/web/constants.ts` and `apps/web/components/ResourcePanel.tsx` has been cleaned to readable Chinese text.
+- The learning resource sidebar now opens real in-page resource content for each stage: vocabulary, common phrases, and international trade knowledge.
+- Structured metadata is persisted on `simulation_messages`:
+  - `coach_note`
+  - `assessment_json`
+  - `trace_json`
+  - `persona_json`
 
-### 3. Config drift existed and was partially corrected
+## Verified Runtime
 
-Before cleanup, DB names and env examples were inconsistent:
-
-- some files used `bcai`
-- some files used `bussinessv3`
-
-This was standardized for local startup in:
-
-- `.env.example`
-- `apps/api/.env.example`
-- `docker-compose.yml`
-
-### 4. AI integration is present
-
-Relevant files:
-
-- `apps/api/src/ai/openaiClient.ts`
-- `apps/api/src/services/simulationChatService.ts`
-
-Behavior:
-
-- when `OPENAI_API_KEY` is missing or AI is disabled, backend returns a fallback coach reply
-- simulation message flow can call OpenAI and then persist coach/student messages
-
-### 5. Styling setup is lightweight
-
-The frontend currently loads Tailwind from CDN in `apps/web/index.html`, instead of a standard package-based Tailwind integration. It works, but it is less robust than a normal Vite + Tailwind setup.
-
-## What Was Fixed On 2026-04-06
-
-### Startup and docs
-
-- rewrote `README.md` into a usable quick-start guide
-- added root npm scripts in `package.json`:
-  - `db:up`
-  - `db:down`
-  - `db:migrate`
-  - `api:dev`
-  - `api:build`
-  - `web:dev`
-  - `web:build`
-
-### Environment consistency
-
-- updated `.env.example`
-- updated `apps/api/.env.example`
-- updated `docker-compose.yml`
-- ensured Docker API service receives:
-  - `JWT_SECRET`
-  - `JWT_EXPIRES_IN`
-  - `BCRYPT_ROUNDS`
-  - OpenAI-related env vars
-
-### Build compatibility
-
-- installed and locked backend `openai` dependency
-- fixed OpenAI SDK request typing in `apps/api/src/ai/openaiClient.ts`
-- fixed simulation message history typing in `apps/api/src/services/simulationChatService.ts`
-
-## What Was Fixed On 2026-04-08
-
-### Startup and seed flow
-
-- updated `README.md` to reflect the actual monorepo install flow:
-  - `npm install`
-  - `npm --prefix apps/api install`
-  - `npm --prefix apps/web install`
-- added root script `db:seed` in `package.json`
-- added API script `db:seed` in `apps/api/package.json`
-- added seed script `apps/api/scripts/seed.mjs`
-- seed now ensures:
-  - `student` role exists
-  - `teacher` role exists
-  - default teacher account exists
-
-### Environment files
-
-- updated `.env.example`
-- updated `apps/api/.env.example`
-- created local `.env`
-- created local `apps/api/.env`
-
-Added variables:
-
-- `DEFAULT_TEACHER_USERNAME=teacher`
-- `DEFAULT_TEACHER_PASSWORD=password123`
-
-### TypeScript build fixes
-
-The API had real compile errors on this machine. These were fixed by adding explicit transaction and map callback typing in:
-
-- `apps/api/src/routes/auth.ts`
-- `apps/api/src/routes/profile.ts`
-- `apps/api/src/services/simulationChatService.ts`
-
-## What Was Fixed On 2026-04-09
-
-### Startup recovery on this machine
-
-- confirmed Docker engine is now available
-- confirmed WSL 2 is active and Docker Desktop is reachable
-- started local Docker services successfully
-- verified PostgreSQL is reachable on `127.0.0.1:5433`
-
-### Environment repair
-
-The local runtime still had broken env state:
-
-- root `.env` was missing:
-  - `DATABASE_URL`
-  - `JWT_SECRET`
-  - `JWT_EXPIRES_IN`
-  - `BCRYPT_ROUNDS`
-  - default teacher credentials
-- `apps/api/.env` still contained placeholder values and no database URL
-
-These local env files were corrected so Prisma, Docker Compose, and the API could boot consistently.
-
-### Migration command fix
-
-The root command:
-
-- `npm run db:migrate`
-
-previously resolved Prisma from the wrong working directory and could hit the legacy root `prisma/` folder instead of `apps/api/prisma/`.
-
-This was corrected by:
-
-- adding `prisma:migrate:deploy` in `apps/api/package.json`
-- changing root `db:migrate` to:
-  - `cd apps/api && npm run prisma:migrate:deploy`
-
-README was updated to use the non-interactive deploy flow from the repo root.
-
-### Runtime verification
-
-Verified on 2026-04-09:
-
-- `docker compose up -d`
-- `npm.cmd run db:migrate`
-- `npm.cmd run db:seed`
-- `http://localhost:8000/api/health`
-- `http://localhost:8000/api/health/db`
-- teacher login at `POST /api/auth/teacher/login`
-- frontend dev server on `http://localhost:3000`
-- frontend proxy to backend via `http://localhost:3000/api/health`
-
-### Notable issue encountered
-
-During recovery, a stale Prisma advisory lock remained open in PostgreSQL from an earlier failed migration attempt. That lock blocked `migrate deploy` until the orphaned backend session was terminated.
-
-## Verified Commands
-
-These were verified on 2026-04-08:
-
-```bash
-npm.cmd run api:build
-npm.cmd run web:build
-node --check apps/api/scripts/seed.mjs
-```
-
-Notes:
-
-- frontend build required running outside the sandbox because Vite/esbuild needed to spawn subprocesses
-- both API and web builds succeeded after the 2026-04-08 fixes
-- database startup and migration were not completed because Docker engine was not ready on this machine
-
-Additional verified commands on 2026-04-09:
+Verified on 2026-04-12:
 
 ```bash
 docker compose up -d
 npm.cmd run db:migrate
 npm.cmd run db:seed
+npm.cmd run db:seed:content
+npm.cmd run api:build
+npm.cmd run web:build
 ```
 
-## Current Recommended Startup Flow
+Local URLs:
+
+- Web: `http://localhost:3000`
+- API health: `http://localhost:8000/api/health`
+- API DB health: `http://localhost:8000/api/health/db`
+
+During local development on this machine, the database runs in Docker while the API and web apps are usually run directly from the workspace.
+
+## Current Startup Flow
 
 From repo root:
 
@@ -246,89 +111,28 @@ From repo root:
 npm.cmd run db:up
 npm.cmd run db:migrate
 npm.cmd run db:seed
+npm.cmd run db:seed:content
 npm.cmd run api:dev
 npm.cmd run web:dev
 ```
 
-On Windows PowerShell in this environment, `npm` may be blocked by execution policy because `npm.ps1` cannot run. Use `npm.cmd` instead.
+On Windows PowerShell in this environment, use `npm.cmd` instead of `npm` if script execution policy blocks `npm.ps1`.
 
-## Machine State On 2026-04-08
+## Important Structure Notes
 
-This session was run on a new Windows 11 machine.
+- The active backend Prisma schema is `apps/api/prisma/schema.prisma`.
+- The root `prisma/` directory is legacy and should not be used for current backend changes.
+- Business/database planning is documented in `docs/业务逻辑与数据库规划.md`; the database direction is to preserve research-grade practice data, including learner behavior, AI inputs/outputs, feedback, and exportable anonymized analysis views.
+- Implemented content/research tables are in `apps/api/prisma/migrations/20260411150000_add_content_and_research_tables/migration.sql`: `business_stages`, `stage_tasks`, `learning_resources`, `stage_ai_scenarios`, `practice_events`, `ai_interaction_logs`, `message_analysis_results`, and `student_learning_snapshots`.
+- Content seed command: `npm.cmd run db:seed:content`; current seed inserts 8 stages, 8 tasks, 48 learning resources, and 8 default AI scenarios.
+- The frontend currently loads Tailwind from CDN in `apps/web/index.html`; this works for now but is not ideal for heavier frontend work.
+- Runtime `.env` files are local only and must not be committed.
+- Generated log files at the repo root are runtime artifacts, not source.
 
-Confirmed:
+## Known Follow-Up Items
 
-- `node` installed: `v24.13.1`
-- `npm.cmd` installed: `11.8.0`
-- project dependencies installed at root, `apps/api`, and `apps/web`
-- Docker Desktop installed via `winget`
-- Docker CLI exists at:
-  - `C:\Program Files\Docker\Docker\resources\bin\docker.exe`
-
-Previously blocked:
-
-- Docker engine was not ready
-- `docker info` against `dockerDesktopLinuxEngine` failed
-- `wsl` output indicated no usable Linux environment/distribution was available
-
-Current status as of 2026-04-09:
-
-- Docker engine is ready
-- Docker Desktop server is reachable
-- WSL 2 is active
-- default WSL distribution reported was `docker-desktop`
-
-## Resume Checklist For Next Session
-
-Start by reading this file and then check Docker service state before touching app code.
-
-Recommended order:
-
-1. Verify Docker engine status:
-   - `& 'C:\Program Files\Docker\Docker\resources\bin\docker.exe' info`
-2. Start services and initialize the database:
-   - `npm.cmd run db:up`
-   - `npm.cmd run db:migrate`
-   - `npm.cmd run db:seed`
-3. Start app servers if needed:
-   - `npm.cmd run api:dev`
-   - `npm.cmd run web:dev`
-4. Smoke test:
-   - `http://localhost:8000/api/health`
-   - `http://localhost:8000/api/health/db`
-   - `http://localhost:3000`
-   - teacher login with seeded credentials
-
-## Known Risks / Follow-Up Items
-
-### High priority
-
-- Decide whether the root Prisma schema and migration tooling should be removed, archived, or aligned with `apps/api/prisma/schema.prisma`.
-- Confirm whether Docker-based API runs should execute Prisma migrations automatically or remain manual.
-- Root Prisma directory is still legacy noise and may be removed or archived later.
-- Docker Desktop on new Windows machines may require manual WSL/Virtual Machine Platform enablement plus reboot before `db:up` works.
-
-### Medium priority
-
-- Replace CDN Tailwind with a standard package-based setup if frontend work becomes heavier.
-- Add test scripts or at least smoke-test scripts for API health and auth flows.
-- Clean up duplicated Prisma client files if both `apps/api/src/prisma.ts` and `apps/api/src/lib/prisma.ts` are not needed.
-
-### Workspace note
-
-There are unrelated uncommitted changes in the repository outside the startup/doc fixes committed on 2026-04-06. Future work should inspect `git status` before assuming the branch is clean.
-
-## Git Reference
-
-- Branch used during this scan: `feature/pr4-ai-integration`
-- Startup/config fix commit: `98d9ea9` (`Fix local startup configuration`)
-
-## How To Use This File In Future Sessions
-
-At the start of a future conversation, ask:
-
-```text
-先读 PROJECT_CONTEXT.md，再继续
-```
-
-That is enough to re-anchor the next session quickly.
+- Decide whether to remove or archive the legacy root `prisma/` directory.
+- Decide whether API startup should run migrations automatically in Docker or keep migrations manual.
+- Replace CDN Tailwind with a package-based Vite setup if frontend styling work becomes heavier.
+- Add smoke tests for API health, auth, profile, and one simulation message round trip.
+- Consider adding a richer learner profile model for personalization beyond the current static student profile fields.

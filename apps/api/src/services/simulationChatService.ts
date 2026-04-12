@@ -1,33 +1,28 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { generateCoachReply } from '../ai/openaiClient.js';
+import { CompatibleSimulationProvider } from '../ai/providers/compatibleSimulationProvider.js';
+import {
+  SimulationOrchestrator,
+  type SimulationHistoryMessage,
+  type SimulationOrchestratorResult,
+  type SimulationStage
+} from '../ai/simulationOrchestrator.js';
 
-const FALLBACK_COACH_REPLY =
-  '（系统提示）AI 暂时不可用，我先给你一个可执行的谈判建议：\n' +
-  '1) 先共情并确认对方关注点；\n' +
-  '2) 用数据解释价格差异（质量/交付/售后/合规）；\n' +
-  '3) 给出两档方案（标准版/优化版）并引导对方选择；\n' +
-  '4) 以小让步换取对方承诺（数量/付款/长期合作）。\n' +
-  '你可以先回复：『理解你们的预算压力。我们这次报价包含XXX（交付/质保/服务），如果你们愿意把数量提升到X或将付款条款改为Y，我们可以把单价下调到Z。你更倾向哪一种？』';
+const FALLBACK_OPPONENT_REPLY =
+  '我理解你的说明，但目前这个报价对我们还是偏高。除非你能进一步解释价格构成，或者在数量、付款条件上给出更有竞争力的方案，否则我们很难继续推进。';
 
 type Db = Pick<
   PrismaClient,
-  'simulationSession' | 'simulationMessage' | '$transaction'
+  | 'businessStage'
+  | 'stageTask'
+  | 'stageAiScenario'
+  | 'simulationSession'
+  | 'simulationMessage'
+  | '$transaction'
 >;
 
-type SimulationStage =
-  | 'acquisition'
-  | 'quotation'
-  | 'negotiation'
-  | 'contract'
-  | 'preparation'
-  | 'customs'
-  | 'settlement'
-  | 'after_sales';
-
-type CoachHistoryMessage = {
-  role: 'student' | 'coach';
-  content: string;
-};
+const simulationOrchestrator = new SimulationOrchestrator(
+  new CompatibleSimulationProvider()
+);
 
 export async function getOrCreateActiveSession(
   prisma: Db,
@@ -43,7 +38,36 @@ export async function getOrCreateActiveSession(
     orderBy: { createdAt: 'desc' }
   });
 
-  if (existing) return existing;
+  const stageRecord = await prisma.businessStage.findUnique({
+    where: { key: stage },
+    include: {
+      tasks: {
+        where: { isActive: true, isDefault: true },
+        take: 1
+      },
+      aiScenarios: {
+        where: { isActive: true, isDefault: true },
+        take: 1
+      }
+    }
+  });
+
+  const taskId = stageRecord?.tasks[0]?.id;
+  const scenarioId = stageRecord?.aiScenarios[0]?.id;
+
+  if (existing) {
+    if (!existing.stageId && stageRecord) {
+      return prisma.simulationSession.update({
+        where: { id: existing.id },
+        data: {
+          stageId: stageRecord.id,
+          taskId,
+          scenarioId
+        }
+      });
+    }
+    return existing;
+  }
 
   const attempt = await prisma.simulationSession.aggregate({
     where: { userId, stage },
@@ -54,70 +78,109 @@ export async function getOrCreateActiveSession(
   return prisma.simulationSession.create({
     data: {
       userId,
+      stageId: stageRecord?.id,
+      taskId,
+      scenarioId,
       stage,
       attemptNo,
-      status: 'active'
+      status: 'active',
+      title: stageRecord?.titleZh
     }
   });
 }
 
-function fallbackCoach() {
-  return FALLBACK_COACH_REPLY;
+function createFallbackOrchestration(): SimulationOrchestratorResult {
+  return {
+    roleplayReply: FALLBACK_OPPONENT_REPLY,
+    coachNote: null,
+    assessment: {
+      summary: 'AI 暂时不可用，已降级为基础对手回复。'
+    },
+    personaSnapshot: {
+      difficultyAdjustment: 'keep'
+    },
+    trace: {
+      provider: 'compatible',
+      usedTools: [],
+      usedWebSearch: false,
+      degraded: true
+    }
+  };
 }
 
-export async function appendStudentAndMockCoach(
+function toJsonValue(
+  value:
+    | SimulationOrchestratorResult['assessment']
+    | SimulationOrchestratorResult['trace']
+    | SimulationOrchestratorResult['personaSnapshot']
+): Prisma.InputJsonValue | undefined {
+  if (value == null) return undefined;
+  return value as Prisma.InputJsonValue;
+}
+
+export async function appendStudentAndOpponent(
   prisma: Db,
   sessionId: string,
   content: string,
   stage?: SimulationStage
 ) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const maxTurn = await tx.simulationMessage.aggregate({
-      where: { sessionId },
-      _max: { turnIndex: true }
-    });
-    const nextTurn = (maxTurn._max.turnIndex ?? -1) + 1;
-
-    const studentMessage = await tx.simulationMessage.create({
-      data: {
-        sessionId,
-        role: 'student',
-        content,
-        turnIndex: nextTurn
-      }
-    });
-
-    const recent = await tx.simulationMessage.findMany({
-      where: { sessionId },
-      orderBy: { turnIndex: 'desc' },
-      take: 20
-    });
-
-    const history: CoachHistoryMessage[] = [...recent].reverse().map((m) => ({
-      role: m.role === 'coach' ? 'coach' : 'student',
-      content: m.content
-    }));
-
-    let coachContent = fallbackCoach();
-    try {
-      coachContent = await generateCoachReply({
-        stage: stage ?? 'quotation',
-        messages: history
+  const { studentMessage, nextTurn, history } = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      const maxTurn = await tx.simulationMessage.aggregate({
+        where: { sessionId },
+        _max: { turnIndex: true }
       });
-    } catch {
-      coachContent = fallbackCoach();
+      const nextTurn = (maxTurn._max.turnIndex ?? -1) + 1;
+
+      const studentMessage = await tx.simulationMessage.create({
+        data: {
+          sessionId,
+          role: 'student',
+          content,
+          turnIndex: nextTurn
+        }
+      });
+
+      const recent = await tx.simulationMessage.findMany({
+        where: { sessionId },
+        orderBy: { turnIndex: 'desc' },
+        take: 20
+      });
+
+      const history: SimulationHistoryMessage[] = [...recent]
+        .reverse()
+        .map((message) => ({
+          role: message.role === 'student' ? 'student' : 'coach',
+          content: message.content
+        }));
+
+      return { studentMessage, nextTurn, history };
     }
+  );
 
-    const coachMessage = await tx.simulationMessage.create({
-      data: {
-        sessionId,
-        role: 'coach',
-        content: coachContent,
-        coachNote: undefined,
-        turnIndex: nextTurn + 1
-      }
+  let orchestration = createFallbackOrchestration();
+
+  try {
+    orchestration = await simulationOrchestrator.generate({
+      stage: stage ?? 'quotation',
+      messages: history
     });
+  } catch {
+    orchestration = createFallbackOrchestration();
+  }
 
-    return { studentMessage, coachMessage };
+  const opponentMessage = await prisma.simulationMessage.create({
+    data: {
+      sessionId,
+      role: 'opponent',
+      content: orchestration.roleplayReply,
+      coachNote: orchestration.coachNote ?? undefined,
+      assessmentJson: toJsonValue(orchestration.assessment),
+      traceJson: toJsonValue(orchestration.trace),
+      personaJson: toJsonValue(orchestration.personaSnapshot),
+      turnIndex: nextTurn + 1
+    }
   });
+
+  return { studentMessage, opponentMessage, orchestration };
 }
