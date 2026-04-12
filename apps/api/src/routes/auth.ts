@@ -260,11 +260,13 @@ router.post('/student/register_or_login', async (req, res) => {
       }
 
       const created = await createStudentAccount({ username, email, password });
-      const delivery = await sendVerificationEmail({
-        email,
-        username,
-        verificationUrl: buildUrl('/verify-email', created.verificationToken)
-      });
+      const delivery = EMAIL_VERIFICATION_REQUIRED
+        ? await sendVerificationEmail({
+            email,
+            username,
+            verificationUrl: buildUrl('/verify-email', created.verificationToken)
+          })
+        : undefined;
 
       return res.status(200).json(
         ok({
@@ -337,11 +339,13 @@ router.post('/student/register', async (req, res) => {
     }
 
     const created = await createStudentAccount({ username, email, password });
-    const delivery = await sendVerificationEmail({
-      email,
-      username,
-      verificationUrl: buildUrl('/verify-email', created.verificationToken)
-    });
+    const delivery = EMAIL_VERIFICATION_REQUIRED
+      ? await sendVerificationEmail({
+          email,
+          username,
+          verificationUrl: buildUrl('/verify-email', created.verificationToken)
+        })
+      : undefined;
 
     return res.status(200).json(
       ok({
