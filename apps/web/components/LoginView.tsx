@@ -198,45 +198,6 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             </button>
           </div>
 
-          <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-5 text-slate-600">
-            {activeTab === UserRole.STUDENT
-              ? '学生可以直接登录已有账号，或创建一个新的试用账号。'
-              : '教师和管理员请使用学校分配的账号登录。'}
-          </div>
-
-          {activeTab === UserRole.STUDENT && (
-            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 mb-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentMode('login');
-                  clearNotice();
-                }}
-                className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${
-                  studentMode === 'login'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                登录已有账号
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentMode('register');
-                  clearNotice();
-                }}
-                className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${
-                  studentMode === 'register'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                注册新账号
-              </button>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
@@ -323,6 +284,22 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               {isStudentRegister ? '创建学生账号' : activeTab === UserRole.STUDENT ? '登录' : '管理员安全登录'}
               <ArrowRight size={18} />
             </button>
+
+            {activeTab === UserRole.STUDENT && (
+              <div className="text-center text-xs text-slate-500">
+                {isStudentRegister ? '已有账号？' : '还没有账号？'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudentMode(isStudentRegister ? 'login' : 'register');
+                    clearNotice();
+                  }}
+                  className="ml-1 font-bold text-blue-600 hover:text-blue-700"
+                >
+                  {isStudentRegister ? '登录已有账号' : '注册新账号'}
+                </button>
+              </div>
+            )}
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
