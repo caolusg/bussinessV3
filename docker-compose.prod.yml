@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: ${CONTAINER_REGISTRY_MIRROR}postgres:16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -18,6 +18,9 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile.prod
+      args:
+        CONTAINER_REGISTRY_MIRROR: ${CONTAINER_REGISTRY_MIRROR}
+        APT_MIRROR: ${APT_MIRROR}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -56,6 +59,8 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile.prod
+      args:
+        CONTAINER_REGISTRY_MIRROR: ${CONTAINER_REGISTRY_MIRROR}
     restart: unless-stopped
     depends_on:
       - api
