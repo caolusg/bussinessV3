@@ -36,7 +36,7 @@ export type SimulationOrchestratorResult = {
   assessment?: SimulationAssessment;
   personaSnapshot?: SimulationPersonaSnapshot;
   trace: {
-    provider: 'openai' | 'openclaw';
+    provider: 'deepseek' | 'compatible' | 'openclaw';
     usedTools?: string[];
     usedWebSearch?: boolean;
     degraded?: boolean;

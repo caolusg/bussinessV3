@@ -1,6 +1,18 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { Users, MessageSquare, Quote, AlertCircle, CheckCircle, ArrowLeft, X, Rocket, Loader2, Info, Send, ChevronRight, Mic, User as UserIcon, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Bot,
+  CheckCircle,
+  ChevronRight,
+  Info,
+  MessageSquare,
+  Mic,
+  Send,
+  Sparkles,
+  User as UserIcon,
+  Users
+} from 'lucide-react';
 import { MOCK_GROUP_DISCUSSION } from '../constants';
 import { DiscussionMessage } from '../types';
 
@@ -10,16 +22,15 @@ interface GroupDiscussionRoomProps {
   onGoToCoaching: () => void;
 }
 
-const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({ onClose, onRetry, onGoToCoaching }) => {
+const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({
+  onClose,
+  onRetry,
+  onGoToCoaching
+}) => {
   const { caseTitle, items } = MOCK_GROUP_DISCUSSION;
-  
-  // Navigation & Phase States
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [showInstructions, setShowInstructions] = useState(true);
-  const [isLoadingItem, setIsLoadingItem] = useState(false);
-  const [roomPhase, setRoomPhase] = useState<'CHAT' | 'ITEM_DONE'>('CHAT');
-  
-  // Chat States
+  const [roomPhase, setRoomPhase] = useState<'CHAT' | 'SUMMARY'>('CHAT');
   const [chatMessages, setChatMessages] = useState<DiscussionMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -27,43 +38,39 @@ const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({ onClose, onRe
   const currentItem = items[currentItemIndex];
   const isLastItem = currentItemIndex === items.length - 1;
 
-  // Auto-scroll to bottom of chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, roomPhase]);
 
-  const startAnalysis = () => {
-    setShowInstructions(false);
-    loadItem(0);
-  };
-
   const loadItem = (index: number) => {
     setCurrentItemIndex(index);
-    setIsLoadingItem(true);
     setRoomPhase('CHAT');
-    
-    // Simulate loading state for switching records
-    setTimeout(() => {
-      setIsLoadingItem(false);
-      setChatMessages(items[index].messages);
-    }, 1000);
+    setChatMessages(items[index].messages);
+  };
+
+  const startDiscussion = () => {
+    setShowInstructions(false);
+    loadItem(0);
   };
 
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
     const newMessage: DiscussionMessage = {
       id: Date.now().toString(),
-      member: '组员 A (你)',
-      content: inputValue,
+      member: '成员 A（我）',
+      content: inputValue.trim(),
       isUser: true
     };
-    setChatMessages(prev => [...prev, newMessage]);
+    setChatMessages((prev) => [...prev, newMessage]);
     setInputValue('');
   };
 
-  const handleEndItemDiscussion = () => {
-    // Simulate AI automated processing
-    setRoomPhase('ITEM_DONE');
+  const getMemberColor = (member: string) => {
+    if (member.includes('我')) return 'bg-blue-600';
+    if (member.includes('B')) return 'bg-indigo-500';
+    if (member.includes('C')) return 'bg-emerald-500';
+    if (member.includes('D')) return 'bg-amber-500';
+    return 'bg-purple-500';
   };
 
   const goToNextItem = () => {
@@ -72,268 +79,264 @@ const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({ onClose, onRe
     }
   };
 
-  const getMemberColor = (member: string) => {
-    if (member.includes('你')) return 'bg-blue-600';
-    if (member.includes('B')) return 'bg-indigo-500';
-    if (member.includes('C')) return 'bg-emerald-500';
-    if (member.includes('D')) return 'bg-amber-500';
-    return 'bg-purple-500';
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans overflow-hidden">
-      
-      {/* 1. Entry Tips Modal */}
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
       {showInstructions && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-500">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-500">
-            <div className="bg-gradient-to-br from-indigo-700 to-blue-800 p-8 text-white flex items-center gap-6">
-              <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-md ring-1 ring-white/20">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-md animate-in fade-in duration-500">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 duration-500">
+            <div className="flex items-center gap-6 bg-gradient-to-br from-indigo-700 to-blue-800 p-8 text-white">
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur-md">
                 <Users size={40} className="text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">小组复盘研讨室</h2>
-                <p className="text-blue-100 text-sm mt-1 opacity-90">多人实时连线 · 深度逻辑拆解</p>
+                <h2 className="text-2xl font-bold tracking-tight">小组复盘讨论室</h2>
+                <p className="mt-1 text-sm text-blue-100 opacity-90">讨论典型片段，整理表达思路</p>
               </div>
             </div>
-            <div className="p-10 space-y-8">
+            <div className="space-y-8 p-10">
               <div className="flex gap-5">
-                <div className="bg-amber-50 text-amber-600 p-3 rounded-xl h-fit border border-amber-100">
+                <div className="h-fit rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-600">
                   <Info size={24} />
                 </div>
                 <div className="space-y-4">
-                  <h4 className="font-bold text-slate-800 text-lg">研讨引导建议</h4>
-                  <p className="text-slate-600 text-sm leading-relaxed">
-                    欢迎进入复盘室。请针对小组内出现的<strong>典型问题片段</strong>进行集体研讨。
+                  <h4 className="text-lg font-bold text-slate-800">讨论方式</h4>
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    这里是辅助练习工具，不影响任务状态。你可以针对典型表达片段讨论问题原因、改写方向和业务风险。
                   </p>
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold mt-0.5 shrink-0">1</div>
-                      <p className="text-xs text-slate-500 leading-5">剖析对话失败的<strong>根本原因</strong>。系统将自动记录并分析你们的讨论核心。</p>
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
+                        1
+                      </div>
+                      <p className="text-xs leading-5 text-slate-500">
+                        先判断这句话的问题：是信息不完整、策略不清，还是没有回应客户关切。
+                      </p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold mt-0.5 shrink-0">2</div>
-                      <p className="text-xs text-slate-500 leading-5">研讨结束后，我们将带您进入 <strong>AI 教练对比环节</strong>，查看小组结论与专家诊断的差异。</p>
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
+                        2
+                      </div>
+                      <p className="text-xs leading-5 text-slate-500">
+                        再提出更适合业务场景的中文表达，必要时可以进入 AI 教练页继续看诊断。
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={startAnalysis}
-                className="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
+              <button
+                onClick={startDiscussion}
+                className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-5 font-bold text-white shadow-xl shadow-blue-200 transition-all hover:bg-blue-700"
               >
-                我知道了，进入讨论
-                <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                进入讨论
+                <ChevronRight size={20} className="transition-transform group-hover:translate-x-1" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <header className="h-16 bg-white border-b border-gray-200 shrink-0 px-6 flex items-center justify-between z-50 shadow-sm">
+      <header className="z-50 flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500">
+          <button
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
+          >
             <ArrowLeft size={20} />
           </button>
-          <div className="h-6 w-px bg-gray-200"></div>
+          <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-2">
             <Users size={20} className="text-blue-600" />
-            <h1 className="font-bold text-slate-800 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[300px] md:max-w-none">{caseTitle}</h1>
+            <h1 className="max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap font-bold tracking-tight text-slate-800 md:max-w-none">
+              {caseTitle}
+            </h1>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-slate-50 px-4 py-1.5 rounded-full border border-slate-200">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">研讨进度</span>
-             <div className="flex gap-1.5">
-               {items.map((_, i) => (
-                 <div key={i} className={`h-1.5 w-6 rounded-full transition-all ${i === currentItemIndex ? 'bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.3)]' : i < currentItemIndex ? 'bg-green-500' : 'bg-slate-200'}`} />
-               ))}
-             </div>
-             <span className="text-xs font-bold text-slate-700 ml-1">{currentItemIndex + 1}/{items.length}</span>
-          </div>
+
+        <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            片段
+          </span>
+          <span className="text-xs font-bold text-slate-700">
+            {currentItemIndex + 1}/{items.length}
+          </span>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
-        
-        {/* Sticky Context Snippet Area */}
-        <div className="bg-white border-b border-gray-100 shadow-sm z-40 px-8 py-6">
-          <div className="max-w-4xl mx-auto space-y-4">
-             {isLoadingItem ? (
-               <div className="h-28 flex items-center justify-center gap-4 animate-pulse">
-                 <Loader2 size={24} className="text-blue-500 animate-spin" />
-                 <span className="text-sm font-bold text-slate-400">正在调取下一条问题记录...</span>
-               </div>
-             ) : (
-               <>
-                 <div className="flex items-center justify-between">
-                    <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-blue-100 flex items-center gap-2">
-                      <AlertCircle size={14} />
-                      正在复盘：案例片段 #{currentItemIndex + 1}
-                    </div>
-                    {roomPhase === 'CHAT' && (
-                      <button 
-                        onClick={handleEndItemDiscussion}
-                        className="flex items-center gap-2 px-6 py-2 rounded-xl border-2 border-slate-900 bg-white text-slate-900 text-xs font-bold hover:bg-slate-900 hover:text-white transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-sm group"
-                      >
-                        <MessageSquare size={14} className="group-hover:scale-110 transition-transform" />
-                        研讨完毕，结束本项
-                      </button>
-                    )}
-                 </div>
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div className="z-40 border-b border-gray-100 bg-white px-8 py-6 shadow-sm">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-blue-100">
+                <AlertCircle size={14} />
+                讨论片段 #{currentItemIndex + 1}
+              </div>
+              {roomPhase === 'CHAT' && (
+                <button
+                  onClick={() => setRoomPhase('SUMMARY')}
+                  className="group flex items-center gap-2 rounded-xl border-2 border-slate-900 bg-white px-6 py-2 text-xs font-bold text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-900 hover:text-white active:scale-95"
+                >
+                  <MessageSquare size={14} className="transition-transform group-hover:scale-110" />
+                  查看本轮小结
+                </button>
+              )}
+            </div>
 
-                 <div className="relative flex gap-6 items-start animate-in slide-in-from-top-4 duration-500">
-                    <div className="text-blue-100 shrink-0">
-                      <Quote size={48} fill="currentColor" />
-                    </div>
-                    <div className="space-y-3 flex-1">
-                      <p className="text-slate-700 font-bold text-xl leading-relaxed italic">
-                        “{currentItem.snippet}”
-                      </p>
-                      <div className="flex items-center gap-3">
-                         <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">源自: {currentItem.sourceMember}</span>
-                         <span className="text-[10px] font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full flex items-center gap-1.5">
-                           <AlertCircle size={12} /> 商业逻辑漏洞
-                         </span>
-                      </div>
-                    </div>
-                 </div>
-               </>
-             )}
+            <div className="flex items-start gap-6 animate-in slide-in-from-top-4 duration-500">
+              <div className="shrink-0 text-blue-100">
+                <MessageSquare size={48} />
+              </div>
+              <div className="flex-1 space-y-3">
+                <p className="text-xl font-bold italic leading-relaxed text-slate-700">
+                  “{currentItem.snippet}”
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-400">
+                    来源：{currentItem.sourceMember}
+                  </span>
+                  <span className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[10px] font-bold text-red-500">
+                    <AlertCircle size={12} /> 待改进表达
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Scrollable Discussion Chat Area */}
-        <main className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50 scroll-smooth">
-          <div className="max-w-4xl mx-auto space-y-8 pb-32">
-            {isLoadingItem ? (
-              <div className="space-y-6 pt-10">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex gap-4 items-start">
-                     <div className="w-10 h-10 rounded-xl bg-slate-200 animate-pulse" />
-                     <div className="h-20 flex-1 bg-white rounded-2xl animate-pulse border border-slate-100" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex items-center justify-center">
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">
-                    小组实时研讨区域
-                  </span>
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                </div>
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 px-8 py-6 scroll-smooth">
+          <div className="mx-auto max-w-4xl space-y-8 pb-32">
+            <div className="flex items-center justify-center">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                小组讨论区
+              </span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
 
-                {chatMessages.map((msg, index) => (
-                  <div 
-                    key={msg.id} 
-                    className="flex items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs text-white shadow-sm ${getMemberColor(msg.member)}`}>
-                      {msg.member.includes('你') ? <UserIcon size={18} /> : msg.member.slice(2, 4)}
-                    </div>
-                    <div className={`flex-1 p-5 rounded-2xl shadow-sm border ${
-                      msg.isUser ? 'bg-blue-600 text-white border-blue-600 shadow-blue-50' : 'bg-white border-slate-100 text-slate-700'
-                    }`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-[10px] font-bold uppercase ${msg.isUser ? 'text-blue-100' : 'text-slate-400'}`}>
-                          {msg.member}
-                        </span>
-                      </div>
-                      <p className="text-sm leading-relaxed">
-                        {msg.content}
-                      </p>
-                    </div>
+            {chatMessages.map((msg, index) => (
+              <div
+                key={msg.id}
+                className="flex items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white shadow-sm ${getMemberColor(msg.member)}`}
+                >
+                  {msg.member.includes('我') ? <UserIcon size={18} /> : msg.member.slice(0, 3)}
+                </div>
+                <div
+                  className={`flex-1 rounded-2xl border p-5 shadow-sm ${
+                    msg.isUser
+                      ? 'border-blue-600 bg-blue-600 text-white shadow-blue-50'
+                      : 'border-slate-100 bg-white text-slate-700'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span
+                      className={`text-[10px] font-bold uppercase ${
+                        msg.isUser ? 'text-blue-100' : 'text-slate-400'
+                      }`}
+                    >
+                      {msg.member}
+                    </span>
                   </div>
-                ))}
-                
-                {roomPhase === 'ITEM_DONE' && (
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 p-6 rounded-2xl animate-in zoom-in-95 duration-500">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                      <CheckCircle size={24} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-emerald-900 text-sm">AI 已自动提取核心观点并完成归档</h4>
-                      <p className="text-xs text-emerald-600">本项讨论已结束，点击底部按钮继续。</p>
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
+                  <p className="text-sm leading-relaxed">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+
+            {roomPhase === 'SUMMARY' && (
+              <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-6 animate-in zoom-in-95 duration-500">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                  <CheckCircle size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-900">本轮讨论小结</h4>
+                  <p className="text-xs text-emerald-600">
+                    重点关注：是否回应客户关切、是否说明业务依据、是否给出可执行下一步。
+                  </p>
+                </div>
               </div>
             )}
+            <div ref={chatEndRef} />
           </div>
         </main>
 
-        {/* Fixed Footer */}
-        <footer className="bg-white border-t border-gray-200 shrink-0 px-8 py-5 z-50 shadow-[0_-10px_25px_rgba(0,0,0,0.05)]">
-           <div className="max-w-4xl mx-auto">
-             {roomPhase === 'CHAT' ? (
-               <div className="flex items-center gap-4">
-                  <div className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl flex items-center px-5 py-4 focus-within:ring-4 focus-within:ring-blue-50 focus-within:border-blue-400 transition-all shadow-inner">
-                     <input 
-                       type="text"
-                       value={inputValue}
-                       disabled={isLoadingItem}
-                       onChange={(e) => setInputValue(e.target.value)}
-                       onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                       placeholder="输入你的见解，与同伴交流该条目..."
-                       className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] text-slate-700 placeholder:text-slate-400"
-                     />
-                     <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-                        <Mic size={20} />
-                     </button>
-                  </div>
-                  <button 
-                     onClick={handleSendMessage}
-                     disabled={!inputValue.trim() || isLoadingItem}
-                     className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 disabled:opacity-50 transition-all active:scale-95"
-                  >
-                     <Send size={24} />
+        <footer className="z-50 shrink-0 border-t border-gray-200 bg-white px-8 py-5 shadow-[0_-10px_25px_rgba(0,0,0,0.05)]">
+          <div className="mx-auto max-w-4xl">
+            {roomPhase === 'CHAT' ? (
+              <div className="flex items-center gap-4">
+                <div className="flex flex-1 items-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 shadow-inner transition-all focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-50">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(event) => setInputValue(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && handleSendMessage()}
+                    placeholder="输入你的看法，讨论这句话可以怎样改..."
+                    className="flex-1 border-none bg-transparent text-[15px] text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                  />
+                  <button className="p-2 text-slate-400 transition-colors hover:text-slate-600">
+                    <Mic size={20} />
                   </button>
-               </div>
-             ) : (
-               <div className="flex items-center justify-between py-1">
-                 <div className="flex items-center gap-4">
-                    <div className="bg-blue-100 text-blue-600 p-3 rounded-2xl shadow-sm">
-                      <CheckCircle size={24} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-base font-bold text-slate-800">
-                        {isLastItem ? '🎉 研讨已结束，数据分析中' : `案例片段 ${currentItemIndex + 1} 讨论已归档`}
-                      </span>
-                      <span className="text-xs text-slate-400 font-medium tracking-tight">
-                        {isLastItem ? '系统已准备好专家级复盘报告，请点击右侧查看对比' : '点击右侧按钮开启下一个案例的实时研讨'}
-                      </span>
-                    </div>
-                 </div>
-                 
-                 {isLastItem ? (
-                   <button 
-                     onClick={onGoToCoaching}
-                     className="flex items-center gap-4 px-12 py-5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold shadow-2xl shadow-blue-100 hover:shadow-blue-200 transition-all transform hover:-translate-y-1 active:scale-95 group"
-                   >
-                      <Sparkles size={24} className="group-hover:animate-pulse" />
-                      查看 AI 专家深度对比报告
-                   </button>
-                 ) : (
-                   <button 
-                     onClick={goToNextItem}
-                     className="flex items-center gap-4 px-10 py-5 rounded-2xl bg-slate-900 text-white font-bold shadow-xl hover:bg-black transition-all transform hover:-translate-y-1 active:scale-95 group"
-                   >
-                      进入下一条讨论
-                      <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                   </button>
-                 )}
-               </div>
-             )}
-           </div>
-        </footer>
+                </div>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim()}
+                  className="rounded-2xl bg-blue-600 p-4 text-white shadow-xl shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+                >
+                  <Send size={24} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-4">
+                  <div className="rounded-2xl bg-blue-100 p-3 text-blue-600 shadow-sm">
+                    <CheckCircle size={24} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-base font-bold text-slate-800">
+                      本轮讨论已整理
+                    </span>
+                    <span className="text-xs font-medium tracking-tight text-slate-400">
+                      你可以继续讨论、切换片段，或进入 AI 教练页查看诊断。
+                    </span>
+                  </div>
+                </div>
 
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setRoomPhase('CHAT')}
+                    className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
+                  >
+                    继续讨论
+                  </button>
+                  {!isLastItem && (
+                    <button
+                      onClick={goToNextItem}
+                      className="group flex items-center gap-3 rounded-2xl bg-slate-900 px-6 py-4 text-sm font-bold text-white shadow-xl transition-all hover:-translate-y-1 hover:bg-black active:scale-95"
+                    >
+                      切换下一片段
+                      <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
+                    </button>
+                  )}
+                  <button
+                    onClick={onGoToCoaching}
+                    className="group flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 text-sm font-bold text-white shadow-2xl shadow-blue-100 transition-all hover:-translate-y-1 hover:shadow-blue-200 active:scale-95"
+                  >
+                    <Sparkles size={20} className="group-hover:animate-pulse" />
+                    看 AI 教练
+                  </button>
+                  <button
+                    onClick={onRetry}
+                    className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-6 py-4 text-sm font-bold text-blue-700 transition-all hover:bg-blue-100 active:scale-95"
+                  >
+                    <Bot size={18} />
+                    回到练习
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </footer>
       </div>
     </div>
   );

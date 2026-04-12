@@ -11,7 +11,7 @@ This repository uses npm as the package manager.
 - Frontend: React 19 + Vite
 - Backend: Express + TypeScript + Prisma
 - Database: PostgreSQL 16
-- AI: OpenAI SDK
+- AI: DeepSeek-compatible chat completion API
 
 ## Quick Start
 
@@ -92,8 +92,11 @@ Important variables:
 - `BCRYPT_ROUNDS=10`
 - `DEFAULT_TEACHER_USERNAME=teacher`
 - `DEFAULT_TEACHER_PASSWORD=password123`
-- `OPENAI_API_KEY=` optional; when empty, the API falls back to a mock coach reply
 - `AI_ENABLED=true`
+- `AI_PROVIDER=deepseek`
+- `AI_BASE_URL=https://api.deepseek.com`
+- `AI_MODEL=deepseek-chat`
+- `AI_API_KEY=` optional; when empty, the API falls back to a mock reply
 
 For backend-only local work, you can also copy `apps/api/.env.example` to `apps/api/.env`.
 
