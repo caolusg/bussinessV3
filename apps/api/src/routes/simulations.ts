@@ -4,7 +4,8 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   appendStudentAndOpponent,
-  getOrCreateActiveSession
+  getOrCreateActiveSession,
+  restartStageSession
 } from '../services/simulationChatService.js';
 import {
   logAiInteraction,
@@ -230,6 +231,52 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Post message failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/:stage/restart', requireAuth, async (req, res) => {
+  try {
+    const paramsParsed = messageParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json(fail('UNAUTHORIZED', 'Unauthorized'));
+    }
+
+    const stage = paramsParsed.data.stage;
+    const session = await restartStageSession(prisma, userId, stage);
+
+    await logPracticeEvent(prisma, {
+      userId,
+      stageId: session.stageId,
+      sessionId: session.id,
+      eventType: 'practice_session_restarted',
+      metadata: {
+        stage,
+        status: session.status,
+        attemptNo: session.attemptNo
+      }
+    });
+
+    return res.status(200).json(ok({
+      session: {
+        id: session.id,
+        userId: session.userId,
+        stage: session.stage,
+        attemptNo: session.attemptNo,
+        status: session.status,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt
+      },
+      orchestration: null,
+      messages: []
+    }));
+  } catch (error) {
+    console.error('Restart session failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

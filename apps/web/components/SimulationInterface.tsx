@@ -5,6 +5,7 @@ import {
   ChevronRight,
   HelpCircle,
   Mic,
+  RotateCcw,
   Send,
   User,
   Users
@@ -96,6 +97,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [coachNote, setCoachNote] = useState<string | null>(null);
   const [assessmentSummary, setAssessmentSummary] = useState<string | null>(null);
@@ -256,6 +258,46 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     }
   };
 
+  const handleRestart = async () => {
+    if (restarting || sending || loadingSession) return;
+
+    const confirmed = window.confirm(
+      '确定要重新开始当前阶段对话吗？当前进行中的这轮对话会被结束，并新建一条空白会话。'
+    );
+    if (!confirmed) return;
+
+    setRestarting(true);
+    resetStructuredFeedback();
+
+    try {
+      const { res, data, text } = await apiFetch<{
+        orchestration?: SimulationOrchestration | null;
+        messages?: SimulationApiMessage[];
+      }>(`/api/simulations/${currentStage}/restart`, {
+        method: 'POST'
+      });
+
+      if (!res.ok) {
+        console.error('Simulation restart failed', { status: res.status, body: text });
+        alert('重新开始失败，请稍后重试。');
+        return;
+      }
+
+      const sessionMessages = Array.isArray(data?.messages)
+        ? data.messages.map(toChatMessage)
+        : [];
+
+      setMessages(sessionMessages);
+      setInputValue('');
+      updateStructuredFeedback(data?.orchestration ?? undefined);
+    } catch (error) {
+      console.error('Simulation restart error', error);
+      alert(error instanceof Error ? error.message : '重新开始失败，请稍后重试。');
+    } finally {
+      setRestarting(false);
+    }
+  };
+
   const displayMessages =
     messages.length > 0 || loadingSession ? messages : INITIAL_CHAT_MESSAGES;
 
@@ -263,6 +305,14 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900">
       <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleRestart}
+            disabled={restarting || sending || loadingSession}
+            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCcw size={16} />
+            {restarting ? '重新开始中...' : '重新开始'}
+          </button>
           <button
             onClick={onExit}
             className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"

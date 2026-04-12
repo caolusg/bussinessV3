@@ -95,6 +95,61 @@ export async function getOrCreateActiveSession(
   });
 }
 
+export async function restartStageSession(
+  prisma: Db,
+  userId: string,
+  stage: SimulationStage
+) {
+  const stageRecord = await prisma.businessStage.findUnique({
+    where: { key: stage },
+    include: {
+      tasks: {
+        where: { isActive: true, isDefault: true },
+        take: 1
+      },
+      aiScenarios: {
+        where: { isActive: true, isDefault: true },
+        take: 1
+      }
+    }
+  });
+
+  const taskId = stageRecord?.tasks[0]?.id;
+  const scenarioId = stageRecord?.aiScenarios[0]?.id;
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.simulationSession.updateMany({
+      where: {
+        userId,
+        stage,
+        status: 'active'
+      },
+      data: {
+        status: 'ended'
+      }
+    });
+
+    const attempt = await tx.simulationSession.aggregate({
+      where: { userId, stage },
+      _max: { attemptNo: true }
+    });
+    const attemptNo = (attempt._max.attemptNo ?? 0) + 1;
+
+    return tx.simulationSession.create({
+      data: {
+        userId,
+        stageId: stageRecord?.id,
+        taskId,
+        scenarioId,
+        stage,
+        attemptNo,
+        status: 'active',
+        title: stageRecord?.titleZh
+      }
+    });
+  });
+}
+
 function createFallbackOrchestration(): SimulationOrchestratorResult {
   return {
     roleplayReply: FALLBACK_OPPONENT_REPLY,
