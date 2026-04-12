@@ -227,11 +227,7 @@ const AppRoutes: React.FC = () => {
 
         setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
 
-        if (!me.profileCompleted) {
-          navigate('/profile');
-        } else {
-          navigate('/');
-        }
+        navigate('/');
 
         return { kind: 'logged_in' };
       }
@@ -267,8 +263,6 @@ const AppRoutes: React.FC = () => {
 
     if (me.roles.includes('teacher')) {
       navigate('/teacher');
-    } else if (!me.profileCompleted) {
-      navigate('/profile');
     } else {
       navigate('/');
     }
