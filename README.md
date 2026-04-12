@@ -78,6 +78,11 @@ npm run api:dev
 npm run api:build
 npm run web:dev
 npm run web:build
+npm run prod:up
+npm run prod:migrate
+npm run prod:seed
+npm run prod:seed:content
+npm run prod:down
 ```
 
 ## Environment
@@ -97,6 +102,8 @@ Important variables:
 - `AI_BASE_URL=https://api.deepseek.com`
 - `AI_MODEL=deepseek-chat`
 - `AI_API_KEY=` optional; when empty, the API falls back to a mock reply
+
+Production deployment uses `.env.production` copied from `.env.production.example`.
 
 For backend-only local work, you can also copy `apps/api/.env.example` to `apps/api/.env`.
 
@@ -209,3 +216,30 @@ If you update the Prisma schema:
 cd apps/api
 npm run prisma:generate
 ```
+
+## Production Deployment
+
+This repository now includes a production deployment path based on Docker Compose:
+
+- `docker-compose.prod.yml`
+- `apps/api/Dockerfile.prod`
+- `apps/web/Dockerfile.prod`
+- `apps/web/nginx.conf`
+- `.env.production.example`
+
+Recommended flow:
+
+```bash
+copy .env.production.example .env.production
+npm run prod:up
+npm run prod:migrate
+npm run prod:seed
+npm run prod:seed:content
+```
+
+After deployment:
+
+- Web: `http://<server-ip-or-domain>:<WEB_PORT>`
+- API health through nginx proxy: `http://<server-ip-or-domain>:<WEB_PORT>/api/health`
+
+Detailed server instructions are in `docs/服务器部署说明.md`.

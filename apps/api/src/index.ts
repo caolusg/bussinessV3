@@ -12,12 +12,19 @@ const app = express();
 
 app.use(express.json({ limit: '1mb' }));
 
-const allowedOrigins = new Set([
+const defaultAllowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000'
-]);
+];
+
+const envAllowedOrigins = (process.env.CORS_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
 
 app.use(
   cors({
