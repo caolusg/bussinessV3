@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { LogOut, Briefcase, Settings } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
+import BrandLogo from './BrandLogo';
 
 interface TopBarProps {
   user: UserProfile;
@@ -13,15 +14,7 @@ const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onManageProfile }) => {
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 fixed top-0 left-0 right-0 z-50 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="bg-blue-700 text-white p-1.5 rounded-lg shadow-md shadow-blue-100">
-          <Briefcase size={24} />
-        </div>
-        <h1
-          className="text-xl font-bold text-slate-800 tracking-tight"
-          style={{ fontFamily: "'秦朝小篆', 'QinChaoXiaoZhuan', serif" }}
-        >
-          商通中文
-        </h1>
+        <BrandLogo compact />
       </div>
 
       <div className="flex items-center gap-6">

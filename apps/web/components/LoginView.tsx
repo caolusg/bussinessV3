@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Briefcase, Lock, Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
+import BrandLogo from './BrandLogo';
 
 type StudentLoginPayload = {
   username: string;
@@ -169,20 +170,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-slate-900 p-8 text-white">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-blue-600 p-2 rounded-xl">
-              <Briefcase size={28} />
-            </div>
-            <h1
-              className="text-2xl font-bold tracking-tight"
-              style={{ fontFamily: "'秦朝小篆', 'QinChaoXiaoZhuan', serif" }}
-            >
-              商通中文
-            </h1>
-          </div>
-          <p className="text-slate-400 text-xs font-medium uppercase tracking-[0.2em]">
-            BIZ Chinese
-          </p>
+          <BrandLogo inverse />
         </div>
 
         <div className="p-8">
