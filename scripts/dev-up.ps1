@@ -17,6 +17,18 @@ function Invoke-Step {
   & $Action
 }
 
+function Invoke-Native {
+  param(
+    [Parameter(Mandatory = $true)][scriptblock]$Action,
+    [Parameter(Mandatory = $true)][string]$ErrorMessage
+  )
+
+  & $Action
+  if ($LASTEXITCODE -ne 0) {
+    throw $ErrorMessage
+  }
+}
+
 function Test-Command {
   param([Parameter(Mandatory = $true)][string]$Name)
   return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
@@ -72,7 +84,7 @@ Set-Content -Path $apiLog -Value ''
 Set-Content -Path $webLog -Value ''
 
 Invoke-Step 'Checking Docker engine' {
-  docker version --format '{{.Server.Version}}' | Out-Null
+  Invoke-Native { docker info | Out-Null } 'Docker engine is not running'
 }
 
 Invoke-Step 'Stopping previous local dev processes' {
@@ -80,13 +92,13 @@ Invoke-Step 'Stopping previous local dev processes' {
 }
 
 Invoke-Step 'Starting PostgreSQL container' {
-  docker compose up -d db
+  Invoke-Native { docker compose up -d db } 'Failed to start PostgreSQL container'
 }
 
 Invoke-Step 'Waiting for PostgreSQL readiness' {
   $maxAttempts = 30
   for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-    docker compose exec -T db pg_isready -U postgres -d bussinessv3 *> $null
+    & { docker compose exec -T db pg_isready -U postgres -d bussinessv3 *> $null }
     if ($LASTEXITCODE -eq 0) {
       return
     }
