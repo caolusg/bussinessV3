@@ -102,11 +102,14 @@ router.get('/stages/:stage/resources', requireAuth, async (req, res) => {
       orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }]
     });
 
-    const grouped = resources.reduce<Record<string, typeof resources>>((acc, resource) => {
-      acc[resource.type] = acc[resource.type] ?? [];
-      acc[resource.type].push(resource);
-      return acc;
-    }, {});
+    const grouped = resources.reduce(
+      (acc: Record<string, typeof resources>, resource: (typeof resources)[number]) => {
+        acc[resource.type] = acc[resource.type] ?? [];
+        acc[resource.type].push(resource);
+        return acc;
+      },
+      {}
+    );
 
     await logPracticeEvent(prisma, {
       userId: req.user?.id,

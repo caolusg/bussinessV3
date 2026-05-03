@@ -1,6 +1,13 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 type Db = Pick<PrismaClient, 'practiceEvent' | 'aiInteractionLog' | 'messageAnalysisResult'>;
+type JsonInput =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonInput[]
+  | { [key: string]: JsonInput };
 
 type PracticeEventInput = {
   userId?: string | null;
@@ -8,7 +15,7 @@ type PracticeEventInput = {
   sessionId?: string | null;
   resourceId?: string | null;
   eventType: string;
-  metadata?: Prisma.InputJsonValue;
+  metadata?: JsonInput;
 };
 
 type AiInteractionInput = {
@@ -20,9 +27,9 @@ type AiInteractionInput = {
   model?: string | null;
   promptVersion?: string | null;
   systemPrompt?: string | null;
-  inputMessages?: Prisma.InputJsonValue;
+  inputMessages?: JsonInput;
   outputText?: string | null;
-  outputJson?: Prisma.InputJsonValue;
+  outputJson?: JsonInput;
   latencyMs?: number | null;
   degraded?: boolean;
   errorCode?: string | null;
@@ -35,11 +42,11 @@ type MessageAnalysisInput = {
   sessionId?: string | null;
   stageId?: string | null;
   analysisVersion: string;
-  languageQuality?: Prisma.InputJsonValue;
-  businessStrategy?: Prisma.InputJsonValue;
-  tradeTermUsage?: Prisma.InputJsonValue;
-  errorTags?: Prisma.InputJsonValue;
-  score?: Prisma.InputJsonValue;
+  languageQuality?: JsonInput;
+  businessStrategy?: JsonInput;
+  tradeTermUsage?: JsonInput;
+  errorTags?: JsonInput;
+  score?: JsonInput;
 };
 
 export async function logPracticeEvent(prisma: Db, input: PracticeEventInput) {

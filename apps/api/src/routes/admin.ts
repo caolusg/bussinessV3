@@ -5,6 +5,10 @@ import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
+type RowWithRole = { role: string };
+type AiLogRow = { degraded: boolean };
+type UserRoleRow = { role: { key: string } };
+
 type TableDelegate = {
   count(args?: unknown): Promise<number>;
   findMany(args?: unknown): Promise<Record<string, unknown>[]>;
@@ -390,10 +394,10 @@ router.get('/sessions/:sessionId/summary', async (req, res) => {
       session,
       stats: {
         messageCount: messages.length,
-        studentMessageCount: messages.filter((message) => message.role === 'student').length,
-        opponentMessageCount: messages.filter((message) => message.role === 'opponent').length,
+        studentMessageCount: messages.filter((message: RowWithRole) => message.role === 'student').length,
+        opponentMessageCount: messages.filter((message: RowWithRole) => message.role === 'opponent').length,
         aiCallCount: aiLogs.length,
-        degradedAiCallCount: aiLogs.filter((log) => log.degraded).length,
+        degradedAiCallCount: aiLogs.filter((log: AiLogRow) => log.degraded).length,
         practiceEventCount: practiceEvents.length,
         analysisResultCount: analysisResults.length
       },
@@ -513,7 +517,7 @@ router.get('/students/:userId/summary', async (req, res) => {
         status: user.status,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        roles: user.roles.map((userRole) => userRole.role.key),
+        roles: user.roles.map((userRole: UserRoleRow) => userRole.role.key),
         studentProfile: user.studentProfile,
         studentAuth: user.studentAuth
       },

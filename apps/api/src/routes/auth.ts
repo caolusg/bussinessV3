@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Router } from 'express';
-import type { Prisma, User } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -85,6 +85,15 @@ const jwtSecret: jwt.Secret = JWT_SECRET;
 const jwtExpiresIn = JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'];
 const ACCOUNT_STATUS_ACTIVE = 'ACTIVE';
 const ACCOUNT_STATUS_PENDING = 'PENDING_VERIFICATION';
+type AuthUserState = {
+  status: string;
+  emailVerifiedAt: Date | null;
+};
+type MailUser = {
+  id: string;
+  username: string;
+  email: string | null;
+};
 const GENERIC_PASSWORD_RESET_MESSAGE =
   '如果账号存在且邮箱已验证，系统会向注册邮箱发送用户名和重置密码链接';
 
@@ -106,7 +115,7 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 const makeToken = () => randomBytes(32).toString('hex');
 const buildUrl = (path: string, token: string) =>
   `${APP_BASE_URL.replace(/\/$/, '')}${path}?token=${encodeURIComponent(token)}`;
-const shouldBlockUnverifiedLogin = (user: Pick<User, 'status' | 'emailVerifiedAt'>) =>
+const shouldBlockUnverifiedLogin = (user: AuthUserState) =>
   EMAIL_VERIFICATION_REQUIRED &&
   (user.status === ACCOUNT_STATUS_PENDING || !user.emailVerifiedAt);
 
@@ -195,7 +204,7 @@ const createStudentAccount = async ({
   });
 };
 
-const sendVerificationForUser = async (user: Pick<User, 'id' | 'username' | 'email'>) => {
+const sendVerificationForUser = async (user: MailUser) => {
   if (!user.email) {
     throw new Error('EMAIL_MISSING');
   }
@@ -216,7 +225,7 @@ const sendVerificationForUser = async (user: Pick<User, 'id' | 'username' | 'ema
   });
 };
 
-const sendPasswordResetForUser = async (user: Pick<User, 'id' | 'username' | 'email'>) => {
+const sendPasswordResetForUser = async (user: MailUser) => {
   if (!user.email) {
     throw new Error('EMAIL_MISSING');
   }

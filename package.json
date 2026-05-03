@@ -14,7 +14,9 @@
     "api:dev": "npm --prefix apps/api run dev",
     "api:build": "npm --prefix apps/api run build",
     "web:dev": "npm --prefix apps/web run dev",
-    "web:build": "npm --prefix apps/web run build"
+    "web:build": "npm --prefix apps/web run build",
+    "dev:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-up.ps1",
+    "dev:down": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-down.ps1"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -15,6 +15,20 @@ const FALLBACK_REPLY_HISTORY = new Set([
   FALLBACK_OPPONENT_REPLY,
   COMPATIBLE_CLIENT_FALLBACK_REPLY
 ]);
+type JsonInput =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonInput[]
+  | { [key: string]: JsonInput };
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 type Db = Pick<
   PrismaClient,
@@ -174,12 +188,12 @@ function toJsonValue(
     | SimulationOrchestratorResult['assessment']
     | SimulationOrchestratorResult['trace']
     | SimulationOrchestratorResult['personaSnapshot']
-): Prisma.InputJsonValue | undefined {
+): JsonInput | undefined {
   if (value == null) return undefined;
-  return value as Prisma.InputJsonValue;
+  return value as JsonInput;
 }
 
-function isDegradedTrace(traceJson: Prisma.JsonValue | null) {
+function isDegradedTrace(traceJson: JsonValue | null) {
   if (!traceJson || typeof traceJson !== 'object' || Array.isArray(traceJson)) {
     return false;
   }
@@ -189,7 +203,7 @@ function isDegradedTrace(traceJson: Prisma.JsonValue | null) {
 function shouldIncludeInAiHistory(message: {
   role: string;
   content: string;
-  traceJson: Prisma.JsonValue | null;
+  traceJson: JsonValue | null;
 }) {
   if (message.role === 'student') return true;
   return !isDegradedTrace(message.traceJson) && !FALLBACK_REPLY_HISTORY.has(message.content);
