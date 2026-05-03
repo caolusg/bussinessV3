@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import type { InputJsonValue, JsonValue } from '@prisma/client/runtime/library';
 import { CompatibleSimulationProvider } from '../ai/providers/compatibleSimulationProvider.js';
 import {
   SimulationOrchestrator,
@@ -15,20 +16,6 @@ const FALLBACK_REPLY_HISTORY = new Set([
   FALLBACK_OPPONENT_REPLY,
   COMPATIBLE_CLIENT_FALLBACK_REPLY
 ]);
-type JsonInput =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonInput[]
-  | { [key: string]: JsonInput };
-type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
 
 type Db = Pick<
   PrismaClient,
@@ -188,9 +175,9 @@ function toJsonValue(
     | SimulationOrchestratorResult['assessment']
     | SimulationOrchestratorResult['trace']
     | SimulationOrchestratorResult['personaSnapshot']
-): JsonInput | undefined {
+): InputJsonValue | undefined {
   if (value == null) return undefined;
-  return value as JsonInput;
+  return value as InputJsonValue;
 }
 
 function isDegradedTrace(traceJson: JsonValue | null) {

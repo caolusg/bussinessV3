@@ -17,7 +17,8 @@ if (Test-Path $pidFile) {
 
     $existing = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
     if ($existing) {
-      Stop-Process -Id $pidValue -Force
+      cmd.exe /d /c "taskkill /PID $pidValue /T /F 1>nul 2>nul"
+      Start-Sleep -Milliseconds 500
     }
   }
 

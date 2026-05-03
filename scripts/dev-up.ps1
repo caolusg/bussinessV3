@@ -54,11 +54,27 @@ function Stop-ExistingDevProcesses {
 
     $existing = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
     if ($existing) {
-      Stop-Process -Id $pidValue -Force
+      cmd.exe /d /c "taskkill /PID $pidValue /T /F 1>nul 2>nul"
+      Start-Sleep -Milliseconds 500
     }
   }
 
   Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+}
+
+function Clear-LogFile {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  for ($attempt = 1; $attempt -le 20; $attempt++) {
+    try {
+      Set-Content -Path $Path -Value ''
+      return
+    } catch {
+      Start-Sleep -Milliseconds 300
+    }
+  }
+
+  throw "Log file is still locked: $Path"
 }
 
 if (-not (Test-Command 'npm.cmd')) {
@@ -80,9 +96,6 @@ if (-not (Test-Path $logsDir)) {
   New-Item -ItemType Directory -Path $logsDir | Out-Null
 }
 
-Set-Content -Path $apiLog -Value ''
-Set-Content -Path $webLog -Value ''
-
 Invoke-Step 'Checking Docker engine' {
   Invoke-Native { docker info | Out-Null } 'Docker engine is not running'
 }
@@ -91,6 +104,9 @@ Invoke-Step 'Stopping previous local dev processes' {
   Stop-ExistingDevProcesses
 }
 
+Clear-LogFile -Path $apiLog
+Clear-LogFile -Path $webLog
+
 Invoke-Step 'Starting PostgreSQL container' {
   Invoke-Native { docker compose up -d db } 'Failed to start PostgreSQL container'
 }
@@ -98,7 +114,7 @@ Invoke-Step 'Starting PostgreSQL container' {
 Invoke-Step 'Waiting for PostgreSQL readiness' {
   $maxAttempts = 30
   for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-    & { docker compose exec -T db pg_isready -U postgres -d bussinessv3 *> $null }
+    cmd.exe /d /c "docker compose exec -T db pg_isready -U postgres -d bussinessv3 1>nul 2>nul"
     if ($LASTEXITCODE -eq 0) {
       return
     }
@@ -107,6 +123,10 @@ Invoke-Step 'Waiting for PostgreSQL readiness' {
   }
 
   throw 'PostgreSQL did not become ready in time'
+}
+
+Invoke-Step 'Generating Prisma client' {
+  npm.cmd --prefix apps/api run prisma:generate
 }
 
 Invoke-Step 'Running database migrations' {
