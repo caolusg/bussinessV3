@@ -11,6 +11,7 @@
     "prod:migrate": "docker compose --env-file .env.production -f docker-compose.prod.yml run --rm api npm run prisma:migrate:deploy",
     "prod:seed": "docker compose --env-file .env.production -f docker-compose.prod.yml run --rm api npm run db:seed",
     "prod:seed:content": "docker compose --env-file .env.production -f docker-compose.prod.yml run --rm api npm run db:seed:content",
+    "prod:reset-teacher": "docker compose --env-file .env.production -f docker-compose.prod.yml run --rm api npm run db:reset-teacher",
     "api:dev": "npm --prefix apps/api run dev",
     "api:build": "npm --prefix apps/api run build",
     "web:dev": "npm --prefix apps/web run dev",

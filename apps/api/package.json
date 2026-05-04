@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "db:seed": "node scripts/seed.mjs",
-    "db:seed:content": "node scripts/seed-content.mjs"
+    "db:seed:content": "node scripts/seed-content.mjs",
+    "db:reset-teacher": "node scripts/reset-teacher-password.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
