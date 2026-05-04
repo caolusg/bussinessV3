@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { apiRequest } from '../utils/apiFetch';
+import TeachingGroupManager from './TeachingGroupManager';
+import TeachingResourceManager from './TeachingResourceManager';
 
 interface TeacherDashboardProps {
   user: UserProfile;
@@ -1498,8 +1500,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </div>
           )}
 
-          {activeTab === 'RESOURCES' && renderPlaceholder('教学资源管理', <BookOpen />)}
-          {activeTab === 'GROUPS' && renderPlaceholder('班级与分组管理', <Users />)}
+          {activeTab === 'RESOURCES' && <TeachingResourceManager />}
+          {activeTab === 'GROUPS' && <TeachingGroupManager />}
           {activeTab === 'RECORDS' && renderResearchLab()}
           {activeTab === 'SYSTEM_DATA' && renderSystemData()}
 

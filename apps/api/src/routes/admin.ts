@@ -41,6 +41,8 @@ const tableConfigs: TableConfig[] = [
   { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', summaryColumns: ['userId', 'roleId'] },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['userId', 'idOrName'] },
   { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
+  { key: 'teaching_groups', label: '教学分组', group: '教学组织', delegate: 'teachingGroup', idField: 'id', searchableFields: ['name', 'description', 'color'], summaryColumns: ['name', 'description', 'color', 'isActive', 'updatedAt'], statusFields: ['isActive', 'color'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
+  { key: 'teaching_group_members', label: '分组成员', group: '教学组织', delegate: 'teachingGroupMember', searchableFields: [], summaryColumns: ['groupId', 'userId', 'assignedBy', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'business_stages', label: '业务阶段', group: '学习内容', delegate: 'businessStage', idField: 'id', searchableFields: ['titleZh', 'titleEn', 'description'], summaryColumns: ['sortOrder', 'key', 'titleZh', 'titleEn', 'isActive', 'updatedAt'], statusFields: ['isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
   { key: 'stage_tasks', label: '阶段任务', group: '学习内容', delegate: 'stageTask', idField: 'id', searchableFields: ['taskCode', 'title', 'goal', 'subGoal', 'tipTitle', 'tipContent'], summaryColumns: ['taskCode', 'title', 'isDefault', 'isActive', 'updatedAt'], statusFields: ['isDefault', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'learning_resources', label: '学习资源', group: '学习内容', delegate: 'learningResource', idField: 'id', searchableFields: ['type', 'term', 'explanation', 'example'], summaryColumns: ['type', 'term', 'explanation', 'sortOrder', 'isActive'], statusFields: ['type', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
@@ -98,6 +100,40 @@ const teacherPasswordSchema = z.object({
 
 const researchQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d')
+});
+
+const resourcePayloadSchema = z.object({
+  stageId: z.string().uuid(),
+  type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary'),
+  term: z.string().trim().min(1).max(160),
+  explanation: z.string().trim().min(1).max(2000),
+  example: z.string().trim().max(2000).optional().nullable().default(null),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+  isActive: z.coerce.boolean().default(true)
+});
+
+const resourceParamsSchema = z.object({
+  resourceId: z.string().uuid()
+});
+
+const groupPayloadSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).optional().nullable().default(null),
+  color: z.string().trim().min(1).max(32).default('indigo'),
+  isActive: z.coerce.boolean().default(true)
+});
+
+const groupParamsSchema = z.object({
+  groupId: z.string().uuid()
+});
+
+const groupMemberParamsSchema = z.object({
+  groupId: z.string().uuid(),
+  userId: z.string().uuid()
+});
+
+const groupMembersPayloadSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1).max(200)
 });
 
 const ok = <T>(data: T) => ({ ok: true, data });
@@ -680,6 +716,284 @@ router.get('/research/overview', async (req, res) => {
     }));
   } catch (error) {
     console.error('Get research overview failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/resources/manager', async (_req, res) => {
+  try {
+    const stages = await prisma.businessStage.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        key: true,
+        sortOrder: true,
+        titleZh: true,
+        titleEn: true,
+        resources: {
+          orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
+          select: {
+            id: true,
+            stageId: true,
+            type: true,
+            term: true,
+            explanation: true,
+            example: true,
+            sortOrder: true,
+            isActive: true,
+            updatedAt: true
+          }
+        }
+      }
+    });
+
+    return res.status(200).json(ok({
+      stages,
+      totals: {
+        stageCount: stages.length,
+        resourceCount: stages.reduce((sum, stage) => sum + stage.resources.length, 0),
+        activeResourceCount: stages.reduce((sum, stage) =>
+          sum + stage.resources.filter((resource) => resource.isActive).length
+        , 0)
+      }
+    }));
+  } catch (error) {
+    console.error('Get resource manager failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/resources', async (req, res) => {
+  try {
+    const parsed = resourcePayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid resource payload'));
+    }
+
+    const resource = await prisma.learningResource.create({
+      data: parsed.data
+    });
+
+    return res.status(201).json(ok({ resource }));
+  } catch (error) {
+    console.error('Create learning resource failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/resources/:resourceId', async (req, res) => {
+  try {
+    const params = resourceParamsSchema.safeParse(req.params);
+    const parsed = resourcePayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid resource payload'));
+    }
+
+    const resource = await prisma.learningResource.update({
+      where: { id: params.data.resourceId },
+      data: parsed.data
+    });
+
+    return res.status(200).json(ok({ resource }));
+  } catch (error) {
+    console.error('Update learning resource failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/resources/:resourceId', async (req, res) => {
+  try {
+    const params = resourceParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid resource id'));
+    }
+
+    const resource = await prisma.learningResource.update({
+      where: { id: params.data.resourceId },
+      data: { isActive: false }
+    });
+
+    return res.status(200).json(ok({ resource }));
+  } catch (error) {
+    console.error('Disable learning resource failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/groups/manager', async (_req, res) => {
+  try {
+    const [groups, students] = await Promise.all([
+      prisma.teachingGroup.findMany({
+        orderBy: [{ isActive: 'desc' }, { updatedAt: 'desc' }],
+        include: {
+          members: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  status: true,
+                  studentAuth: true,
+                  studentProfile: true
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.user.findMany({
+        where: { roles: { some: { role: { key: 'student' } } } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          username: true,
+          status: true,
+          createdAt: true,
+          studentAuth: true,
+          studentProfile: true,
+          teachingGroupMemberships: {
+            include: {
+              group: {
+                select: {
+                  id: true,
+                  name: true,
+                  color: true,
+                  isActive: true
+                }
+              }
+            }
+          }
+        }
+      })
+    ]);
+
+    const countFacet = (field: 'hskLevel' | 'major' | 'nationality') =>
+      students.reduce<Record<string, number>>((acc, student) => {
+        const key = student.studentProfile?.[field] || '未填写';
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      }, {});
+
+    return res.status(200).json(ok({
+      groups,
+      students,
+      facets: {
+        hskLevel: countFacet('hskLevel'),
+        major: countFacet('major'),
+        nationality: countFacet('nationality')
+      },
+      totals: {
+        groupCount: groups.length,
+        activeGroupCount: groups.filter((group) => group.isActive).length,
+        studentCount: students.length,
+        ungroupedStudentCount: students.filter((student) => student.teachingGroupMemberships.length === 0).length
+      }
+    }));
+  } catch (error) {
+    console.error('Get group manager failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/groups', async (req, res) => {
+  try {
+    const parsed = groupPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group payload'));
+    }
+
+    const group = await prisma.teachingGroup.create({ data: parsed.data });
+    return res.status(201).json(ok({ group }));
+  } catch (error) {
+    console.error('Create teaching group failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/groups/:groupId', async (req, res) => {
+  try {
+    const params = groupParamsSchema.safeParse(req.params);
+    const parsed = groupPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group payload'));
+    }
+
+    const group = await prisma.teachingGroup.update({
+      where: { id: params.data.groupId },
+      data: parsed.data
+    });
+
+    return res.status(200).json(ok({ group }));
+  } catch (error) {
+    console.error('Update teaching group failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/groups/:groupId', async (req, res) => {
+  try {
+    const params = groupParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group id'));
+    }
+
+    const group = await prisma.teachingGroup.update({
+      where: { id: params.data.groupId },
+      data: { isActive: false }
+    });
+
+    return res.status(200).json(ok({ group }));
+  } catch (error) {
+    console.error('Disable teaching group failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/groups/:groupId/members', async (req, res) => {
+  try {
+    const params = groupParamsSchema.safeParse(req.params);
+    const parsed = groupMembersPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group members payload'));
+    }
+
+    await prisma.teachingGroupMember.createMany({
+      data: parsed.data.userIds.map((userId) => ({
+        groupId: params.data.groupId,
+        userId,
+        assignedBy: req.user?.id
+      })),
+      skipDuplicates: true
+    });
+
+    return res.status(200).json(ok({ added: parsed.data.userIds.length }));
+  } catch (error) {
+    console.error('Add teaching group members failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/groups/:groupId/members/:userId', async (req, res) => {
+  try {
+    const params = groupMemberParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group member id'));
+    }
+
+    await prisma.teachingGroupMember.delete({
+      where: {
+        groupId_userId: {
+          groupId: params.data.groupId,
+          userId: params.data.userId
+        }
+      }
+    });
+
+    return res.status(200).json(ok({ removed: true }));
+  } catch (error) {
+    console.error('Remove teaching group member failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
