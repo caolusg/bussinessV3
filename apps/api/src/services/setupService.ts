@@ -58,7 +58,7 @@ async function ensureBaseData(prisma: PrismaClient, teacherUsername: string, tea
     throw new Error('Teacher role not available after seed');
   }
 
-  const bcrypt = await import('bcryptjs');
+  const { default: bcrypt } = await import('bcryptjs');
   const passwordHash = await bcrypt.hash(teacherPassword, Number(process.env.BCRYPT_ROUNDS ?? '10'));
 
   const teacher = await prisma.user.upsert({
