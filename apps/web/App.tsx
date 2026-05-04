@@ -348,7 +348,12 @@ const AppRoutes: React.FC = () => {
   };
   const handleStartSimulation = () => navigate('/simulation');
   const handleExitSimulation = () => navigate('/dashboard');
-  const handleTriggerCoaching = () => navigate('/coach');
+  const handleTriggerCoaching = (context?: { sessionId?: string; stage?: string }) => {
+    const params = new URLSearchParams();
+    if (context?.sessionId) params.set('sessionId', context.sessionId);
+    if (context?.stage) params.set('stage', context.stage);
+    navigate(params.size ? `/coach?${params.toString()}` : '/coach');
+  };
   const handleRetryFromOverlay = () => navigate('/simulation');
   const handleBackToResources = () => navigate('/dashboard');
   const handleLogout = () => {

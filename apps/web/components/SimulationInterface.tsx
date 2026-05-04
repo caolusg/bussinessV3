@@ -21,7 +21,7 @@ import { apiFetch } from '../utils/apiFetch';
 interface SimulationInterfaceProps {
   task: TaskDetail;
   onExit: () => void;
-  onTriggerCoaching: () => void;
+  onTriggerCoaching: (context?: { sessionId?: string; stage?: string }) => void;
   onTriggerGroupDiscussion: () => void;
 }
 
@@ -99,6 +99,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [sending, setSending] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<string | null>(null);
   const [assessmentSummary, setAssessmentSummary] = useState<string | null>(null);
   const [assessmentStrengths, setAssessmentStrengths] = useState<string[]>([]);
@@ -167,6 +168,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
       try {
         const { res, data } = await apiFetch<{
+          session?: { id: string };
           orchestration?: SimulationOrchestration | null;
           messages?: SimulationApiMessage[];
         }>(`/api/simulations/session?stage=${currentStage}`);
@@ -177,6 +179,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           ? data.messages.map(toChatMessage)
           : [];
 
+        setCurrentSessionId(data?.session?.id ?? null);
         setMessages(sessionMessages);
         updateStructuredFeedback(data?.orchestration ?? undefined);
       } catch (error) {
@@ -227,6 +230,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     try {
       const { res, data, text } = await apiFetch<{
+        sessionId?: string;
         messages?: SimulationApiMessage[];
         orchestration?: SimulationOrchestration;
       }>(`/api/simulations/${currentStage}/message`, {
@@ -242,6 +246,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       }
 
       const returnedMessages = Array.isArray(data?.messages) ? data.messages : [];
+      if (data?.sessionId) {
+        setCurrentSessionId(data.sessionId);
+      }
       const nextMessages = [
         ...messages.filter((message) => message.id !== optimisticId),
         ...returnedMessages.map(toChatMessage)
@@ -271,6 +278,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     try {
       const { res, data, text } = await apiFetch<{
+        session?: { id: string };
         orchestration?: SimulationOrchestration | null;
         messages?: SimulationApiMessage[];
       }>(`/api/simulations/${currentStage}/restart`, {
@@ -287,6 +295,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         ? data.messages.map(toChatMessage)
         : [];
 
+      setCurrentSessionId(data?.session?.id ?? null);
       setMessages(sessionMessages);
       setInputValue('');
       updateStructuredFeedback(data?.orchestration ?? undefined);
@@ -612,7 +621,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               </button>
 
               <button
-                onClick={onTriggerCoaching}
+                onClick={() => onTriggerCoaching({ sessionId: currentSessionId ?? undefined, stage: currentStage })}
                 className="group w-full rounded-lg border border-gray-200 p-3 text-left transition-all hover:border-blue-300 hover:bg-gray-50"
               >
                 <div className="flex items-center justify-between">

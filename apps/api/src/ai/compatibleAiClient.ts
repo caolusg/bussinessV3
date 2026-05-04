@@ -19,6 +19,9 @@ type ChatCompletionResponse = {
 const MOCK_ROLEPLAY_REPLY =
   '我理解你的说明，不过这个方案还需要更清楚的业务依据。请你进一步说明条件、风险边界和下一步安排。';
 
+const MOCK_COACHING_REPLY =
+  '可以先把客户刚才的问题拆成三层：他在确认事实、评估风险、要求你给出下一步承诺。你回复时先复述关键信息，再说明业务依据，最后给出一个可执行安排。';
+
 const STAGE_PROMPTS: Record<string, string> = {
   acquisition: '当前是获客阶段。你扮演潜在客户，应该关注供应商是否理解需求、是否专业、是否值得后续联系。',
   quotation: '当前是报价阶段。你扮演采购方，应该关注价格构成、贸易术语、交付周期和让步空间。',
@@ -39,6 +42,11 @@ export function getAiProviderName(): 'deepseek' | 'compatible' | 'openclaw' {
 }
 
 export type RoleplayReplyResult = {
+  content: string;
+  degraded: boolean;
+};
+
+export type CoachingReplyResult = {
   content: string;
   degraded: boolean;
 };
@@ -136,6 +144,81 @@ export async function generateRoleplayReply(args: {
       message: err.message
     });
     return { content: MOCK_ROLEPLAY_REPLY, degraded: true };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function generateCoachingReply(args: {
+  stage: string;
+  question: string;
+  messages: Array<{ role: 'student' | 'opponent' | 'coach'; content: string }>;
+}): Promise<CoachingReplyResult> {
+  const runtimeConfig = await resolveAiConfig();
+  if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
+    return { content: MOCK_COACHING_REPLY, degraded: true };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
+
+  const systemPrompt = [
+    '你是商务中文实训平台里的 AI 教练。',
+    STAGE_PROMPTS[args.stage] ?? STAGE_PROMPTS.quotation,
+    '你必须基于当前会话上下文回答学生的问题。',
+    '回答要短、具体、可执行。优先解释客户刚才话里的业务含义、潜在风险、学生下一句可以怎么说。',
+    '如果学生没有明确提问，就主动给出：客户意图、关键信息、下一步建议、可直接使用的中文表达。'
+  ].join('\n');
+
+  const context = args.messages
+    .slice(-16)
+    .map((message) => `${message.role}: ${message.content}`)
+    .join('\n');
+
+  try {
+    const completion = await createChatCompletion(
+      {
+        model: runtimeConfig.model,
+        temperature: 0.35,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              '当前会话：',
+              context || '暂无会话消息',
+              '',
+              '学生问题：',
+              args.question || '请根据当前上下文给我即时指导。'
+            ].join('\n')
+          }
+        ]
+      },
+      controller.signal,
+      runtimeConfig
+    );
+
+    const content = completion.choices?.[0]?.message?.content?.trim();
+    return content ? { content, degraded: false } : { content: MOCK_COACHING_REPLY, degraded: true };
+  } catch (error) {
+    const err = error as {
+      name?: string;
+      status?: number;
+      code?: string;
+      type?: string;
+      message?: string;
+    };
+    console.warn('Compatible AI coaching reply failed, using fallback:', {
+      provider: runtimeConfig.provider,
+      baseURL: runtimeConfig.baseURL,
+      model: runtimeConfig.model,
+      name: err.name,
+      status: err.status,
+      code: err.code,
+      type: err.type,
+      message: err.message
+    });
+    return { content: MOCK_COACHING_REPLY, degraded: true };
   } finally {
     clearTimeout(timeoutId);
   }
