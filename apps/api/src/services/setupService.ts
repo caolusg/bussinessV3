@@ -116,10 +116,10 @@ export async function buildSetupStatus(prisma: PrismaClient) {
     databaseReachable = true;
 
     const rolesTable = await prisma.$queryRaw<Array<{ table_name: string | null }>>`
-      SELECT to_regclass('public.roles') AS table_name
+      SELECT to_regclass('public.roles')::text AS table_name
     `;
     const stagesTable = await prisma.$queryRaw<Array<{ table_name: string | null }>>`
-      SELECT to_regclass('public.business_stages') AS table_name
+      SELECT to_regclass('public.business_stages')::text AS table_name
     `;
 
     const rolesTableExists = Boolean(rolesTable[0]?.table_name);
