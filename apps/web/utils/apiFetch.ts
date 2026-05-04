@@ -43,6 +43,10 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'CONFIG_SAVE_FAILED':
     case 'BOOTSTRAP_RUNNING':
     case 'BOOTSTRAP_FAILED':
+    case 'ROLE_MISSING':
+    case 'ROLE_FORBIDDEN':
+    case 'SYSTEM_CONFIG_SAVE_FAILED':
+    case 'TEACHER_PASSWORD_RESET_FAILED':
       return '服务暂时不可用，请确认 API 服务启动后再试';
     default:
       break;

@@ -12,6 +12,7 @@ import LoginView from './components/LoginView';
 import type { LoginActionPayload, LoginActionResult } from './components/LoginView';
 import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
+import SystemAdminPage from './components/SystemAdminPage';
 import RequireAuth from './components/RequireAuth';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import ForgotPasswordPage from './components/ForgotPasswordPage';
@@ -406,6 +407,16 @@ const AppRoutes: React.FC = () => {
             <ProfileSetup
               initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
               onComplete={handleProfileComplete}
+            />
+          }
+        />
+        <Route path="/admin" element={<Navigate to="/admin/system" replace />} />
+        <Route
+          path="/admin/system"
+          element={
+            <SystemAdminPage
+              user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
+              onLogout={handleLogout}
             />
           }
         />

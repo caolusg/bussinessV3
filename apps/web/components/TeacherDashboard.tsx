@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   BarChart3,
@@ -934,7 +935,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           {Object.entries(tableGroups).map(([group, tables]) => (
             <div key={group} className="space-y-2">
               <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{group}</p>
-              {tables.map((table) => (
+              {(tables as AdminTableMeta[]).map((table) => (
                 <button
                   key={table.key}
                   onClick={() => switchTable(table.key)}
@@ -1196,17 +1197,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </div>
           </div>
 
-          {activeTab === 'PROMPT' && (
-            <button
-              onClick={() => {
-                setIsAddingNew(true);
-                setSelectedScenarioId(null);
-              }}
-              className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 text-xs"
+          <div className="flex items-center gap-3">
+            <Link
+              to="/admin/system"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
             >
-              <Plus size={16} /> 新增模板/资源
-            </button>
-          )}
+              <Settings2 size={16} />
+              系统管理
+            </Link>
+            {activeTab === 'PROMPT' && (
+              <button
+                onClick={() => {
+                  setIsAddingNew(true);
+                  setSelectedScenarioId(null);
+                }}
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 text-xs"
+              >
+                <Plus size={16} /> 新增模板/资源
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="p-10 max-w-7xl mx-auto w-full">

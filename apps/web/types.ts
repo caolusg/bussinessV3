@@ -144,6 +144,27 @@ export interface SetupStatus {
   };
 }
 
+export interface SystemConfigStatus {
+  setupComplete: boolean;
+  bootstrapRunning: boolean;
+  currentStep: string;
+  progress: number;
+  message: string;
+  lastError: string | null;
+  updatedAt: string;
+  config: {
+    teacherUsername: string;
+    aiEnabled: boolean;
+    aiProvider: string;
+    aiBaseUrl: string;
+    aiModel: string;
+    aiApiKeyConfigured: boolean;
+    aiApiKeyMasked: string;
+    aiProxyUrl: string;
+    aiTimeoutMs: number;
+  };
+}
+
 // --- Coaching Types ---
 export interface Annotation {
   id: string;

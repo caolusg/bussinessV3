@@ -56,7 +56,10 @@ const RequireAuth: React.FC = () => {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (location.pathname.startsWith('/teacher') && !roles.includes('teacher')) {
+  if (
+    (location.pathname.startsWith('/teacher') || location.pathname.startsWith('/admin')) &&
+    !roles.includes('teacher')
+  ) {
     return <Navigate to="/login/teacher" replace state={{ from: location }} />;
   }
 

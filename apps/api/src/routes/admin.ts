@@ -1,8 +1,14 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { getDefaultRuntimeConfig, readRuntimeState } from '../services/runtimeConfigService.js';
+import {
+  getDefaultRuntimeConfig,
+  maskApiKey,
+  readRuntimeState,
+  updateRuntimeConfig
+} from '../services/runtimeConfigService.js';
 
 const router = Router();
 
@@ -72,6 +78,22 @@ const userParamsSchema = z.object({
 
 const aiLogParamsSchema = z.object({
   logId: z.string().uuid()
+});
+
+const runtimeConfigSchema = z.object({
+  teacherUsername: z.string().trim().min(1).default('teacher'),
+  aiEnabled: z.coerce.boolean().default(true),
+  aiProvider: z.string().trim().min(1).default('deepseek'),
+  aiBaseUrl: z.string().trim().min(1).default('https://api.deepseek.com'),
+  aiModel: z.string().trim().min(1).default('deepseek-chat'),
+  aiApiKey: z.string().trim().optional().nullable().default(null),
+  aiProxyUrl: z.string().trim().optional().default(''),
+  aiTimeoutMs: z.coerce.number().int().min(1000).default(15000)
+});
+
+const teacherPasswordSchema = z.object({
+  username: z.string().trim().min(1).default('teacher'),
+  password: z.string().min(6)
 });
 
 const ok = <T>(data: T) => ({ ok: true, data });
@@ -156,6 +178,52 @@ function selectMeta(config: TableConfig) {
   };
 }
 
+function formatRuntimeConfig() {
+  const fallback = getDefaultRuntimeConfig();
+
+  return readRuntimeState()
+    .then((state) => ({
+      setupComplete: state.setupComplete,
+      bootstrapRunning: state.bootstrapRunning,
+      currentStep: state.currentStep,
+      progress: state.progress,
+      message: state.message,
+      lastError: state.lastError,
+      updatedAt: state.updatedAt,
+      config: {
+        teacherUsername: state.config.teacherUsername || fallback.teacherUsername,
+        aiEnabled: state.config.enabled,
+        aiProvider: state.config.provider || fallback.provider,
+        aiBaseUrl: state.config.baseUrl || fallback.baseUrl,
+        aiModel: state.config.model || fallback.model,
+        aiApiKeyConfigured: Boolean(state.config.apiKey),
+        aiApiKeyMasked: maskApiKey(state.config.apiKey),
+        aiProxyUrl: state.config.proxyUrl,
+        aiTimeoutMs: state.config.timeoutMs
+      }
+    }))
+    .catch(() => ({
+      setupComplete: false,
+      bootstrapRunning: false,
+      currentStep: 'idle',
+      progress: 0,
+      message: '',
+      lastError: null,
+      updatedAt: new Date().toISOString(),
+      config: {
+        teacherUsername: fallback.teacherUsername,
+        aiEnabled: fallback.enabled,
+        aiProvider: fallback.provider,
+        aiBaseUrl: fallback.baseUrl,
+        aiModel: fallback.model,
+        aiApiKeyConfigured: Boolean(fallback.apiKey),
+        aiApiKeyMasked: maskApiKey(fallback.apiKey),
+        aiProxyUrl: fallback.proxyUrl,
+        aiTimeoutMs: fallback.timeoutMs
+      }
+    }));
+}
+
 async function buildAiRuntimeStatus() {
   const fallback = getDefaultRuntimeConfig();
   try {
@@ -218,6 +286,89 @@ router.use(async (req, res, next) => {
     return res.status(403).json(fail('FORBIDDEN', 'Forbidden'));
   } catch (error) {
     console.error('Check teacher role failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/runtime-config', async (_req, res) => {
+  try {
+    const payload = await formatRuntimeConfig();
+    return res.status(200).json(ok(payload));
+  } catch (error) {
+    console.error('Get runtime config failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/runtime-config', async (req, res) => {
+  try {
+    const parsed = runtimeConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    await updateRuntimeConfig({
+      teacherUsername: parsed.data.teacherUsername,
+      enabled: parsed.data.aiEnabled,
+      provider: parsed.data.aiProvider,
+      baseUrl: parsed.data.aiBaseUrl,
+      model: parsed.data.aiModel,
+      apiKey: parsed.data.aiApiKey,
+      proxyUrl: parsed.data.aiProxyUrl,
+      timeoutMs: parsed.data.aiTimeoutMs
+    });
+
+    const payload = await formatRuntimeConfig();
+    return res.status(200).json(ok(payload));
+  } catch (error) {
+    console.error('Save runtime config failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/teacher-password', async (req, res) => {
+  try {
+    const parsed = teacherPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const teacherRole = await prisma.role.findUnique({ where: { key: 'teacher' } });
+    if (!teacherRole) {
+      return res.status(500).json(fail('ROLE_MISSING', 'Teacher role not initialized'));
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, Number(process.env.BCRYPT_ROUNDS ?? '10'));
+    const teacher = await prisma.user.upsert({
+      where: { username: parsed.data.username },
+      update: {
+        passwordHash,
+        status: 'ACTIVE'
+      },
+      create: {
+        username: parsed.data.username,
+        passwordHash,
+        status: 'ACTIVE'
+      }
+    });
+
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: teacher.id,
+          roleId: teacherRole.id
+        }
+      },
+      update: {},
+      create: {
+        userId: teacher.id,
+        roleId: teacherRole.id
+      }
+    });
+
+    return res.status(200).json(ok({ username: teacher.username, reset: true }));
+  } catch (error) {
+    console.error('Reset teacher password failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
