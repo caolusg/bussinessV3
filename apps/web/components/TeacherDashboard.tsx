@@ -70,6 +70,53 @@ type AdminOverview = {
   recentAiErrors: Array<Record<string, unknown>>;
 };
 
+type ResearchOverview = {
+  generatedAt: string;
+  dateRange: 'today' | '7d' | '30d' | 'all';
+  metrics: {
+    studentCount: number;
+    sessionCount: number;
+    messageCount: number;
+    studentMessageCount: number;
+    aiCallCount: number;
+    degradedAiCallCount: number;
+    degradedRate: number;
+    analysisCount: number;
+    practiceEventCount: number;
+  };
+  stageBreakdown: Array<{
+    stageId: string;
+    key: string;
+    titleZh: string;
+    titleEn?: string | null;
+    sessionCount: number;
+    analysisCount: number;
+    aiCallCount: number;
+    degradedAiCallCount: number;
+    degradedRate: number;
+    averageScore: number | null;
+  }>;
+  researchIdeas: Array<{
+    title: string;
+    question: string;
+    data: string;
+    method: string;
+  }>;
+  datasetPreview: Array<{
+    messageId: string;
+    anonymousUserCode: string;
+    stageKey: string;
+    stageTitle: string;
+    turnIndex: number;
+    studentMessage: string;
+    score: number | null;
+    hskLevel?: string | null;
+    nationality?: string | null;
+    major?: string | null;
+    createdAt: string;
+  }>;
+};
+
 type SessionSummary = {
   session: Record<string, unknown> & {
     user?: Record<string, unknown> | null;
@@ -202,6 +249,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [selectedTable, setSelectedTable] = useState('');
   const [tableData, setTableData] = useState<AdminTableListResponse | null>(null);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [researchOverview, setResearchOverview] = useState<ResearchOverview | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [studentSummary, setStudentSummary] = useState<StudentSummary | null>(null);
   const [aiLogSummary, setAiLogSummary] = useState<AiLogSummary | null>(null);
@@ -213,14 +261,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [statusValue, setStatusValue] = useState('');
   const [dateField, setDateField] = useState('');
   const [dateRange, setDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('all');
+  const [researchDateRange, setResearchDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('30d');
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [isLoadingOverview, setIsLoadingOverview] = useState(false);
+  const [isLoadingResearch, setIsLoadingResearch] = useState(false);
   const [isLoadingSessionSummary, setIsLoadingSessionSummary] = useState(false);
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
   const [rowsRefreshKey, setRowsRefreshKey] = useState(0);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
+  const [researchRefreshKey, setResearchRefreshKey] = useState(0);
   const [adminError, setAdminError] = useState('');
 
   const [scenarios, setScenarios] = useState([
@@ -300,6 +351,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       ignore = true;
     };
   }, [activeTab, overviewRefreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'RECORDS') return;
+
+    let ignore = false;
+    setIsLoadingResearch(true);
+    setAdminError('');
+
+    apiRequest<ResearchOverview>(`/api/admin/research/overview?dateRange=${researchDateRange}`)
+      .then((data) => {
+        if (!ignore) setResearchOverview(data);
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '研究数据加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingResearch(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, researchDateRange, researchRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || !selectedTable) return;
@@ -484,7 +558,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           ? '分组管理'
           : activeTab === 'SYSTEM_DATA'
             ? '系统数据查看'
-            : '学习记录查询';
+            : '研究分析工作台';
 
   const renderPlaceholder = (title: string, icon: React.ReactNode) => (
     <div className="bg-white rounded-[40px] border border-slate-100 p-20 flex flex-col items-center justify-center text-center space-y-6 shadow-sm">
@@ -878,6 +952,177 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     );
   };
 
+  const renderResearchLab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Lab</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">研究分析工作台</h3>
+            <p className="text-sm text-slate-400 mt-2">
+              基于学生与 AI 实训数据生成研究指标、选题线索和匿名化样本预览。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {DATE_RANGES.map((range) => (
+              <button
+                key={range.value}
+                onClick={() => setResearchDateRange(range.value)}
+                className={`px-3 py-2 rounded-xl text-xs font-black transition ${
+                  researchDateRange === range.value
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setResearchRefreshKey((key) => key + 1)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-50"
+            >
+              <RefreshCw size={14} className={isLoadingResearch ? 'animate-spin' : ''} />
+              刷新
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isLoadingResearch && !researchOverview && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 text-slate-400 flex items-center gap-3">
+          <Loader2 className="animate-spin text-indigo-500" size={20} />
+          正在加载研究数据...
+        </div>
+      )}
+
+      {researchOverview && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+            {[
+              ['学生数', researchOverview.metrics.studentCount, 'student users'],
+              ['实训会话', researchOverview.metrics.sessionCount, 'simulation sessions'],
+              ['学生消息', researchOverview.metrics.studentMessageCount, `${researchOverview.metrics.messageCount} total messages`],
+              ['AI 调用', researchOverview.metrics.aiCallCount, `fallback ${researchOverview.metrics.degradedAiCallCount}`],
+              ['分析结果', researchOverview.metrics.analysisCount, `${researchOverview.metrics.practiceEventCount} practice events`]
+            ].map(([label, value, detail]) => (
+              <div key={String(label)} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <span className="text-3xl font-black text-slate-900">{value}</span>
+                  <BarChart3 size={18} className="text-indigo-400" />
+                </div>
+                <p className="mt-2 text-xs font-bold text-slate-400">{detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6">
+            <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Stage Breakdown</p>
+                <h3 className="text-xl font-black text-slate-900 mt-1">阶段分布</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">
+                    <tr>
+                      <th className="px-5 py-3 text-left">阶段</th>
+                      <th className="px-5 py-3 text-right">会话</th>
+                      <th className="px-5 py-3 text-right">AI 调用</th>
+                      <th className="px-5 py-3 text-right">fallback</th>
+                      <th className="px-5 py-3 text-right">均分</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {researchOverview.stageBreakdown.map((stage) => (
+                      <tr key={stage.stageId} className="text-slate-600">
+                        <td className="px-5 py-4">
+                          <p className="font-black text-slate-800">{stage.titleZh}</p>
+                          <p className="mt-1 text-xs text-slate-400">{stage.key}</p>
+                        </td>
+                        <td className="px-5 py-4 text-right font-bold">{stage.sessionCount}</td>
+                        <td className="px-5 py-4 text-right font-bold">{stage.aiCallCount}</td>
+                        <td className="px-5 py-4 text-right font-bold">{stage.degradedRate}%</td>
+                        <td className="px-5 py-4 text-right font-bold">{stage.averageScore ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="bg-slate-900 rounded-3xl shadow-sm p-6 text-white">
+              <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Idea Builder</p>
+              <h3 className="text-xl font-black mt-1">选题线索</h3>
+              <div className="mt-5 space-y-4">
+                {researchOverview.researchIdeas.map((idea) => (
+                  <article key={idea.title} className="rounded-2xl bg-white/10 p-4">
+                    <p className="text-sm font-black text-white">{idea.title}</p>
+                    <p className="mt-2 text-xs leading-5 text-indigo-100">{idea.question}</p>
+                    <p className="mt-3 text-xs leading-5 text-slate-300">{idea.data}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-400">{idea.method}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Dataset Preview</p>
+                <h3 className="text-xl font-black text-slate-900 mt-1">匿名化样本预览</h3>
+              </div>
+              <p className="text-xs font-bold text-slate-400">
+                generated {new Date(researchOverview.generatedAt).toLocaleString()}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">
+                  <tr>
+                    <th className="px-5 py-3 text-left">匿名编号</th>
+                    <th className="px-5 py-3 text-left">阶段</th>
+                    <th className="px-5 py-3 text-left">学生消息</th>
+                    <th className="px-5 py-3 text-right">得分</th>
+                    <th className="px-5 py-3 text-left">研究变量</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {researchOverview.datasetPreview.map((row) => (
+                    <tr key={row.messageId} className="text-slate-600 align-top">
+                      <td className="px-5 py-4 font-mono text-xs font-bold">{row.anonymousUserCode}</td>
+                      <td className="px-5 py-4">
+                        <p className="font-bold text-slate-800">{row.stageTitle}</p>
+                        <p className="mt-1 text-xs text-slate-400">turn {row.turnIndex}</p>
+                      </td>
+                      <td className="px-5 py-4 max-w-xl">
+                        <p className="line-clamp-3 leading-6">{row.studentMessage}</p>
+                      </td>
+                      <td className="px-5 py-4 text-right font-bold">{row.score ?? '-'}</td>
+                      <td className="px-5 py-4 text-xs text-slate-400">
+                        <p>HSK: {row.hskLevel || '-'}</p>
+                        <p>国籍: {row.nationality || '-'}</p>
+                        <p>专业: {row.major || '-'}</p>
+                      </td>
+                    </tr>
+                  ))}
+                  {researchOverview.datasetPreview.length === 0 && (
+                    <tr>
+                      <td className="px-5 py-8 text-center text-slate-400" colSpan={5}>
+                        当前范围内暂无可分析样本
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+
   const renderSystemData = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -1170,7 +1415,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             <Group size={18} /> 2.2 分组管理
           </button>
           <button onClick={() => setActiveTab('RECORDS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'RECORDS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <BarChart3 size={18} /> 2.3 学习记录查询
+            <BarChart3 size={18} /> 2.3 研究分析工作台
           </button>
           <button onClick={() => setActiveTab('PROMPT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'PROMPT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <Code2 size={18} /> 2.4 提示词工程管理
@@ -1255,7 +1500,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
           {activeTab === 'RESOURCES' && renderPlaceholder('教学资源管理', <BookOpen />)}
           {activeTab === 'GROUPS' && renderPlaceholder('班级与分组管理', <Users />)}
-          {activeTab === 'RECORDS' && renderPlaceholder('学习数据分析', <BarChart3 />)}
+          {activeTab === 'RECORDS' && renderResearchLab()}
           {activeTab === 'SYSTEM_DATA' && renderSystemData()}
 
           {(isAddingNew || selectedScenarioId) && (

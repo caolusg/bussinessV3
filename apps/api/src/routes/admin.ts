@@ -96,6 +96,10 @@ const teacherPasswordSchema = z.object({
   password: z.string().min(6)
 });
 
+const researchQuerySchema = z.object({
+  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d')
+});
+
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
 
@@ -250,6 +254,21 @@ async function buildAiRuntimeStatus() {
 
 async function countSince(delegate: TableDelegate, dateField: string, since: Date) {
   return delegate.count({ where: { [dateField]: { gte: since } } });
+}
+
+function buildCreatedAtWhere(dateRange: 'today' | '7d' | '30d' | 'all') {
+  const filter = buildDateFilter(dateRange);
+  return filter ? { createdAt: filter } : undefined;
+}
+
+function anonymousCode(userId: string | null | undefined) {
+  return userId ? `S-${userId.slice(0, 8).toUpperCase()}` : 'S-UNKNOWN';
+}
+
+function readScore(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+  const score = (value as { score?: unknown }).score;
+  return typeof score === 'number' && Number.isFinite(score) ? score : null;
 }
 
 async function distinctStatusValues(config: TableConfig) {
@@ -431,6 +450,236 @@ router.get('/overview', async (_req, res) => {
     }));
   } catch (error) {
     console.error('Get admin overview failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/research/overview', async (req, res) => {
+  try {
+    const parsed = researchQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+
+    const dateRange = parsed.data.dateRange;
+    const createdAtWhere = buildCreatedAtWhere(dateRange);
+    const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
+
+    const [
+      studentCount,
+      sessionCount,
+      messageCount,
+      studentMessageCount,
+      aiCallCount,
+      degradedAiCallCount,
+      analysisCount,
+      practiceEventCount,
+      stages,
+      sessionGroups,
+      analysisGroups,
+      aiGroups,
+      degradedAiGroups,
+      recentAnalyses,
+      datasetRows
+    ] = await Promise.all([
+      prisma.userRole.count({ where: { role: { key: 'student' } } }),
+      prisma.simulationSession.count({ where: dateScopedWhere }),
+      prisma.simulationMessage.count({ where: dateScopedWhere }),
+      prisma.simulationMessage.count({ where: { role: 'student', ...dateScopedWhere } }),
+      prisma.aiInteractionLog.count({ where: dateScopedWhere }),
+      prisma.aiInteractionLog.count({ where: { degraded: true, ...dateScopedWhere } }),
+      prisma.messageAnalysisResult.count({ where: dateScopedWhere }),
+      prisma.practiceEvent.count({ where: dateScopedWhere }),
+      prisma.businessStage.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, key: true, titleZh: true, titleEn: true, sortOrder: true }
+      }),
+      prisma.simulationSession.groupBy({
+        by: ['stageId'],
+        where: dateScopedWhere,
+        _count: { _all: true }
+      }),
+      prisma.messageAnalysisResult.groupBy({
+        by: ['stageId'],
+        where: dateScopedWhere,
+        _count: { _all: true }
+      }),
+      prisma.aiInteractionLog.groupBy({
+        by: ['stageId'],
+        where: dateScopedWhere,
+        _count: { _all: true }
+      }),
+      prisma.aiInteractionLog.groupBy({
+        by: ['stageId'],
+        where: { degraded: true, ...dateScopedWhere },
+        _count: { _all: true }
+      }),
+      prisma.messageAnalysisResult.findMany({
+        where: dateScopedWhere,
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: {
+          stageId: true,
+          scoreJson: true,
+          errorTagsJson: true,
+          businessStrategyJson: true,
+          languageQualityJson: true,
+          createdAt: true
+        }
+      }),
+      prisma.simulationMessage.findMany({
+        where: { role: 'student', ...dateScopedWhere },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+        select: {
+          id: true,
+          content: true,
+          turnIndex: true,
+          createdAt: true,
+          session: {
+            select: {
+              id: true,
+              stage: true,
+              userId: true,
+              businessStage: { select: { key: true, titleZh: true, titleEn: true } },
+              user: {
+                select: {
+                  studentProfile: {
+                    select: {
+                      hskLevel: true,
+                      nationality: true,
+                      major: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          messageAnalysisResults: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              scoreJson: true,
+              errorTagsJson: true,
+              businessStrategyJson: true
+            }
+          }
+        }
+      })
+    ]);
+
+    const countByStage = <T extends { stageId: string | null; _count: { _all: number } }>(rows: T[]) =>
+      rows.reduce<Record<string, number>>((acc, row) => {
+        if (row.stageId) acc[row.stageId] = row._count._all;
+        return acc;
+      }, {});
+
+    const sessionsByStage = countByStage(sessionGroups);
+    const analysesByStage = countByStage(analysisGroups);
+    const aiByStage = countByStage(aiGroups);
+    const degradedByStage = countByStage(degradedAiGroups);
+
+    const scoresByStage = recentAnalyses.reduce<Record<string, number[]>>((acc, row) => {
+      if (!row.stageId) return acc;
+      const score = readScore(row.scoreJson);
+      if (score === null) return acc;
+      acc[row.stageId] = acc[row.stageId] ?? [];
+      acc[row.stageId].push(score);
+      return acc;
+    }, {});
+
+    const stageBreakdown = stages.map((stage) => {
+      const scores = scoresByStage[stage.id] ?? [];
+      const averageScore = scores.length
+        ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
+        : null;
+      const aiCalls = aiByStage[stage.id] ?? 0;
+      const degradedCalls = degradedByStage[stage.id] ?? 0;
+      return {
+        stageId: stage.id,
+        key: stage.key,
+        titleZh: stage.titleZh,
+        titleEn: stage.titleEn,
+        sortOrder: stage.sortOrder,
+        sessionCount: sessionsByStage[stage.id] ?? 0,
+        analysisCount: analysesByStage[stage.id] ?? 0,
+        aiCallCount: aiCalls,
+        degradedAiCallCount: degradedCalls,
+        degradedRate: aiCalls ? Math.round((degradedCalls / aiCalls) * 1000) / 10 : 0,
+        averageScore
+      };
+    });
+
+    const busiestStage = stageBreakdown.reduce((best, item) =>
+      !best || item.sessionCount > best.sessionCount ? item : best
+    , stageBreakdown[0] ?? null);
+    const weakestStage = stageBreakdown
+      .filter((item) => item.averageScore !== null)
+      .reduce<typeof stageBreakdown[number] | null>((best, item) =>
+        !best || Number(item.averageScore) < Number(best.averageScore) ? item : best
+      , null);
+    const degradedRate = aiCallCount ? Math.round((degradedAiCallCount / aiCallCount) * 1000) / 10 : 0;
+
+    const researchIdeas = [
+      busiestStage
+        ? {
+            title: `${busiestStage.titleZh}阶段的互动密度研究`,
+            question: `学生在${busiestStage.titleZh}阶段为什么产生更多实训会话？`,
+            data: `可使用 ${busiestStage.sessionCount} 个会话、${busiestStage.aiCallCount} 条 AI 调用和消息分析结果做阶段内比较。`,
+            method: '按 HSK、国籍、专业分组，对比消息长度、策略得分和反馈类型。'
+          }
+        : null,
+      weakestStage
+        ? {
+            title: `${weakestStage.titleZh}阶段的学习困难诊断`,
+            question: `学生在${weakestStage.titleZh}阶段的平均得分偏低是否与语言表达或商务策略有关？`,
+            data: `当前该阶段平均得分约 ${weakestStage.averageScore}，可结合错误标签和 coach note 做编码分析。`,
+            method: '抽样学生消息，建立语言质量、贸易术语使用、策略风险三类编码。'
+          }
+        : null,
+      {
+        title: 'AI 降级回复对学习反馈质量的影响',
+        question: 'AI fallback 是否会影响学生后续表达质量和练习持续性？',
+        data: `当前范围内 AI 调用 ${aiCallCount} 次，fallback ${degradedAiCallCount} 次，比例 ${degradedRate}%。`,
+        method: '比较 fallback 与正常 AI 回复后的下一轮学生消息长度、得分和继续练习率。'
+      }
+    ].filter(Boolean);
+
+    const datasetPreview = datasetRows.map((row) => ({
+      messageId: row.id,
+      anonymousUserCode: anonymousCode(row.session.userId),
+      stageKey: row.session.businessStage?.key ?? row.session.stage,
+      stageTitle: row.session.businessStage?.titleZh ?? row.session.stage,
+      turnIndex: row.turnIndex,
+      studentMessage: row.content,
+      score: readScore(row.messageAnalysisResults[0]?.scoreJson),
+      hskLevel: row.session.user?.studentProfile?.hskLevel ?? null,
+      nationality: row.session.user?.studentProfile?.nationality ?? null,
+      major: row.session.user?.studentProfile?.major ?? null,
+      createdAt: row.createdAt
+    }));
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      metrics: {
+        studentCount,
+        sessionCount,
+        messageCount,
+        studentMessageCount,
+        aiCallCount,
+        degradedAiCallCount,
+        degradedRate,
+        analysisCount,
+        practiceEventCount
+      },
+      stageBreakdown,
+      researchIdeas,
+      datasetPreview
+    }));
+  } catch (error) {
+    console.error('Get research overview failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
