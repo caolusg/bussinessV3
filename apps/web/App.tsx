@@ -16,6 +16,7 @@ import RequireAuth from './components/RequireAuth';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import ForgotPasswordPage from './components/ForgotPasswordPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
+import SetupWizard from './components/SetupWizard';
 import { SCENARIO_DB, STAGE_RESOURCES, STAGES } from './constants';
 import {
   UserRole,
@@ -25,7 +26,8 @@ import {
   StageResourceSet,
   TaskDetail,
   TaskMode,
-  ResourceEntry
+  ResourceEntry,
+  SetupStatus
 } from './types';
 import { apiRequest } from './utils/apiFetch';
 
@@ -128,6 +130,9 @@ const mapContentStages = (contentStages: ContentStage[]) => {
 };
 
 const AppRoutes: React.FC = () => {
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
+  const [setupLoading, setSetupLoading] = useState(true);
+
   // Global Auth State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
@@ -150,6 +155,49 @@ const AppRoutes: React.FC = () => {
     return contentResources[selectedResource.stageId]?.[selectedResource.resource.type];
   }, [contentResources, selectedResource]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest<SetupStatus>('/api/setup/status', {}, { redirectOnUnauthorized: false })
+      .then((status) => {
+        if (cancelled) return;
+        setSetupStatus(status);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSetupStatus({
+          setupComplete: false,
+          databaseReachable: false,
+          migrationsReady: false,
+          teacherReady: false,
+          contentReady: false,
+          bootstrapRunning: false,
+          currentStep: '等待初始化',
+          progress: 0,
+          message: '无法读取安装状态',
+          lastError: null,
+          logs: [],
+          config: {
+            teacherUsername: 'teacher',
+            aiEnabled: true,
+            aiProvider: 'deepseek',
+            aiBaseUrl: 'https://api.deepseek.com',
+            aiModel: 'deepseek-chat',
+            aiApiKeyConfigured: false,
+            aiApiKeyMasked: '',
+            aiProxyUrl: '',
+            aiTimeoutMs: 15000
+          }
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setSetupLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearAuth = () => {
     localStorage.removeItem('access_token');
@@ -324,9 +372,27 @@ const AppRoutes: React.FC = () => {
     }
   };
 
+  if (setupLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm font-medium text-slate-300">
+        正在检查安装状态...
+      </div>
+    );
+  }
+
+  if (!setupStatus?.setupComplete) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupWizard status={setupStatus} onStatusChange={setSetupStatus} />} />
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/setup" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Navigate to="/login/student" replace />} />
       <Route path="/login/student" element={<LoginView onLogin={handleLogin} initialRole="student" />} />
       <Route path="/login/teacher" element={<LoginView onLogin={handleLogin} initialRole="teacher" />} />

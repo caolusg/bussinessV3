@@ -108,7 +108,7 @@ Important variables:
 
 Production deployment uses `.env.production` copied from `.env.production.example`.
 
-For backend-only local work, you can also copy `apps/api/.env.example` to `apps/api/.env`.
+The API reads environment variables from the process environment. For local development, the root `.env` is the primary file because the backend entrypoints import `dotenv/config`. The `apps/api/.env.example` file is only a convenience template for backend-only workflows.
 
 ## Prisma
 
@@ -129,6 +129,23 @@ npm run db:seed
 ```
 
 Note: the active Prisma schema is under `apps/api/prisma`. The root-level `prisma/` directory is legacy and should not be used for current backend changes.
+
+## Deployment Flow
+
+The deployment bootstrap is intentionally split into two steps: schema migrations and data seeds.
+
+1. `npm run prod:up` starts PostgreSQL, API, and web containers.
+2. `npm run prod:migrate` applies Prisma migrations and creates the schema.
+3. `npm run prod:seed` inserts required base records, including roles and the default teacher account.
+4. `npm run prod:seed:content` inserts stage content, tasks, learning resources, and default AI scenarios.
+
+What lives where:
+
+- Database schema and constraints: migrations under `apps/api/prisma/migrations`
+- Default teacher account: created by `apps/api/scripts/seed.mjs`
+- Default stage/content data: created by `apps/api/scripts/seed-content.mjs`
+- Runtime secrets and connection strings: `.env.production`
+- AI provider settings: `.env.production` or local `.env`
 
 ## API Checks
 
@@ -244,5 +261,7 @@ After deployment:
 
 - Web: `http://<server-ip-or-domain>:<WEB_PORT>`
 - API health through nginx proxy: `http://<server-ip-or-domain>:<WEB_PORT>/api/health`
+
+For a clean step-by-step first deployment flow, see [docs/首次部署流程.md](docs/首次部署流程.md).
 
 Detailed server instructions are in `docs/服务器部署说明.md`.

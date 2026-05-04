@@ -7,6 +7,7 @@ import adminRoutes from './routes/admin.js';
 import contentRoutes from './routes/content.js';
 import profileRoutes from './routes/profile.js';
 import simulationsRoutes from './routes/simulations.js';
+import setupRoutes from './routes/setup.js';
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/simulations', simulationsRoutes);
+app.use('/api/setup', setupRoutes);
 
 const port = Number(process.env.PORT ?? 8000);
 

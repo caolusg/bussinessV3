@@ -39,6 +39,10 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'INTERNAL_ERROR':
     case 'Internal error':
     case 'Internal Server Error':
+    case 'STATUS_ERROR':
+    case 'CONFIG_SAVE_FAILED':
+    case 'BOOTSTRAP_RUNNING':
+    case 'BOOTSTRAP_FAILED':
       return '服务暂时不可用，请确认 API 服务启动后再试';
     default:
       break;

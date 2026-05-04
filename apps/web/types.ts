@@ -113,6 +113,37 @@ export interface OpponentProfile {
   avatarInitials: string;
 }
 
+export interface SetupLogEntry {
+  ts: string;
+  level: 'info' | 'success' | 'error';
+  message: string;
+}
+
+export interface SetupStatus {
+  setupComplete: boolean;
+  databaseReachable: boolean;
+  migrationsReady: boolean;
+  teacherReady: boolean;
+  contentReady: boolean;
+  bootstrapRunning: boolean;
+  currentStep: string;
+  progress: number;
+  message: string;
+  lastError: string | null;
+  logs: SetupLogEntry[];
+  config: {
+    teacherUsername: string;
+    aiEnabled: boolean;
+    aiProvider: string;
+    aiBaseUrl: string;
+    aiModel: string;
+    aiApiKeyConfigured: boolean;
+    aiApiKeyMasked: string;
+    aiProxyUrl: string;
+    aiTimeoutMs: number;
+  };
+}
+
 // --- Coaching Types ---
 export interface Annotation {
   id: string;

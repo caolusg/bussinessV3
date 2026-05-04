@@ -50,6 +50,9 @@ services:
       AI_PROXY_URL: ${AI_PROXY_URL}
       AI_TIMEOUT_MS: ${AI_TIMEOUT_MS}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      APP_RUNTIME_DIR: /app/runtime
+    volumes:
+      - ./runtime:/app/runtime
     depends_on:
       db:
         condition: service_healthy

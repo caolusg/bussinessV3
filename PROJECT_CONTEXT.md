@@ -65,7 +65,7 @@ Current AI environment variables:
 
 If AI is disabled, no key is present, or the provider call fails, the simulation falls back to a local heuristic opponent reply and marks the trace as degraded.
 
-Runtime note from 2026-04-12: the Docker API container now reads `apps/api/.env` through `docker-compose.yml` `env_file`, has an AI key, and uses `AI_PROXY_URL=http://host.docker.internal:7897` for the local Windows proxy. A live simulation smoke test returned `trace.degraded=false` with provider `deepseek`.
+Current local and production startup rely on the process environment supplied by Docker Compose or the root `.env`. When `AI_API_KEY` is empty, the simulation falls back to the local heuristic reply.
 
 ## Current Simulation Semantics
 
@@ -131,6 +131,7 @@ On Windows PowerShell in this environment, use `npm.cmd` instead of `npm` if scr
 
 - The active backend Prisma schema is `apps/api/prisma/schema.prisma`.
 - The root `prisma/` directory is legacy and now contains an explicit README/deprecation note; it should not be used for current backend changes.
+- Database initialization is split on purpose: migrations create schema and constraints, `apps/api/scripts/seed.mjs` creates the base roles plus the default teacher account, and `apps/api/scripts/seed-content.mjs` creates the stage/content fixtures.
 - Business/database planning is documented in `docs/业务逻辑与数据库规划.md`; the database direction is to preserve research-grade practice data, including learner behavior, AI inputs/outputs, feedback, and exportable anonymized analysis views.
 - Implemented content/research tables are in `apps/api/prisma/migrations/20260411150000_add_content_and_research_tables/migration.sql`: `business_stages`, `stage_tasks`, `learning_resources`, `stage_ai_scenarios`, `practice_events`, `ai_interaction_logs`, `message_analysis_results`, and `student_learning_snapshots`.
 - Content seed command: `npm.cmd run db:seed:content`; current seed inserts 8 stages, 8 tasks, 48 learning resources, and 8 default AI scenarios.

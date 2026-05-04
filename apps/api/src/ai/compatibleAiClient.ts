@@ -1,14 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-
-const provider = process.env.AI_PROVIDER || 'deepseek';
-const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
-const baseURL =
-  process.env.AI_BASE_URL ||
-  (provider === 'deepseek' ? 'https://api.deepseek.com' : undefined);
-const proxyUrl = process.env.AI_PROXY_URL || process.env.HTTPS_PROXY;
-const httpAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+import { getDefaultRuntimeConfig, readRuntimeState } from '../services/runtimeConfigService.js';
 
 type RoleplayMessageParam = {
   role: 'system' | 'user' | 'assistant';
@@ -24,21 +17,24 @@ type ChatCompletionResponse = {
 };
 
 const MOCK_ROLEPLAY_REPLY =
-  '我理解你的说明，但这个方案还需要更清楚的业务依据。请你进一步说明条件、风险边界和下一步安排。';
+  '我理解你的说明，不过这个方案还需要更清楚的业务依据。请你进一步说明条件、风险边界和下一步安排。';
 
 const STAGE_PROMPTS: Record<string, string> = {
-  acquisition: '当前是获客阶段。你扮演潜在客户，应关注供应商是否理解需求、是否专业、是否值得后续联系。',
-  quotation: '当前是报价阶段。你扮演采购方，应关注价格构成、贸易术语、交付周期和让步空间。',
-  negotiation: '当前是磋商阶段。你扮演强势采购方，应围绕价格、数量、付款和交期提出压力。',
-  contract: '当前是合同阶段。你扮演客户法务/采购负责人，应追问条款边界、违约责任和口头承诺。',
-  preparation: '当前是备货阶段。你扮演客户，应关注生产进度、质检安排和延期风险。',
-  customs: '当前是报关阶段。你扮演客户，应关注单证是否齐全、清关时限和合规风险。',
-  settlement: '当前是结算阶段。你扮演客户财务/采购方，应围绕付款节点、尾款、单据放行提出问题。',
-  after_sales: '当前是售后阶段。你扮演遇到问题的客户，应关注事实确认、补救方案、赔偿和后续改进。'
+  acquisition: '当前是获客阶段。你扮演潜在客户，应该关注供应商是否理解需求、是否专业、是否值得后续联系。',
+  quotation: '当前是报价阶段。你扮演采购方，应该关注价格构成、贸易术语、交付周期和让步空间。',
+  negotiation: '当前是磋商阶段。你扮演强势采购方，应该围绕价格、数量、付款和交期提出压力。',
+  contract: '当前是合同阶段。你扮演客户法务/采购负责人，应该追问条款边界、违约责任和口头承诺。',
+  preparation: '当前是备货阶段。你扮演客户，应该关注生产进度、质检安排和延期风险。',
+  customs: '当前是报关阶段。你扮演客户，应该关注单证是否齐全、清关时限和合规风险。',
+  settlement: '当前是结算阶段。你扮演客户财务/采购方，应该围绕付款节点、尾款和单据放行提出问题。',
+  after_sales: '当前是售后阶段。你扮演遇到问题的客户，应该关注事实确认、补救方案、赔偿和后续改进。'
 };
 
-export function getAiProviderName() {
-  if (provider === 'deepseek') return 'deepseek';
+export function getAiProviderName(): 'deepseek' | 'compatible' | 'openclaw' {
+  const provider = (process.env.AI_PROVIDER || 'compatible').toLowerCase();
+  if (provider === 'deepseek' || provider === 'openclaw' || provider === 'compatible') {
+    return provider;
+  }
   return 'compatible';
 }
 
@@ -47,27 +43,59 @@ export type RoleplayReplyResult = {
   degraded: boolean;
 };
 
+type ResolvedAiConfig = {
+  provider: string;
+  apiKey: string;
+  baseURL: string;
+  proxyUrl: string;
+  enabled: boolean;
+  model: string;
+  timeoutMs: number;
+};
+
+async function resolveAiConfig(): Promise<ResolvedAiConfig> {
+  const fallback = getDefaultRuntimeConfig();
+  try {
+    const runtimeState = await readRuntimeState();
+    const config = runtimeState.config;
+    return {
+      provider: config.provider || fallback.provider,
+      apiKey: config.apiKey || fallback.apiKey,
+      baseURL: config.baseUrl || fallback.baseUrl,
+      proxyUrl: config.proxyUrl || fallback.proxyUrl,
+      enabled: config.enabled ?? fallback.enabled,
+      model: config.model || fallback.model,
+      timeoutMs: Number.isFinite(Number(config.timeoutMs)) ? Number(config.timeoutMs) : fallback.timeoutMs
+    };
+  } catch {
+    return {
+      provider: fallback.provider,
+      apiKey: fallback.apiKey,
+      baseURL: fallback.baseUrl,
+      proxyUrl: fallback.proxyUrl,
+      enabled: fallback.enabled,
+      model: fallback.model,
+      timeoutMs: fallback.timeoutMs
+    };
+  }
+}
+
 export async function generateRoleplayReply(args: {
   stage: string;
   messages: Array<{ role: 'student' | 'coach'; content: string }>;
 }): Promise<RoleplayReplyResult> {
-  const aiEnabled = String(process.env.AI_ENABLED ?? 'true').toLowerCase();
-  if (['false', '0', 'no', 'off', ''].includes(aiEnabled)) {
-    return { content: MOCK_ROLEPLAY_REPLY, degraded: true };
-  }
-  if (!apiKey) {
+  const runtimeConfig = await resolveAiConfig();
+  if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
     return { content: MOCK_ROLEPLAY_REPLY, degraded: true };
   }
 
-  const model = process.env.AI_MODEL || 'deepseek-chat';
-  const timeoutMs = Number(process.env.AI_TIMEOUT_MS || 15000);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
 
   const systemPrompt = [
-    '你是国际贸易场景里的客户/采购方角色扮演对象。',
+    '你是国际贸易场景中的客户/采购方角色扮演对象。',
     STAGE_PROMPTS[args.stage] ?? STAGE_PROMPTS.quotation,
-    '必须用中文回复。请基于学生刚才的话，直接给出自然、简洁、带有商务压力的对手回复。',
+    '必须用中文回复。请基于学生刚才的话，直接给出自然、简洁、带有商务压力的对话回复。',
     '不要写成教练建议，不要解释你在扮演角色。'
   ].join('\n');
 
@@ -79,17 +107,16 @@ export async function generateRoleplayReply(args: {
   try {
     const completion = await createChatCompletion(
       {
-        model,
+        model: runtimeConfig.model,
         temperature: 0.7,
         messages: [{ role: 'system', content: systemPrompt }, ...history]
       },
-      controller.signal
+      controller.signal,
+      runtimeConfig
     );
 
     const content = completion.choices?.[0]?.message?.content?.trim();
-    return content
-      ? { content, degraded: false }
-      : { content: MOCK_ROLEPLAY_REPLY, degraded: true };
+    return content ? { content, degraded: false } : { content: MOCK_ROLEPLAY_REPLY, degraded: true };
   } catch (error) {
     const err = error as {
       name?: string;
@@ -99,9 +126,9 @@ export async function generateRoleplayReply(args: {
       message?: string;
     };
     console.warn('Compatible AI roleplay reply failed, using fallback:', {
-      provider,
-      baseURL,
-      model,
+      provider: runtimeConfig.provider,
+      baseURL: runtimeConfig.baseURL,
+      model: runtimeConfig.model,
       name: err.name,
       status: err.status,
       code: err.code,
@@ -120,15 +147,17 @@ function createChatCompletion(
     temperature: number;
     messages: RoleplayMessageParam[];
   },
-  signal: AbortSignal
+  signal: AbortSignal,
+  config: ResolvedAiConfig
 ): Promise<ChatCompletionResponse> {
-  if (!baseURL) {
+  if (!config.baseURL) {
     return Promise.reject(new Error('AI_BASE_URL is required'));
   }
 
-  const endpoint = new URL('chat/completions', baseURL.endsWith('/') ? baseURL : `${baseURL}/`);
+  const endpoint = new URL('chat/completions', config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`);
   const body = JSON.stringify(payload);
   const requester = endpoint.protocol === 'http:' ? http : https;
+  const httpAgent = config.proxyUrl ? new HttpsProxyAgent(config.proxyUrl) : undefined;
 
   return new Promise((resolve, reject) => {
     const request = requester.request(
@@ -137,7 +166,7 @@ function createChatCompletion(
         method: 'POST',
         agent: httpAgent,
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body)
         }

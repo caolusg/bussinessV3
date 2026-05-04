@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { getDefaultRuntimeConfig, readRuntimeState } from '../services/runtimeConfigService.js';
 
 const router = Router();
 
@@ -155,15 +156,28 @@ function selectMeta(config: TableConfig) {
   };
 }
 
-function buildAiRuntimeStatus() {
-  return {
-    enabled: !['false', '0', 'no', 'off', ''].includes(String(process.env.AI_ENABLED ?? 'true').toLowerCase()),
-    provider: process.env.AI_PROVIDER || 'deepseek',
-    baseURL: process.env.AI_BASE_URL || null,
-    model: process.env.AI_MODEL || null,
-    hasKey: Boolean(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY),
-    proxyConfigured: Boolean(process.env.AI_PROXY_URL || process.env.HTTPS_PROXY)
-  };
+async function buildAiRuntimeStatus() {
+  const fallback = getDefaultRuntimeConfig();
+  try {
+    const state = await readRuntimeState();
+    return {
+      enabled: state.config.enabled,
+      provider: state.config.provider || fallback.provider,
+      baseURL: state.config.baseUrl || fallback.baseUrl,
+      model: state.config.model || fallback.model,
+      hasKey: Boolean(state.config.apiKey),
+      proxyConfigured: Boolean(state.config.proxyUrl || process.env.HTTPS_PROXY)
+    };
+  } catch {
+    return {
+      enabled: fallback.enabled,
+      provider: fallback.provider,
+      baseURL: fallback.baseUrl,
+      model: fallback.model,
+      hasKey: Boolean(fallback.apiKey),
+      proxyConfigured: Boolean(fallback.proxyUrl)
+    };
+  }
 }
 
 async function countSince(delegate: TableDelegate, dateField: string, since: Date) {
@@ -254,7 +268,7 @@ router.get('/overview', async (_req, res) => {
 
     return res.status(200).json(ok({
       generatedAt: new Date().toISOString(),
-      ai: buildAiRuntimeStatus(),
+      ai: await buildAiRuntimeStatus(),
       cards: [
         { key: 'users', label: '用户数', value: users, detail: `学生 ${students}` },
         { key: 'content', label: '启用内容', value: resources, detail: `阶段 ${stages}，AI 场景 ${aiScenarios}` },
