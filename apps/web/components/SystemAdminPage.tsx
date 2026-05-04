@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, KeyRound, RefreshCw, Save, ShieldCheck, Sparkles, User } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  Database,
+  KeyRound,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  User
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../utils/apiFetch';
 import type { SystemConfigStatus, UserProfile } from '../types';
@@ -26,6 +38,33 @@ type PasswordResetForm = {
   confirmPassword: string;
 };
 
+type AdminOverview = {
+  generatedAt: string;
+  ai: {
+    enabled: boolean;
+    provider: string;
+    baseURL: string | null;
+    model: string | null;
+    hasKey: boolean;
+    proxyConfigured: boolean;
+  };
+  cards: Array<{
+    key: string;
+    label: string;
+    value: number;
+    detail: string;
+  }>;
+  recentAiErrors: Array<{
+    id: string;
+    provider?: string | null;
+    model?: string | null;
+    degraded?: boolean;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    createdAt: string;
+  }>;
+};
+
 const defaultConfig: SystemConfigForm = {
   teacherUsername: 'teacher',
   aiEnabled: true,
@@ -37,25 +76,46 @@ const defaultConfig: SystemConfigForm = {
   aiTimeoutMs: 15000
 };
 
+const formatNumber = (value: number) => new Intl.NumberFormat('zh-CN').format(value);
+
 const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [config, setConfig] = useState<SystemConfigForm>(defaultConfig);
   const [status, setStatus] = useState<SystemConfigStatus | null>(null);
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [passwordForm, setPasswordForm] = useState<PasswordResetForm>({
     username: 'teacher',
     password: '',
     confirmPassword: ''
   });
   const [loading, setLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+
+  const loadOverview = async () => {
+    try {
+      setOverviewLoading(true);
+      setOverviewError(null);
+      const data = await apiRequest<AdminOverview>('/api/admin/overview');
+      setOverview(data);
+    } catch (err) {
+      setOverviewError(err instanceof Error ? err.message : '加载系统总览失败');
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest<SystemConfigStatus>('/api/admin/runtime-config')
-      .then((data) => {
+
+    const loadPage = async () => {
+      try {
+        setLoading(true);
+        const data = await apiRequest<SystemConfigStatus>('/api/admin/runtime-config');
         if (cancelled) return;
         setStatus(data);
         setConfig({
@@ -72,13 +132,15 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
           ...current,
           username: data.config.teacherUsername || current.username
         }));
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : '加载系统配置失败');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void loadPage();
+    void loadOverview();
 
     return () => {
       cancelled = true;
@@ -106,6 +168,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
           aiTimeoutMs: config.aiTimeoutMs
         })
       });
+
       setStatus(next);
       setConfig((current) => ({
         ...current,
@@ -120,6 +183,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
       }));
       setPasswordForm((current) => ({ ...current, username: next.config.teacherUsername }));
       setMessage('运行时配置已保存');
+      void loadOverview();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存系统配置失败');
     } finally {
@@ -149,6 +213,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
       });
       setPasswordForm((current) => ({ ...current, password: '', confirmPassword: '' }));
       setMessage('教师密码已重置');
+      void loadOverview();
     } catch (err) {
       setError(err instanceof Error ? err.message : '重置教师密码失败');
     } finally {
@@ -195,6 +260,125 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
             </button>
           </div>
         </header>
+
+        <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.3em] text-cyan-200">
+                <BarChart3 size={12} />
+                System Overview
+              </p>
+              <h2 className="mt-3 text-2xl font-black tracking-tight">系统总览</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                这里可以看到当前部署、AI 运行时和今日关键指标。最后更新时间：{overview?.generatedAt ? new Date(overview.generatedAt).toLocaleString() : '-'}
+              </p>
+            </div>
+            <button
+              onClick={() => void loadOverview()}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/10"
+            >
+              <RefreshCw size={16} className={overviewLoading ? 'animate-spin' : ''} />
+              刷新总览
+            </button>
+          </div>
+
+          {overviewError && (
+            <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+              {overviewError}
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-5">
+            {overview?.cards.map((card) => (
+              <div key={card.key} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{card.label}</p>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <span className="text-3xl font-black text-slate-50">{formatNumber(card.value)}</span>
+                  <Database size={18} className="text-cyan-300" />
+                </div>
+                <p className="mt-2 text-xs font-semibold text-slate-400">{card.detail}</p>
+              </div>
+            ))}
+
+            {overviewLoading && (
+              <div className="lg:col-span-5 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-6 text-sm text-slate-400 flex items-center gap-3">
+                <Activity size={18} className="animate-pulse text-cyan-300" />
+                正在加载系统总览...
+              </div>
+            )}
+          </div>
+
+          {overview && (
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">AI Runtime</p>
+                    <h3 className="mt-1 text-lg font-black text-slate-50">
+                      {overview.ai.provider} · {overview.ai.model ?? '未指定模型'}
+                    </h3>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-200">
+                    {overview.ai.enabled ? '已启用' : '已关闭'}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-white/5 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Key</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">
+                      {overview.ai.hasKey ? '已配置' : '未配置'}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/5 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Proxy</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">
+                      {overview.ai.proxyConfigured ? '已配置' : '未配置'}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/5 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">更新时间</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">
+                      {status?.updatedAt ? new Date(status.updatedAt).toLocaleString() : '-'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Recent Errors</p>
+                    <h3 className="mt-1 text-lg font-black text-slate-50">最近异常</h3>
+                  </div>
+                  <AlertTriangle size={18} className="text-amber-300" />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {overview.recentAiErrors.length > 0 ? (
+                    overview.recentAiErrors.map((item) => (
+                      <div key={item.id} className="rounded-2xl bg-white/5 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-black text-slate-100">
+                            {item.provider || '-'} · {item.model || 'model -'}
+                          </p>
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-300">
+                            {item.errorCode || 'ERROR'}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-300">
+                          {item.errorMessage || '暂无错误详情'} · {new Date(item.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl bg-white/5 p-4 text-sm text-slate-300">
+                      当前没有最近 AI 异常
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         <main className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 backdrop-blur">
@@ -334,7 +518,15 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
                   </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">更新</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">进度</div>
+                  <div className="mt-1 font-semibold">{status?.progress ?? 0}%</div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-cyan-400" style={{ width: `${status?.progress ?? 0}%` }} />
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">{status?.currentStep || 'idle'}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">更新时间</div>
                   <div className="mt-1 font-semibold">{status?.updatedAt ? new Date(status.updatedAt).toLocaleString() : '-'}</div>
                 </div>
               </div>
@@ -349,7 +541,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
                 忘记教师密码时可以在这里直接重置，不需要重新部署。
               </p>
               <div className="mt-4 space-y-3">
-                <label className="space-y-2 block">
+                <label className="block space-y-2">
                   <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">用户名</span>
                   <input
                     value={passwordForm.username}
@@ -357,7 +549,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
                     className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-amber-300/50"
                   />
                 </label>
-                <label className="space-y-2 block">
+                <label className="block space-y-2">
                   <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">新密码</span>
                   <input
                     type="password"
@@ -366,7 +558,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
                     className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-amber-300/50"
                   />
                 </label>
-                <label className="space-y-2 block">
+                <label className="block space-y-2">
                   <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">确认密码</span>
                   <input
                     type="password"
