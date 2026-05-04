@@ -175,8 +175,8 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
           </div>
         </header>
 
-        <main className="grid flex-1 grid-cols-[minmax(0,1fr)_380px] overflow-hidden">
-          <section className="overflow-y-auto px-8 py-8">
+        <main className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,34vw)] overflow-hidden max-xl:grid-cols-1 max-xl:overflow-y-auto">
+          <section className="overflow-y-auto px-8 py-8 max-xl:overflow-visible max-lg:px-5">
             {loadingContext && (
               <div className="flex items-center gap-3 rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-sm">
                 <Loader2 className="animate-spin text-blue-600" size={18} />
@@ -253,7 +253,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
             )}
           </section>
 
-          <aside className="border-l border-slate-200 bg-white p-6">
+          <aside className="overflow-y-auto border-l border-slate-200 bg-white p-6 max-xl:border-l-0 max-xl:border-t max-xl:p-5">
             <div className="rounded-2xl bg-slate-900 p-5 text-white">
               <div className="flex items-center gap-2">
                 <HelpCircle size={18} className="text-blue-300" />
