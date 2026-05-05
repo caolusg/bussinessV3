@@ -147,7 +147,11 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
   if (!sessionId) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
+      <div
+        className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans"
+        data-analytics-page="coach"
+        data-analytics-session-id={sessionId ?? ''}
+      >
         <header className="z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <button
@@ -167,6 +171,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
             <button
               onClick={onClose}
+              aria-label="关闭 AI 教练"
               className="flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               <X size={18} />
@@ -199,7 +204,11 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
   if (sessionId) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
+      <div
+        className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans"
+        data-analytics-page="coach"
+        data-analytics-session-id={sessionId ?? ''}
+      >
         <header className="z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <button
@@ -219,6 +228,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
             <button
               onClick={onClose}
+              aria-label="关闭 AI 教练"
               className="flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               <X size={18} />

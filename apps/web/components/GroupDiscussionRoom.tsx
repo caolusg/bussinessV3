@@ -80,7 +80,10 @@ const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
+    <div
+      className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans"
+      data-analytics-page="discussion"
+    >
       {showInstructions && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-md animate-in fade-in duration-500">
           <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 duration-500">
@@ -139,6 +142,7 @@ const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
+            aria-label="关闭小组复盘讨论室"
             className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
           >
             <ArrowLeft size={20} />
@@ -281,6 +285,7 @@ const GroupDiscussionRoom: React.FC<GroupDiscussionRoomProps> = ({
                 <button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim()}
+                  aria-label="发送讨论消息"
                   className="rounded-2xl bg-blue-600 p-4 text-white shadow-xl shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
                 >
                   <Send size={24} />

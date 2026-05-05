@@ -456,7 +456,12 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     messages.length > 0 || loadingSession ? messages : INITIAL_CHAT_MESSAGES;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900">
+    <div
+      className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900"
+      data-analytics-page="simulation"
+      data-analytics-stage={currentStage}
+      data-analytics-session-id={currentSessionId ?? ''}
+    >
       <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
         <div className="flex items-center gap-4">
           <button
@@ -628,6 +633,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               <button
                 onClick={() => void handleSend()}
                 disabled={!inputValue.trim() || sending || loadingSession}
+                aria-label="发送消息"
                 className="rounded-xl bg-blue-600 p-5 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
               >
                 <Send size={18} />

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import WorkflowMap from './components/WorkflowMap';
@@ -31,6 +31,7 @@ import {
   SetupStatus
 } from './types';
 import { apiFetch, apiRequest } from './utils/apiFetch';
+import { installGlobalClickTracking, trackPageView } from './utils/clickFlowTracker';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
@@ -176,6 +177,7 @@ const AppRoutes: React.FC = () => {
     return contentResources[selectedResource.stageId]?.[selectedResource.resource.type];
   }, [contentResources, selectedResource]);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -253,6 +255,15 @@ const AppRoutes: React.FC = () => {
       cancelled = true;
     };
   }, [role]);
+
+  useEffect(() => {
+    const dispose = installGlobalClickTracking();
+    return () => dispose();
+  }, []);
+
+  useEffect(() => {
+    trackPageView(location.pathname.replace(/^\//, '') || 'root');
+  }, [location.pathname, location.search]);
 
   const handleLogin = async (
     selectedRole: UserRole,

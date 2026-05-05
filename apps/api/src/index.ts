@@ -5,6 +5,7 @@ import { prisma } from './lib/prisma.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import contentRoutes from './routes/content.js';
+import analyticsRoutes from './routes/analytics.js';
 import profileRoutes from './routes/profile.js';
 import simulationsRoutes from './routes/simulations.js';
 import setupRoutes from './routes/setup.js';
@@ -56,6 +57,7 @@ app.get('/api/health/db', async (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/simulations', simulationsRoutes);
 app.use('/api/setup', setupRoutes);
