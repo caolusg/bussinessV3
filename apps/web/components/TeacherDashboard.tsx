@@ -17,6 +17,7 @@ import {
   Save,
   Search,
   Settings2,
+  Sparkles,
   Users
 } from 'lucide-react';
 import { UserProfile } from '../types';
