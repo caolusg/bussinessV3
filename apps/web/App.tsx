@@ -644,7 +644,6 @@ const AppRoutes: React.FC = () => {
                     <TaskCard
                       data={currentTaskDetail}
                       onStartSimulation={handleStartSimulation}
-                      onViewCoaching={handleTriggerCoaching}
                     />
                   </div>
                 </main>
