@@ -201,6 +201,7 @@ type ResearchAiResult = {
   answer: string;
   chartSuggestion?: 'line' | 'bar' | 'table';
   followupPrompts?: string[];
+  sqlRisk?: { level: 'low' | 'medium' | 'high'; items: string[] };
   modelDegraded?: boolean;
 };
 
@@ -209,6 +210,10 @@ type ResearchAiHistoryItem = {
   question: string;
   sql: string;
   rowCount: number;
+};
+type ResearchAiContextItem = {
+  question: string;
+  answer: string;
 };
 
 type AiLogSummary = {
@@ -253,6 +258,17 @@ const formatValue = (value: unknown) => {
 const formatCell = (value: unknown) => {
   const text = formatValue(value);
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
+};
+
+const buildResearchChartData = (rows: Record<string, unknown>[]) => {
+  if (!rows.length) return [];
+  const columns = Object.keys(rows[0]);
+  const labelCol = columns[0];
+  const valueCol = columns.find((col) => rows.some((row) => typeof row[col] === 'number'));
+  if (!labelCol || !valueCol) return [];
+  return rows.slice(0, 12)
+    .map((row) => ({ label: formatCell(row[labelCol]), value: Number(row[valueCol] ?? 0) }))
+    .filter((item) => Number.isFinite(item.value));
 };
 
 
@@ -327,6 +343,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [researchAiSortDirection, setResearchAiSortDirection] = useState<'asc' | 'desc'>('asc');
   const [researchAiFilterText, setResearchAiFilterText] = useState('');
   const [researchAiHistory, setResearchAiHistory] = useState<ResearchAiHistoryItem[]>([]);
+  const [researchAiContext, setResearchAiContext] = useState<ResearchAiContextItem[]>([]);
+  const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
 
   const [scenarios, setScenarios] = useState([
     { id: 1, name: '1. 获客阶段：商务礼仪与名片交换', stage: 1, type: 'Built-in', active: true, prompt: '你是一个严格的采购经理...' },
@@ -1014,9 +1032,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setResearchAiError('');
       const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
         method: 'POST',
-        body: JSON.stringify({ question })
+        body: JSON.stringify({ question, context: researchAiContext.slice(-6) })
       });
       setResearchAiResult(data);
+      setResearchAiContext((current) => {
+        const next = [...current, { question: data.question, answer: data.answer }].slice(-6);
+        try {
+          localStorage.setItem('research_ai_context', JSON.stringify(next));
+        } catch {
+          // ignore localStorage failures
+        }
+        return next;
+      });
       setResearchAiPage(1);
       setResearchAiSortColumn('');
       setResearchAiFilterText('');
@@ -1045,6 +1072,27 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       if (!raw) return;
       const parsed = JSON.parse(raw) as ResearchAiHistoryItem[];
       if (Array.isArray(parsed)) setResearchAiHistory(parsed.slice(0, 20));
+    } catch {
+      // ignore localStorage failures
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('research_ai_feedback');
+      if (!raw) return;
+      setResearchAiFeedback(JSON.parse(raw) as Record<string, 'up' | 'down'>);
+    } catch {
+      // ignore localStorage failures
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('research_ai_context');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ResearchAiContextItem[];
+      if (Array.isArray(parsed)) setResearchAiContext(parsed.slice(-6));
     } catch {
       // ignore localStorage failures
     }
@@ -1151,6 +1199,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               </div>
             </div>
           )}
+          {researchAiContext.length > 0 && (
+            <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">多轮上下文（M3）</p>
+                <button
+                  onClick={() => {
+                    setResearchAiContext([]);
+                    localStorage.removeItem('research_ai_context');
+                  }}
+                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700"
+                >
+                  清空
+                </button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {researchAiContext.slice(-3).map((item, idx) => (
+                  <div key={`${item.question}-${idx}`} className="rounded-lg bg-white border border-indigo-100 p-2">
+                    <p className="text-[11px] font-bold text-slate-700">Q: {item.question}</p>
+                    <p className="text-[11px] text-slate-500 mt-1">A: {item.answer.slice(0, 90)}...</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {researchAiResult && (
@@ -1159,6 +1231,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI 结论</p>
               <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-wrap">{researchAiResult.answer}</p>
+              {researchAiResult.sqlRisk ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">
+                    SQL 风险等级：{researchAiResult.sqlRisk.level}
+                  </p>
+                  {researchAiResult.sqlRisk.items.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-700 space-y-0.5">
+                      {researchAiResult.sqlRisk.items.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-emerald-700">已通过基础风险检查</p>
+                  )}
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">图表建议</span>
                 <span className="rounded-md bg-indigo-100 px-2 py-1 text-[11px] font-bold text-indigo-700">
@@ -1184,7 +1270,53 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                   </div>
                 </div>
               ) : null}
+              {researchAiResult.chartSuggestion !== 'table' && (() => {
+                const chartData = buildResearchChartData(researchAiResult.rows);
+                if (!chartData.length) return null;
+                const max = Math.max(...chartData.map((d) => d.value), 1);
+                return (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">图表预览（M4）</p>
+                    <div className="mt-2 space-y-1">
+                      {chartData.map((item) => (
+                        <div key={item.label} className="flex items-center gap-2">
+                          <span className="w-20 truncate text-[11px] text-slate-500">{item.label}</span>
+                          <div className="h-2 flex-1 rounded bg-indigo-100 overflow-hidden">
+                            <div className="h-full bg-indigo-500" style={{ width: `${Math.max(4, (item.value / max) * 100)}%` }} />
+                          </div>
+                          <span className="w-10 text-right text-[11px] text-slate-600">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <p className="mt-2 text-xs text-slate-400">行数 {researchAiResult.rowCount} · {researchAiResult.durationMs}ms</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">本次结果是否有帮助？</span>
+                <button
+                  onClick={() => {
+                    const key = `${researchAiResult.question}__${researchAiResult.sql}`;
+                    const next = { ...researchAiFeedback, [key]: 'up' as const };
+                    setResearchAiFeedback(next);
+                    localStorage.setItem('research_ai_feedback', JSON.stringify(next));
+                  }}
+                  className="rounded border border-emerald-200 px-2 py-0.5 text-[10px] text-emerald-700"
+                >
+                  👍 有帮助
+                </button>
+                <button
+                  onClick={() => {
+                    const key = `${researchAiResult.question}__${researchAiResult.sql}`;
+                    const next = { ...researchAiFeedback, [key]: 'down' as const };
+                    setResearchAiFeedback(next);
+                    localStorage.setItem('research_ai_feedback', JSON.stringify(next));
+                  }}
+                  className="rounded border border-rose-200 px-2 py-0.5 text-[10px] text-rose-700"
+                >
+                  👎 待改进
+                </button>
+              </div>
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-900 p-4">
               <div className="flex items-center justify-between gap-2">
