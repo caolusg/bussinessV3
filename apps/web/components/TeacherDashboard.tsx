@@ -17,6 +17,7 @@ import {
   Save,
   Search,
   Settings2,
+  MousePointerClick,
   Sparkles,
   Users
 } from 'lucide-react';
@@ -37,7 +38,7 @@ type PasswordChangePayload = {
   confirmPassword: string;
 };
 
-type TeacherTab = 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
+type TeacherTab = 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
 
 type AdminTableMeta = {
   key: string;
@@ -198,7 +199,21 @@ type StudentSummary = {
   }>;
 };
 
-
+type ClickFlowSummary = {
+  generatedAt: string;
+  total: number;
+  uiClickCount: number;
+  pageViewCount: number;
+  rows: Array<Record<string, unknown> & {
+    id: string;
+    eventType: string;
+    sessionId?: string | null;
+    stageId?: string | null;
+    resourceId?: string | null;
+    metadataJson?: unknown;
+    createdAt: string;
+  }>;
+};
 
 type ResearchAiResult = {
   question: string;
@@ -335,6 +350,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [studentSummary, setStudentSummary] = useState<StudentSummary | null>(null);
   const [aiLogSummary, setAiLogSummary] = useState<AiLogSummary | null>(null);
+  const [clickFlowSummary, setClickFlowSummary] = useState<ClickFlowSummary | null>(null);
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [tablePage, setTablePage] = useState(1);
   const [searchDraft, setSearchDraft] = useState('');
@@ -351,10 +367,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingSessionSummary, setIsLoadingSessionSummary] = useState(false);
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
+  const [isLoadingClickFlow, setIsLoadingClickFlow] = useState(false);
   const [rowsRefreshKey, setRowsRefreshKey] = useState(0);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [researchRefreshKey, setResearchRefreshKey] = useState(0);
   const [adminError, setAdminError] = useState('');
+  const [clickFlowDateRange, setClickFlowDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('7d');
+  const [clickFlowEventType, setClickFlowEventType] = useState<'all' | 'ui_click' | 'page_view'>('all');
 
   const [researchAiQuestion, setResearchAiQuestion] = useState('最近30天各教学分组活跃人数趋势');
   const [researchAiLoading, setResearchAiLoading] = useState(false);
@@ -469,6 +488,57 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       ignore = true;
     };
   }, [activeTab, researchDateRange, researchRefreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'CLICK_FLOW') return;
+
+    let ignore = false;
+    setIsLoadingClickFlow(true);
+    setAdminError('');
+
+    const buildQuery = (eventType: 'all' | 'ui_click' | 'page_view') => {
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: eventType === 'all' ? '50' : '100',
+        dateField: 'createdAt',
+        dateRange: clickFlowDateRange
+      });
+
+      if (eventType !== 'all') {
+        params.set('statusField', 'eventType');
+        params.set('status', eventType);
+      }
+
+      return `/api/admin/tables/practice_events?${params.toString()}`;
+    };
+
+    Promise.all([
+      apiRequest<AdminTableListResponse>(buildQuery(clickFlowEventType)),
+      apiRequest<AdminTableListResponse>(buildQuery('ui_click')),
+      apiRequest<AdminTableListResponse>(buildQuery('page_view'))
+    ])
+      .then(([rowsResponse, clickResponse, viewResponse]) => {
+        if (ignore) return;
+
+        setClickFlowSummary({
+          generatedAt: new Date().toISOString(),
+          total: rowsResponse.total,
+          uiClickCount: clickResponse.total,
+          pageViewCount: viewResponse.total,
+          rows: rowsResponse.rows as ClickFlowSummary['rows']
+        });
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '点击流加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingClickFlow(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, clickFlowDateRange, clickFlowEventType]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || !selectedTable) return;
@@ -693,6 +763,129 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       </div>
     </div>
   );
+
+  const renderClickFlow = () => {
+    if (isLoadingClickFlow && !clickFlowSummary) {
+      return (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 text-slate-400 flex items-center gap-3">
+          <Loader2 className="animate-spin text-indigo-500" size={20} />
+          正在加载点击流...
+        </div>
+      );
+    }
+
+    if (!clickFlowSummary) return null;
+
+    const rows = clickFlowSummary.rows;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            ['总事件', clickFlowSummary.total, 'practice_events'],
+            ['点击事件', clickFlowSummary.uiClickCount, 'ui_click'],
+            ['页面浏览', clickFlowSummary.pageViewCount, 'page_view']
+          ].map(([label, value, detail]) => (
+            <div key={String(label)} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <span className="text-3xl font-black text-slate-900">{value}</span>
+                <MousePointerClick size={18} className="text-indigo-400" />
+              </div>
+              <p className="mt-2 text-xs font-bold text-slate-400">{detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Click Flow</p>
+              <h3 className="text-xl font-black text-slate-900 mt-1">最近点击流</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                generated {new Date(clickFlowSummary.generatedAt).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {(['all', 'ui_click', 'page_view'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setClickFlowEventType(type)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-black transition ${
+                    clickFlowEventType === type
+                      ? 'bg-indigo-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+              <select
+                value={clickFlowDateRange}
+                onChange={(event) => setClickFlowDateRange(event.target.value as (typeof DATE_RANGES)[number]['value'])}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
+              >
+                {DATE_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">
+                <tr>
+                  <th className="px-5 py-3 text-left">时间</th>
+                  <th className="px-5 py-3 text-left">事件</th>
+                  <th className="px-5 py-3 text-left">页面</th>
+                  <th className="px-5 py-3 text-left">标签</th>
+                  <th className="px-5 py-3 text-left">目标</th>
+                  <th className="px-5 py-3 text-left">阶段</th>
+                  <th className="px-5 py-3 text-left">会话</th>
+                  <th className="px-5 py-3 text-left">附加信息</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row) => {
+                  const metadata = row.metadataJson && typeof row.metadataJson === 'object' ? (row.metadataJson as Record<string, unknown>) : {};
+                  return (
+                    <tr key={row.id} className="text-slate-600 align-top">
+                      <td className="px-5 py-4 whitespace-nowrap text-xs text-slate-400">
+                        {new Date(row.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600">
+                          {row.eventType}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-xs">{formatValue(metadata.page) || '-'}</td>
+                      <td className="px-5 py-4 text-xs">{formatValue(metadata.label) || '-'}</td>
+                      <td className="px-5 py-4 text-xs">{formatValue(metadata.target) || '-'}</td>
+                      <td className="px-5 py-4 text-xs">{formatValue(metadata.stage) || '-'}</td>
+                      <td className="px-5 py-4 text-xs font-mono">{formatValue(row.sessionId) || '-'}</td>
+                      <td className="px-5 py-4 max-w-md text-xs text-slate-500">
+                        <p className="line-clamp-3 whitespace-pre-wrap">{formatCell(row.metadataJson)}</p>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 && (
+                  <tr>
+                    <td className="px-5 py-8 text-center text-slate-400" colSpan={8}>
+                      当前筛选条件下暂无点击流
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderAccountSettings = () => (
     <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-6">
@@ -2104,6 +2297,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <button onClick={() => setActiveTab('RECORDS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'RECORDS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <BarChart3 size={18} /> 2.3 研究分析工作台
           </button>
+          <button onClick={() => setActiveTab('CLICK_FLOW')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'CLICK_FLOW' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+            <MousePointerClick size={18} /> 点击流分区
+          </button>
           <button onClick={() => setActiveTab('PROMPT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'PROMPT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <Code2 size={18} /> 2.4 提示词工程管理
           </button>
@@ -2191,6 +2387,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           {activeTab === 'RESOURCES' && <TeachingResourceManager />}
           {activeTab === 'GROUPS' && <TeachingGroupManager />}
           {activeTab === 'RECORDS' && renderResearchLab()}
+          {activeTab === 'CLICK_FLOW' && renderClickFlow()}
           {activeTab === 'SYSTEM_DATA' && renderSystemData()}
           {activeTab === 'ACCOUNT' && renderAccountSettings()}
 

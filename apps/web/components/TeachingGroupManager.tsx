@@ -307,7 +307,7 @@ const TeachingGroupManager: React.FC = () => {
               ['国籍', data?.facets.nationality ?? {}]
             ].map(([label, facet]) => (
               <div key={String(label)} className="mt-4">
-                <p className="text-[10px] font-black text-slate-400">{label}</p>
+                <p className="text-[10px] font-black text-slate-400">{String(label)}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {Object.entries(facet as Record<string, number>).map(([key, count]) => (
                     <span key={key} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
