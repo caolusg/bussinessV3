@@ -264,6 +264,15 @@ const AppRoutes: React.FC = () => {
         { redirectOnUnauthorized: false }
       );
 
+      if (registerResult.delivery) {
+        return {
+          kind: 'verification_required',
+          identifier: registerResult.user.username,
+          email: registerResult.user.email,
+          previewUrl: registerResult.delivery.previewUrl
+        };
+      }
+
       if (!registerResult.verificationRequired && registerResult.token) {
         localStorage.setItem('access_token', registerResult.token);
 
@@ -285,7 +294,7 @@ const AppRoutes: React.FC = () => {
         kind: 'verification_required',
         identifier: registerResult.user.username,
         email: registerResult.user.email,
-        previewUrl: registerResult.delivery?.previewUrl
+        previewUrl: undefined
       };
     }
 
