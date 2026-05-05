@@ -190,6 +190,18 @@ type StudentSummary = {
   }>;
 };
 
+
+
+type ResearchAiResult = {
+  question: string;
+  sql: string;
+  rowCount: number;
+  durationMs: number;
+  rows: Record<string, unknown>[];
+  answer: string;
+  modelDegraded?: boolean;
+};
+
 type AiLogSummary = {
   log: Record<string, unknown> & {
     id: string;
@@ -234,6 +246,27 @@ const formatCell = (value: unknown) => {
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
 };
 
+
+
+const AI_QUERY_TEMPLATES = [
+  '近30天按分组统计活跃学生数，并按日期升序',
+  '统计每个分组的人数，并按人数降序',
+  '近7天学生练习事件数量趋势（按天）'
+];
+
+const toCsv = (rows: Record<string, unknown>[]) => {
+  if (!rows.length) return '';
+  const columns = Array.from(rows.reduce<Set<string>>((set, row) => {
+    Object.keys(row).forEach((k) => set.add(k));
+    return set;
+  }, new Set<string>()));
+
+  const esc = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const header = columns.map(esc).join(',');
+  const body = rows.map((row) => columns.map((col) => esc(row[col])).join(',')).join('\n');
+  return `${header}\n${body}`;
+};
+
 const DATE_RANGES = [
   { value: 'all', label: '全部时间' },
   { value: 'today', label: '今天' },
@@ -275,6 +308,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [researchRefreshKey, setResearchRefreshKey] = useState(0);
   const [adminError, setAdminError] = useState('');
+
+  const [researchAiQuestion, setResearchAiQuestion] = useState('最近30天各教学分组活跃人数趋势');
+  const [researchAiLoading, setResearchAiLoading] = useState(false);
+  const [researchAiError, setResearchAiError] = useState('');
+  const [researchAiResult, setResearchAiResult] = useState<ResearchAiResult | null>(null);
+  const [researchAiPage, setResearchAiPage] = useState(1);
 
   const [scenarios, setScenarios] = useState([
     { id: 1, name: '1. 获客阶段：商务礼仪与名片交换', stage: 1, type: 'Built-in', active: true, prompt: '你是一个严格的采购经理...' },
@@ -954,6 +993,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     );
   };
 
+  const runResearchAiQuery = async () => {
+    try {
+      setResearchAiLoading(true);
+      setResearchAiError('');
+      const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
+        method: 'POST',
+        body: JSON.stringify({ question: researchAiQuestion.trim() })
+      });
+      setResearchAiResult(data);
+      setResearchAiPage(1);
+    } catch (error) {
+      setResearchAiError(error instanceof Error ? error.message : 'AI 分析请求失败');
+    } finally {
+      setResearchAiLoading(false);
+    }
+  };
+
   const renderResearchLab = () => (
     <div className="space-y-6">
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
@@ -988,6 +1044,104 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI SQL Copilot</p>
+        <h4 className="text-lg font-black text-slate-900 mt-1">自然语言查库（M1）</h4>
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {AI_QUERY_TEMPLATES.map((tpl) => (
+              <button
+                key={tpl}
+                onClick={() => setResearchAiQuestion(tpl)}
+                className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+              >
+                {tpl}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={researchAiQuestion}
+            onChange={(event) => setResearchAiQuestion(event.target.value)}
+            placeholder="例如：近30天按分组统计活跃学生数，并按日期升序"
+            className="min-h-[100px] w-full rounded-2xl border border-slate-200 p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={runResearchAiQuery}
+              disabled={researchAiLoading || !researchAiQuestion.trim()}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            >
+              <Sparkles size={14} className={researchAiLoading ? 'animate-pulse' : ''} /> 运行 AI 分析
+            </button>
+            {researchAiResult?.rows?.length ? (
+              <button
+                onClick={() => {
+                  const csv = toCsv(researchAiResult.rows);
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `research-ai-${Date.now()}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+              >
+                导出 CSV
+              </button>
+            ) : null}
+            {researchAiError && <span className="text-xs text-rose-500">{researchAiError}</span>}
+          </div>
+        </div>
+
+        {researchAiResult && (
+          <>
+          <div className="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI 结论</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-wrap">{researchAiResult.answer}</p>
+              <p className="mt-2 text-xs text-slate-400">行数 {researchAiResult.rowCount} · {researchAiResult.durationMs}ms</p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-900 p-4">
+              <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">SQL</p>
+              <pre className="mt-2 text-xs leading-6 text-slate-100 overflow-auto max-h-[220px]">{researchAiResult.sql}</pre>
+            </div>
+          </div>
+
+          {researchAiResult.rows.length > 0 && (() => {
+            const columns = Array.from(new Set(researchAiResult.rows.flatMap((row) => Object.keys(row))));
+            const pageSize = 10;
+            const totalPages = Math.max(1, Math.ceil(researchAiResult.rows.length / pageSize));
+            const currentPage = Math.min(researchAiPage, totalPages);
+            const pageRows = researchAiResult.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+            return (
+              <div className="mt-4 rounded-2xl border border-slate-100 overflow-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>{columns.map((col) => <th key={col} className="px-3 py-2 text-left">{col}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {pageRows.map((row, idx) => (
+                      <tr key={idx}>
+                        {columns.map((col) => <td key={col} className="px-3 py-2 text-slate-700">{formatCell(row[col])}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between px-3 py-2 bg-white border-t border-slate-100">
+                  <span className="text-[11px] text-slate-400">第 {currentPage}/{totalPages} 页，每页 {pageSize} 条</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setResearchAiPage((p) => Math.max(1, p - 1))} className="px-2 py-1 text-xs rounded border">上一页</button>
+                    <button onClick={() => setResearchAiPage((p) => Math.min(totalPages, p + 1))} className="px-2 py-1 text-xs rounded border">下一页</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          </>
+        )}
       </div>
 
       {isLoadingResearch && !researchOverview && (

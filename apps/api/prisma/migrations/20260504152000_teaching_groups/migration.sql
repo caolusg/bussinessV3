@@ -1,3 +1,11 @@
+CREATE OR REPLACE FUNCTION teaching_groups_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE IF NOT EXISTS "teaching_groups" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "name" text NOT NULL,
@@ -26,4 +34,4 @@ DROP TRIGGER IF EXISTS teaching_groups_set_updated_at ON "teaching_groups";
 CREATE TRIGGER teaching_groups_set_updated_at
 BEFORE UPDATE ON "teaching_groups"
 FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
+EXECUTE FUNCTION teaching_groups_set_updated_at();
