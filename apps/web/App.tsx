@@ -562,6 +562,7 @@ const AppRoutes: React.FC = () => {
             <TeacherDashboard
               user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
               onLogout={handleLogout}
+              onPasswordChange={handlePasswordChange}
             />
           }
         />

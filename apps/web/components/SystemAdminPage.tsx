@@ -305,7 +305,7 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
           </div>
         </header>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="hidden">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
             <p className="inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.3em] text-violet-200">
               <User size={12} />
