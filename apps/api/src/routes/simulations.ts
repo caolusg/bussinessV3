@@ -219,6 +219,8 @@ router.get('/coach/:sessionId/context', requireAuth, async (req, res) => {
       return res.status(404).json(fail('NOT_FOUND', 'Session not found'));
     }
 
+    await ensureSessionGreeting(prisma, session.id);
+
     const messages = await prisma.simulationMessage.findMany({
       where: { sessionId: session.id },
       orderBy: { turnIndex: 'asc' },
@@ -290,6 +292,8 @@ router.post('/coach/:sessionId/message', requireAuth, async (req, res) => {
     if (!session) {
       return res.status(404).json(fail('NOT_FOUND', 'Session not found'));
     }
+
+    await ensureSessionGreeting(prisma, session.id);
 
     const messages = await prisma.simulationMessage.findMany({
       where: { sessionId: session.id },
@@ -373,6 +377,8 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     const content = bodyParsed.data.content;
 
     const session = await getOrCreateActiveSession(prisma, userId, stage);
+    await ensureSessionGreeting(prisma, session.id);
+
     const { studentMessage, opponentMessage, orchestration } = await appendStudentAndOpponent(
       prisma,
       session.id,
@@ -429,31 +435,28 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
         : undefined
     });
 
+    const messages = await prisma.simulationMessage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { turnIndex: 'asc' },
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        coachNote: true,
+        assessmentJson: true,
+        traceJson: true,
+        personaJson: true,
+        turnIndex: true,
+        createdAt: true
+      }
+    });
+
     return res.status(200).json({
       sessionId: session.id,
       stage: session.stage,
       attemptNo: session.attemptNo,
       orchestration,
-      messages: [
-        {
-          id: studentMessage.id,
-          role: studentMessage.role,
-          content: studentMessage.content,
-          turnIndex: studentMessage.turnIndex,
-          createdAt: studentMessage.createdAt
-        },
-        {
-          id: opponentMessage.id,
-          role: opponentMessage.role,
-          content: opponentMessage.content,
-          coachNote: opponentMessage.coachNote,
-          assessmentJson: opponentMessage.assessmentJson,
-          traceJson: opponentMessage.traceJson,
-          personaJson: opponentMessage.personaJson,
-          turnIndex: opponentMessage.turnIndex,
-          createdAt: opponentMessage.createdAt
-        }
-      ]
+      messages
     });
   } catch (error) {
     console.error('Post message failed:', error);

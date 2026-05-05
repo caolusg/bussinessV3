@@ -171,19 +171,28 @@ export async function endStageSession(
 }
 
 export async function ensureSessionGreeting(prisma: Db, sessionId: string) {
-  const existing = await prisma.simulationMessage.findFirst({
-    where: { sessionId },
+  const existingGreeting = await prisma.simulationMessage.findFirst({
+    where: {
+      sessionId,
+      role: 'opponent',
+      content: DEFAULT_OPPONENT_GREETING
+    },
     select: { id: true }
   });
 
-  if (existing) return null;
+  if (existingGreeting) return null;
+
+  const minTurn = await prisma.simulationMessage.aggregate({
+    where: { sessionId },
+    _min: { turnIndex: true }
+  });
 
   return prisma.simulationMessage.create({
     data: {
       sessionId,
       role: 'opponent',
       content: DEFAULT_OPPONENT_GREETING,
-      turnIndex: 0
+      turnIndex: minTurn._min.turnIndex == null ? 0 : minTurn._min.turnIndex - 1
     }
   });
 }

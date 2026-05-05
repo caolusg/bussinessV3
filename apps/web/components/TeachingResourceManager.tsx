@@ -43,9 +43,9 @@ type ResourceForm = {
 };
 
 const RESOURCE_TYPES: Array<{ value: ManagedResource['type']; label: string }> = [
-  { value: 'vocabulary', label: '词汇' },
-  { value: 'phrases', label: '表达句型' },
-  { value: 'knowledge', label: '商务知识' }
+  { value: 'vocabulary', label: '商务词汇' },
+  { value: 'phrases', label: '常用句式' },
+  { value: 'knowledge', label: '外贸常识' }
 ];
 
 const emptyForm = (stageId = ''): ResourceForm => ({

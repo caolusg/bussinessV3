@@ -145,6 +145,58 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
     }
   };
 
+  if (!sessionId) {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
+        <header className="z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between px-6 py-4">
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-2 text-slate-500 transition-colors hover:text-slate-800"
+            >
+              <ArrowLeft size={20} />
+              <span className="text-sm font-medium">返回练习</span>
+            </button>
+
+            <div className="flex items-center gap-2 font-bold text-slate-800">
+              <div className="rounded-md bg-blue-600 p-1 text-white">
+                <Bot size={16} />
+              </div>
+              <span>上下文 AI 教练</span>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+            >
+              <X size={18} />
+              <span className="text-sm font-medium">退出指导</span>
+            </button>
+          </div>
+        </header>
+
+        <main className="flex flex-1 items-center justify-center px-6">
+          <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <HelpCircle size={22} />
+            </div>
+            <h2 className="mt-5 text-xl font-black text-slate-900">没有可读取的当前会话</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-500">
+              AI 指导只会读取当前练习会话。请先回到练习页，等待当前会话加载完成后再请求指导。
+            </p>
+            <button
+              onClick={onRetry}
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
+            >
+              <RefreshCw size={16} />
+              回到练习
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (sessionId) {
     return (
       <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">

@@ -203,7 +203,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   }, [currentStage]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || sending) return;
+    if (!inputValue.trim() || sending || loadingSession || !currentSessionId) return;
 
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -250,12 +250,11 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       if (data?.sessionId) {
         setCurrentSessionId(data.sessionId);
       }
-      const nextMessages = [
-        ...messages.filter((message) => message.id !== optimisticId),
-        ...returnedMessages.map(toChatMessage)
-      ].sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
-
-      setMessages(nextMessages);
+      if (returnedMessages.length > 0) {
+        setMessages(returnedMessages.map(toChatMessage));
+      } else {
+        setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+      }
       updateStructuredFeedback(data?.orchestration);
     } catch (error) {
       console.error('Simulation send error', error);
@@ -505,7 +504,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               </button>
               <button
                 onClick={() => void handleSend()}
-                disabled={!inputValue.trim() || sending}
+                disabled={!inputValue.trim() || sending || loadingSession || !currentSessionId}
                 className="rounded-xl bg-blue-600 p-3 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
               >
                 <Send size={18} />
@@ -643,7 +642,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
               <button
                 onClick={() => onTriggerCoaching({ sessionId: currentSessionId ?? undefined, stage: currentStage })}
-                className="group w-full rounded-lg border border-gray-200 p-3 text-left transition-all hover:border-blue-300 hover:bg-gray-50"
+                disabled={loadingSession || !currentSessionId}
+                className="group w-full rounded-lg border border-gray-200 p-3 text-left transition-all hover:border-blue-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                title={!currentSessionId ? '当前会话还在加载，请稍后再请求 AI 教练指导' : undefined}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
