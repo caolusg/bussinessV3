@@ -4,7 +4,6 @@ import {
   Bot,
   ChevronRight,
   HelpCircle,
-  Mic,
   RotateCcw,
   Send,
   User,
@@ -165,6 +164,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
   const cachedSession = useRef<SessionCache | null>(null);
+  const [hydratedStage, setHydratedStage] = useState<SimulationStage | null>(null);
 
   const currentStageMeta =
     STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
@@ -181,6 +181,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       setCurrentSessionId(null);
       setInputValue('');
       resetStructuredFeedback();
+      setHydratedStage(currentStage);
       return;
     }
 
@@ -193,6 +194,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     setTraceLabel(cached.traceLabel);
     setDifficultyLabel(cached.difficultyLabel);
     setCultureHints(cached.cultureHints);
+    setHydratedStage(currentStage);
   }, [currentStage]);
 
   useEffect(() => {
@@ -236,6 +238,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   };
 
   useEffect(() => {
+    if (hydratedStage !== currentStage) return;
+
     writeSessionCache(currentStage, {
       sessionId: currentSessionId,
       messages,
@@ -257,7 +261,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     assessmentRisks,
     traceLabel,
     difficultyLabel,
-    cultureHints
+    cultureHints,
+    hydratedStage
   ]);
 
   useEffect(() => {
@@ -609,13 +614,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <button
-                type="button"
-                className="rounded-full p-3 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                title="语音输入暂未启用"
-              >
-                <Mic size={20} />
-              </button>
               <button
                 onClick={() => void handleSend()}
                 disabled={!inputValue.trim() || sending || loadingSession}
