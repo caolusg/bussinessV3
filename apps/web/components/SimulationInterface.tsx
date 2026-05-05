@@ -100,6 +100,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [restarting, setRestarting] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
+  const [sessionReloadKey, setSessionReloadKey] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<string | null>(null);
   const [assessmentSummary, setAssessmentSummary] = useState<string | null>(null);
@@ -165,6 +167,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     const loadSession = async () => {
       setLoadingSession(true);
+      setSessionLoadError(null);
       resetStructuredFeedback();
 
       try {
@@ -174,7 +177,12 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           messages?: SimulationApiMessage[];
         }>(`/api/simulations/session?stage=${currentStage}`);
 
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled) {
+          if (!cancelled) {
+            setSessionLoadError('当前会话加载失败，请刷新后重试。');
+          }
+          return;
+        }
 
         const sessionMessages = Array.isArray(data?.messages)
           ? data.messages.map(toChatMessage)
@@ -186,6 +194,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       } catch (error) {
         if (cancelled) return;
         console.error('Load simulation session failed', error);
+        setSessionLoadError(error instanceof Error ? error.message : '当前会话加载失败，请刷新后重试。');
         setMessages([]);
         resetStructuredFeedback();
       } finally {
@@ -193,17 +202,17 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           setLoadingSession(false);
         }
       }
-    };
+  };
 
     void loadSession();
 
     return () => {
       cancelled = true;
     };
-  }, [currentStage]);
+  }, [currentStage, sessionReloadKey]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || sending || loadingSession || !currentSessionId) return;
+    if (!inputValue.trim() || sending || loadingSession) return;
 
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -499,17 +508,32 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <button className="rounded-full p-3 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+              <button
+                type="button"
+                className="rounded-full p-3 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                title="语音输入暂未启用"
+              >
                 <Mic size={20} />
               </button>
               <button
                 onClick={() => void handleSend()}
-                disabled={!inputValue.trim() || sending || loadingSession || !currentSessionId}
+                disabled={!inputValue.trim() || sending || loadingSession}
                 className="rounded-xl bg-blue-600 p-3 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
               >
                 <Send size={18} />
               </button>
             </div>
+            {sessionLoadError && (
+              <div className="mx-auto mt-3 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <span>{sessionLoadError}</span>
+                <button
+                  onClick={() => setSessionReloadKey((value) => value + 1)}
+                  className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                >
+                  重新加载
+                </button>
+              </div>
+            )}
           </div>
         </main>
 
