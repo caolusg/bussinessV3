@@ -176,6 +176,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
         <div className="p-8">
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
             <button
+              type="button"
               onClick={() => navigate('/login/student')}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -183,6 +184,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               学生注册登录
             </button>
             <button
+              type="button"
               onClick={() => navigate('/login/teacher')}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.TEACHER ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -194,7 +196,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
-                <UserPlus size={14} className="text-slate-400" /> 用户名
+                <UserPlus size={14} className="text-slate-400" />
+                {activeTab === UserRole.STUDENT && !isStudentRegister ? '用户名或邮箱' : '用户名'}
               </label>
               <input
                 type="text"
@@ -205,7 +208,11 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   setFormData({ ...formData, username: e.target.value });
                 }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
-                placeholder="请输入用户名"
+                placeholder={
+                  activeTab === UserRole.STUDENT && !isStudentRegister
+                    ? '请输入用户名或注册邮箱'
+                    : '请输入用户名'
+                }
               />
             </div>
 

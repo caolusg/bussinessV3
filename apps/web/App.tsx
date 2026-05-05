@@ -34,6 +34,7 @@ import { apiRequest } from './utils/apiFetch';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
+  email: '',
   realName: role === UserRole.TEACHER ? '\u7ba1\u7406\u5458' : '\u65b0\u540c\u5b66',
   studentNo: role === UserRole.TEACHER ? '' : '',
   role: role === UserRole.TEACHER ? '\u5bfc\u5e08' : '\u9500\u552e\u5b66\u5458',
@@ -66,6 +67,25 @@ type ContentStage = {
   titleEn?: string | null;
   tasks?: ContentTask[];
   resources?: ContentResource[];
+};
+
+type AuthMe = {
+  user: {
+    id: string;
+    username: string;
+    email: string | null;
+  };
+  roles: Array<'student' | 'teacher'>;
+  profileCompleted: boolean;
+};
+
+const buildUserFromAuth = (me: AuthMe): UserProfile => {
+  const role = me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT;
+  return {
+    ...buildDefaultUser(role),
+    username: me.user.username,
+    email: me.user.email ?? ''
+  };
 };
 
 const resourceTitleByType: Record<ContentResource['type'], string> = {
@@ -276,14 +296,12 @@ const AppRoutes: React.FC = () => {
       if (!registerResult.verificationRequired && registerResult.token) {
         localStorage.setItem('access_token', registerResult.token);
 
-        const me = await apiRequest<{
-          roles: Array<'student' | 'teacher'>;
-          profileCompleted: boolean;
-        }>('/api/auth/me', {
+        const me = await apiRequest<AuthMe>('/api/auth/me', {
           headers: { Authorization: `Bearer ${registerResult.token}` }
         });
 
         setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+        setCurrentUser(buildUserFromAuth(me));
 
         navigate('/');
 
@@ -310,14 +328,12 @@ const AppRoutes: React.FC = () => {
     const token = tokenResult.token;
     localStorage.setItem('access_token', token);
 
-    const me = await apiRequest<{
-      roles: Array<'student' | 'teacher'>;
-      profileCompleted: boolean;
-    }>('/api/auth/me', {
+    const me = await apiRequest<AuthMe>('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
 
     setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+    setCurrentUser(buildUserFromAuth(me));
 
     if (me.roles.includes('teacher')) {
       navigate('/teacher');

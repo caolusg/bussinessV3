@@ -27,6 +27,7 @@ export interface Stage {
 
 export interface UserProfile {
   username: string;
+  email?: string;
   realName: string;
   studentNo: string;
   role: string;

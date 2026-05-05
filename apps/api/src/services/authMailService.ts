@@ -111,14 +111,14 @@ export const sendVerificationEmail = async (params: {
     html: buildHtml({
       title: '学生账号邮箱验证',
       greeting: `你好，${params.username}：`,
-      intro: '请点击下面的按钮完成学生账号邮箱验证。当前账号可以先登录使用，完成验证后邮箱状态会更新。',
+      intro: `你的账户名是 ${params.username}。请点击下面的按钮完成学生账号邮箱验证。`,
       actionText: '立即验证邮箱',
       actionUrl: params.verificationUrl,
       footer: '如果这不是你本人发起的注册，请忽略这封邮件。'
     }),
     text: buildText({
       title: '学生账号邮箱验证',
-      intro: '请点击下面的链接完成邮箱验证。当前账号可以先登录使用，完成验证后邮箱状态会更新。',
+      intro: `你的账户名是 ${params.username}。请点击下面的链接完成邮箱验证。`,
       actionText: '验证链接',
       actionUrl: params.verificationUrl,
       footer: '如果这不是你本人发起的注册，请忽略这封邮件。'

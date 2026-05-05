@@ -1,6 +1,15 @@
-
 import React, { useState } from 'react';
-import { Flag, Calendar, Users, Star, GraduationCap, ChevronRight, X, User as UserIcon } from 'lucide-react';
+import {
+  Calendar,
+  ChevronRight,
+  Flag,
+  GraduationCap,
+  Mail,
+  Star,
+  User as UserIcon,
+  Users,
+  X
+} from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface ProfileSetupProps {
@@ -31,7 +40,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           </div>
         </div>
         {isModal && (
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+          <button type="button" onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <X size={24} />
           </button>
         )}
@@ -42,10 +51,11 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <UserIcon size={12} /> 真实姓名
           </label>
-          <input 
-            type="text" required
+          <input
+            type="text"
+            required
             value={profile.realName}
-            onChange={e => setProfile({...profile, realName: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, realName: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           />
         </div>
@@ -54,11 +64,25 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <UserIcon size={12} /> 学号
           </label>
-          <input 
-            type="text" required
+          <input
+            type="text"
+            required
             value={profile.studentNo}
-            onChange={e => setProfile({...profile, studentNo: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, studentNo: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+          />
+        </div>
+
+        <div className="space-y-1 col-span-2">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Mail size={12} /> 注册邮箱
+          </label>
+          <input
+            type="email"
+            value={profile.email || ''}
+            readOnly
+            className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 outline-none"
+            placeholder="当前账号未记录邮箱"
           />
         </div>
 
@@ -66,10 +90,11 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Flag size={12} /> 国籍
           </label>
-          <input 
-            type="text" required
+          <input
+            type="text"
+            required
             value={profile.nationality || ''}
-            onChange={e => setProfile({...profile, nationality: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, nationality: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
             placeholder="例如：泰国"
           />
@@ -79,10 +104,11 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Calendar size={12} /> 年龄
           </label>
-          <input 
-            type="number" required
+          <input
+            type="number"
+            required
             value={profile.age || ''}
-            onChange={e => setProfile({...profile, age: parseInt(e.target.value)})}
+            onChange={(e) => setProfile({ ...profile, age: Number(e.target.value) })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           />
         </div>
@@ -91,10 +117,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Users size={12} /> 性别
           </label>
-          <select 
+          <select
             required
             value={profile.gender || ''}
-            onChange={e => setProfile({...profile, gender: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           >
             <option value="">请选择</option>
@@ -108,10 +134,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Star size={12} /> HSK 水平
           </label>
-          <select 
+          <select
             required
             value={profile.hskLevel || ''}
-            onChange={e => setProfile({...profile, hskLevel: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, hskLevel: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           >
             <option value="">请选择等级</option>
@@ -128,15 +154,16 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <GraduationCap size={12} /> 专业方向
           </label>
-          <input 
-            type="text" required
+          <input
+            type="text"
+            required
             value={profile.major || ''}
-            onChange={e => setProfile({...profile, major: e.target.value})}
+            onChange={(e) => setProfile({ ...profile, major: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
           />
         </div>
 
-        <button 
+        <button
           type="submit"
           className="col-span-2 mt-4 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 transform active:scale-[0.99]"
         >
@@ -150,9 +177,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
   if (isModal) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-        <div className="max-w-xl w-full">
-          {Content}
-        </div>
+        <div className="max-w-xl w-full">{Content}</div>
       </div>
     );
   }
@@ -165,4 +190,3 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
 };
 
 export default ProfileSetup;
-

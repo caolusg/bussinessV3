@@ -289,7 +289,7 @@ router.post('/student/register_or_login', async (req, res) => {
 
     const username = normalizeUsername(parsed.data.username);
     const password = parsed.data.password;
-    const existing = await prisma.user.findUnique({ where: { username } });
+    const existing = await findUserByIdentifier(username);
     if (!existing) {
       return res.status(404).json(fail('USER_NOT_FOUND', 'User not found'));
     }
@@ -381,7 +381,7 @@ router.post('/student/login', async (req, res) => {
     const username = normalizeUsername(parsed.data.username);
     const password = parsed.data.password;
 
-    const user = await prisma.user.findUnique({ where: { username } });
+    const user = await findUserByIdentifier(username);
     if (!user) {
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
