@@ -40,7 +40,7 @@ const VerifyEmailPage: React.FC = () => {
       .then((data) => {
         if (cancelled) return;
         setStatus('success');
-        setMessage(`邮箱验证成功，账号 ${data.username} 已可登录。`);
+        setMessage(`邮箱验证成功，账号 ${data.username} 的邮箱状态已更新。`);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -101,7 +101,7 @@ const VerifyEmailPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold">邮箱验证</h1>
-            <p className="text-sm text-slate-500">完成验证后，学生账号才可以登录使用。</p>
+            <p className="text-sm text-slate-500">账号可以先登录使用，完成验证后邮箱状态会更新。</p>
           </div>
         </div>
 
@@ -130,7 +130,7 @@ const VerifyEmailPage: React.FC = () => {
                   : 'border-blue-100 bg-blue-50 text-blue-800'
             }`}
           >
-            {status === 'verifying' ? '正在验证邮箱，请稍候…' : message}
+            {status === 'verifying' ? '正在验证邮箱，请稍候...' : message}
           </div>
         )}
 
@@ -140,7 +140,7 @@ const VerifyEmailPage: React.FC = () => {
             disabled={resending}
             className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {resending ? '正在重发验证邮件…' : '重新发送验证邮件'}
+            {resending ? '正在重发验证邮件...' : '重新发送验证邮件'}
           </button>
           {resendMessage && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
