@@ -9,6 +9,7 @@ const router = Router();
 const schema = z.object({
   question: z.string().trim().min(4).max(1000)
 });
+const chartSuggestionSchema = z.enum(['line', 'bar', 'table']);
 
 const DEFAULT_ALLOWED_TABLES = [
   'teaching_groups',
@@ -24,6 +25,25 @@ const allowedTables = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
+  const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (match?.[1]) return match[1].trim();
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
+  if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
+}
+
+function buildFallbackFollowups(question: string) {
+  return [
+    `把「${question}」按教学分组对比，并按指标降序展示`,
+    `把「${question}」按近7天趋势拆解，说明波动最大的日期`,
+    `基于「${question}」再补充异常样本明细（最多20条）`
+  ];
+}
 
 function assertReadOnlySql(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -82,6 +102,34 @@ router.post('/query', requireAuth, async (req, res) => {
       question: `基于以下查询结果，给出3条中文洞察（简短）：\n问题: ${question}\nSQL: ${sql}\n结果(JSON): ${JSON.stringify(rows).slice(0, 12000)}`,
       messages: []
     });
+    const recommendation = await generateCoachingReply({
+      stage: 'quotation',
+      question: `你是数据分析助手。根据问题与结果，返回 JSON：{"chartSuggestion":"line|bar|table","followupPrompts":["..."]}。followupPrompts给2-3条中文追问，避免空泛。\n问题:${question}\nSQL:${sql}\n结果样例(JSON):${JSON.stringify(rows).slice(0, 8000)}`,
+      messages: []
+    });
+
+    let chartSuggestion: 'line' | 'bar' | 'table' = 'table';
+    let followupPrompts: string[] = buildFallbackFollowups(question);
+    try {
+      const payload = JSON.parse(extractJsonObject(recommendation.content)) as {
+        chartSuggestion?: string;
+        followupPrompts?: unknown;
+      };
+      const parsedChart = chartSuggestionSchema.safeParse(payload.chartSuggestion);
+      chartSuggestion = parsedChart.success ? parsedChart.data : 'table';
+      if (Array.isArray(payload.followupPrompts)) {
+        followupPrompts = payload.followupPrompts
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+          .slice(0, 3);
+      }
+    } catch {
+      chartSuggestion = 'table';
+      followupPrompts = buildFallbackFollowups(question);
+    }
+    if (followupPrompts.length < 2) {
+      followupPrompts = buildFallbackFollowups(question).slice(0, 3);
+    }
 
     return res.json({
       ok: true,
@@ -92,7 +140,9 @@ router.post('/query', requireAuth, async (req, res) => {
         durationMs,
         rows,
         answer: summary.content,
-        modelDegraded: sqlCompletion.degraded || summary.degraded
+        chartSuggestion,
+        followupPrompts,
+        modelDegraded: sqlCompletion.degraded || summary.degraded || recommendation.degraded
       }
     });
   } catch (error) {
