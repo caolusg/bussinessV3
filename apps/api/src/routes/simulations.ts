@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   appendStudentAndOpponent,
   endStageSession,
+  ensureSessionGreeting,
   getOrCreateActiveSession,
   restartStageSession
 } from '../services/simulationChatService.js';
@@ -129,6 +130,7 @@ router.get('/session', requireAuth, async (req, res) => {
 
     const stage = parsed.data.stage;
     const session = await getOrCreateActiveSession(prisma, userId, stage);
+    await ensureSessionGreeting(prisma, session.id);
 
     await logPracticeEvent(prisma, {
       userId,
@@ -473,6 +475,7 @@ router.post('/:stage/restart', requireAuth, async (req, res) => {
 
     const stage = paramsParsed.data.stage;
     const session = await restartStageSession(prisma, userId, stage);
+    const greeting = await ensureSessionGreeting(prisma, session.id);
 
     await logPracticeEvent(prisma, {
       userId,
@@ -497,7 +500,7 @@ router.post('/:stage/restart', requireAuth, async (req, res) => {
         updatedAt: session.updatedAt
       },
       orchestration: null,
-      messages: []
+      messages: greeting ? [greeting] : []
     }));
   } catch (error) {
     console.error('Restart session failed:', error);

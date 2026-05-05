@@ -16,6 +16,8 @@ const FALLBACK_REPLY_HISTORY = new Set([
   FALLBACK_OPPONENT_REPLY,
   COMPATIBLE_CLIENT_FALLBACK_REPLY
 ]);
+const DEFAULT_OPPONENT_GREETING =
+  '你好，我是 David。我们可以直接开始这轮业务沟通，请先说明你的方案。';
 
 type Db = Pick<
   PrismaClient,
@@ -164,6 +166,24 @@ export async function endStageSession(
     },
     data: {
       status: 'ended'
+    }
+  });
+}
+
+export async function ensureSessionGreeting(prisma: Db, sessionId: string) {
+  const existing = await prisma.simulationMessage.findFirst({
+    where: { sessionId },
+    select: { id: true }
+  });
+
+  if (existing) return null;
+
+  return prisma.simulationMessage.create({
+    data: {
+      sessionId,
+      role: 'opponent',
+      content: DEFAULT_OPPONENT_GREETING,
+      turnIndex: 0
     }
   });
 }
