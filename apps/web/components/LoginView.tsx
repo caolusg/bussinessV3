@@ -18,6 +18,13 @@ type StudentRegisterPayload = {
   confirmPassword: string;
 };
 
+type StudentCompleteEmailPayload = {
+  username: string;
+  password: string;
+  email: string;
+  mode: 'complete_email';
+};
+
 type TeacherLoginPayload = {
   username: string;
   password: string;
@@ -26,10 +33,15 @@ type TeacherLoginPayload = {
 export type LoginActionPayload =
   | StudentLoginPayload
   | StudentRegisterPayload
+  | StudentCompleteEmailPayload
   | TeacherLoginPayload;
 
 export type LoginActionResult =
   | { kind: 'logged_in' }
+  | {
+      kind: 'email_required';
+      identifier: string;
+    }
   | {
       kind: 'verification_required';
       identifier: string;
@@ -57,9 +69,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailSetupRequired, setEmailSetupRequired] = useState(false);
+  const [pendingIdentifier, setPendingIdentifier] = useState('');
 
   useEffect(() => {
     setActiveTab(initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT);
+    setEmailSetupRequired(false);
+    setPendingIdentifier('');
     setError(null);
     setMessage(null);
   }, [initialRole]);
@@ -83,6 +99,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
       case 'EMAIL_TAKEN':
       case 'Email already exists':
         return '邮箱已被注册';
+      case 'EMAIL_REQUIRED':
+      case 'Email required':
+        return '该账号需要先绑定邮箱并完成验证';
       case 'EMAIL_NOT_VERIFIED':
       case 'Email verification required':
         return '该账号尚未完成邮箱验证，请先验证后再登录';
@@ -102,14 +121,22 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     }
   };
 
+  const resetEmailSetup = () => {
+    setEmailSetupRequired(false);
+    setPendingIdentifier('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (activeTab === UserRole.STUDENT && studentMode === 'register') {
+    if (activeTab === UserRole.STUDENT && (studentMode === 'register' || emailSetupRequired)) {
       if (!formData.email.trim()) {
         setError('请输入邮箱地址');
         return;
       }
+    }
+
+    if (activeTab === UserRole.STUDENT && studentMode === 'register') {
       if (formData.password !== formData.confirmPassword) {
         setError('两次输入的密码不一致');
         return;
@@ -121,27 +148,41 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     setMessage(null);
 
     const payload: LoginActionPayload =
-      activeTab === UserRole.TEACHER
+      activeTab === UserRole.STUDENT && emailSetupRequired
         ? {
-            username: formData.username.trim(),
-            password: formData.password
+            username: pendingIdentifier || formData.username.trim(),
+            password: formData.password,
+            email: formData.email.trim(),
+            mode: 'complete_email'
           }
-        : studentMode === 'register'
+        : activeTab === UserRole.TEACHER
           ? {
               username: formData.username.trim(),
-              email: formData.email.trim(),
-              password: formData.password,
-              confirmPassword: formData.confirmPassword,
-              mode: 'register'
+              password: formData.password
             }
-          : {
-              username: formData.username.trim(),
-              password: formData.password,
-              mode: 'login'
-            };
+          : studentMode === 'register'
+            ? {
+                username: formData.username.trim(),
+                email: formData.email.trim(),
+                password: formData.password,
+                confirmPassword: formData.confirmPassword,
+                mode: 'register'
+              }
+            : {
+                username: formData.username.trim(),
+                password: formData.password,
+                mode: 'login'
+              };
 
     try {
       const result = await onLogin(activeTab, payload);
+      if (result.kind === 'email_required') {
+        setEmailSetupRequired(true);
+        setPendingIdentifier(result.identifier);
+        setMessage('该账号需要先绑定并验证邮箱。请输入可接收邮件的邮箱地址。');
+        return;
+      }
+
       if (result.kind === 'verification_required') {
         navigate('/verify-email', {
           replace: true,
@@ -165,6 +206,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   };
 
   const isStudentRegister = activeTab === UserRole.STUDENT && studentMode === 'register';
+  const showEmailInput = isStudentRegister || emailSetupRequired;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
@@ -177,7 +219,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
             <button
               type="button"
-              onClick={() => navigate('/login/student')}
+              onClick={() => {
+                resetEmailSetup();
+                navigate('/login/student');
+              }}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <User size={16} />
@@ -185,7 +230,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/login/teacher')}
+              onClick={() => {
+                resetEmailSetup();
+                navigate('/login/teacher');
+              }}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.TEACHER ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <ShieldCheck size={16} />
@@ -202,12 +250,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               <input
                 type="text"
                 required
-                value={formData.username}
+                disabled={emailSetupRequired}
+                value={emailSetupRequired ? pendingIdentifier : formData.username}
                 onChange={(e) => {
                   clearNotice();
                   setFormData({ ...formData, username: e.target.value });
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all disabled:text-slate-500"
                 placeholder={
                   activeTab === UserRole.STUDENT && !isStudentRegister
                     ? '请输入用户名或注册邮箱'
@@ -216,7 +265,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               />
             </div>
 
-            {isStudentRegister && (
+            {showEmailInput && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
                   <Mail size={14} className="text-slate-400" /> 邮箱
@@ -230,7 +279,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                     setFormData({ ...formData, email: e.target.value });
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
-                  placeholder="请输入可接收邮件的邮箱"
+                  placeholder="请输入可接收验证邮件的邮箱"
                 />
               </div>
             )}
@@ -281,7 +330,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               disabled={isSubmitting}
               className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
             >
-              {isStudentRegister ? '创建学生账号' : activeTab === UserRole.STUDENT ? '登录' : '管理员安全登录'}
+              {emailSetupRequired
+                ? '发送验证邮件'
+                : isStudentRegister
+                  ? '创建学生账号'
+                  : activeTab === UserRole.STUDENT
+                    ? '登录'
+                    : '管理员安全登录'}
               <ArrowRight size={18} />
             </button>
 
@@ -292,6 +347,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   type="button"
                   onClick={() => {
                     setStudentMode(isStudentRegister ? 'login' : 'register');
+                    resetEmailSetup();
                     clearNotice();
                   }}
                   className="ml-1 font-bold text-blue-600 hover:text-blue-700"

@@ -58,6 +58,12 @@ const resendVerificationSchema = z.object({
   identifier: z.string().min(1)
 });
 
+const completeStudentEmailSchema = z.object({
+  identifier: z.string().min(1),
+  password: z.string().min(6),
+  email: z.string().email()
+});
+
 const forgotPasswordSchema = z.object({
   identifier: z.string().min(1)
 });
@@ -80,6 +86,7 @@ const resetPasswordSchema = z
 
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
+const failWithData = <T>(code: string, error: string, data: T) => ({ ok: false, code, error, data });
 
 const jwtSecret: jwt.Secret = JWT_SECRET;
 const jwtExpiresIn = JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'];
@@ -246,6 +253,38 @@ const sendPasswordResetForUser = async (user: MailUser) => {
   });
 };
 
+const completeEmailForUser = async ({
+  user,
+  email
+}: {
+  user: MailUser;
+  email: string;
+}) => {
+  const verificationToken = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.emailVerificationToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() }
+    });
+
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        email,
+        emailVerifiedAt: null,
+        status: EMAIL_VERIFICATION_REQUIRED ? ACCOUNT_STATUS_PENDING : ACCOUNT_STATUS_ACTIVE
+      }
+    });
+
+    return createVerificationToken(tx, user.id);
+  });
+
+  return sendVerificationEmail({
+    email,
+    username: user.username,
+    verificationUrl: buildUrl('/verify-email', verificationToken)
+  });
+};
+
 router.post('/student/register_or_login', async (req, res) => {
   try {
     const parsed = studentAuthSchema.safeParse(req.body);
@@ -294,14 +333,6 @@ router.post('/student/register_or_login', async (req, res) => {
       return res.status(404).json(fail('USER_NOT_FOUND', 'User not found'));
     }
 
-    if (shouldBlockUnverifiedLogin(existing)) {
-      return res.status(403).json(fail('EMAIL_NOT_VERIFIED', 'Email verification required'));
-    }
-
-    if (!ensureActiveUser(existing.status)) {
-      return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
-    }
-
     const match = await bcrypt.compare(password, existing.passwordHash);
     if (!match) {
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
@@ -310,6 +341,27 @@ router.post('/student/register_or_login', async (req, res) => {
     const roles = await getUserRoles(existing.id);
     if (!roles.includes('student')) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
+    }
+
+    if (shouldBlockUnverifiedLogin(existing)) {
+      if (!existing.email) {
+        return res.status(403).json(
+          failWithData('EMAIL_REQUIRED', 'Email required', {
+            identifier: existing.username
+          })
+        );
+      }
+
+      return res.status(403).json(
+        failWithData('EMAIL_NOT_VERIFIED', 'Email verification required', {
+          identifier: existing.username,
+          email: existing.email
+        })
+      );
+    }
+
+    if (!ensureActiveUser(existing.status)) {
+      return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
     }
 
     const token = issueAuthToken(existing.id);
@@ -386,14 +438,6 @@ router.post('/student/login', async (req, res) => {
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
-    if (shouldBlockUnverifiedLogin(user)) {
-      return res.status(403).json(fail('EMAIL_NOT_VERIFIED', 'Email verification required'));
-    }
-
-    if (!ensureActiveUser(user.status)) {
-      return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
-    }
-
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
@@ -404,10 +448,87 @@ router.post('/student/login', async (req, res) => {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
+    if (shouldBlockUnverifiedLogin(user)) {
+      if (!user.email) {
+        return res.status(403).json(
+          failWithData('EMAIL_REQUIRED', 'Email required', {
+            identifier: user.username
+          })
+        );
+      }
+
+      return res.status(403).json(
+        failWithData('EMAIL_NOT_VERIFIED', 'Email verification required', {
+          identifier: user.username,
+          email: user.email
+        })
+      );
+    }
+
+    if (!ensureActiveUser(user.status)) {
+      return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
+    }
+
     const token = issueAuthToken(user.id);
     return res.status(200).json(ok({ user: { id: user.id, username: user.username }, token }));
   } catch (error) {
     console.error('Student login failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/student/complete-email', async (req, res) => {
+  try {
+    const parsed = completeStudentEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const identifier = normalizeUsername(parsed.data.identifier);
+    const email = normalizeEmail(parsed.data.email);
+    const user = await findUserByIdentifier(identifier);
+    if (!user) {
+      return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
+    }
+
+    const match = await bcrypt.compare(parsed.data.password, user.passwordHash);
+    if (!match) {
+      return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
+    }
+
+    const roles = await getUserRoles(user.id);
+    if (!roles.includes('student')) {
+      return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
+    }
+
+    if (user.emailVerifiedAt) {
+      return res.status(200).json(
+        ok({
+          alreadyVerified: true,
+          user: { id: user.id, username: user.username, email: user.email }
+        })
+      );
+    }
+
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail && existingEmail.id !== user.id) {
+      return res.status(409).json(fail('EMAIL_TAKEN', 'Email already exists'));
+    }
+
+    const delivery = await completeEmailForUser({
+      user: { id: user.id, username: user.username, email },
+      email
+    });
+
+    return res.status(200).json(
+      ok({
+        sent: true,
+        user: { id: user.id, username: user.username, email },
+        delivery
+      })
+    );
+  } catch (error) {
+    console.error('Complete student email failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

@@ -30,7 +30,7 @@ import {
   ResourceEntry,
   SetupStatus
 } from './types';
-import { apiRequest } from './utils/apiFetch';
+import { apiFetch, apiRequest } from './utils/apiFetch';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
@@ -262,10 +262,12 @@ const AppRoutes: React.FC = () => {
     if (selectedRole === UserRole.TEACHER) {
       endpoint = '/api/auth/teacher/login';
     } else {
-      const mode = (payload as { mode?: 'login' | 'register' }).mode;
+      const mode = (payload as { mode?: 'login' | 'register' | 'complete_email' }).mode;
       endpoint =
         mode === 'register'
           ? '/api/auth/student/register'
+          : mode === 'complete_email'
+            ? '/api/auth/student/complete-email'
           : '/api/auth/student/login';
     }
 
@@ -314,6 +316,89 @@ const AppRoutes: React.FC = () => {
         email: registerResult.user.email,
         previewUrl: undefined
       };
+    }
+
+    if (selectedRole === UserRole.STUDENT && 'mode' in payload && payload.mode === 'complete_email') {
+      const result = await apiRequest<{
+        sent: boolean;
+        alreadyVerified?: boolean;
+        user: { id: string; username: string; email: string };
+        delivery?: { mode: 'preview' | 'smtp'; previewUrl?: string };
+      }>(
+        endpoint,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            identifier: payload.username,
+            password: payload.password,
+            email: payload.email
+          })
+        },
+        { redirectOnUnauthorized: false }
+      );
+
+      return {
+        kind: 'verification_required',
+        identifier: result.user.username,
+        email: result.user.email,
+        previewUrl: result.delivery?.previewUrl
+      };
+    }
+
+    if (selectedRole === UserRole.STUDENT && 'mode' in payload && payload.mode === 'login') {
+      const login = await apiFetch<{
+        ok?: boolean;
+        code?: string;
+        error?: string;
+        message?: string;
+        data?: {
+          token?: string;
+          identifier?: string;
+          email?: string;
+        };
+      }>(
+        endpoint,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const envelope = login.data;
+      if (!login.res.ok || envelope?.ok === false) {
+        if (envelope?.code === 'EMAIL_REQUIRED') {
+          return {
+            kind: 'email_required',
+            identifier: envelope.data?.identifier ?? payload.username
+          };
+        }
+
+        if (envelope?.code === 'EMAIL_NOT_VERIFIED') {
+          return {
+            kind: 'verification_required',
+            identifier: envelope.data?.identifier ?? payload.username,
+            email: envelope.data?.email ?? ''
+          };
+        }
+
+        throw new Error(envelope?.error ?? envelope?.message ?? envelope?.code ?? login.res.statusText);
+      }
+
+      const token = envelope?.data?.token;
+      if (!token) {
+        throw new Error('INTERNAL_ERROR');
+      }
+
+      localStorage.setItem('access_token', token);
+
+      const me = await apiRequest<AuthMe>('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+      setCurrentUser(buildUserFromAuth(me));
+      navigate('/');
+      return { kind: 'logged_in' };
     }
 
     const tokenResult = await apiRequest<{ token: string }>(
