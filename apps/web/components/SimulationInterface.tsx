@@ -47,6 +47,18 @@ type SimulationApiMessage = {
   createdAt: string | Date;
 };
 
+type SessionCache = {
+  sessionId: string | null;
+  messages: ChatMessage[];
+  coachNote: string | null;
+  assessmentSummary: string | null;
+  assessmentStrengths: string[];
+  assessmentRisks: string[];
+  traceLabel: string | null;
+  difficultyLabel: string | null;
+  cultureHints: string[];
+};
+
 const stageKeyMap: Record<number, SimulationStage> = {
   1: 'acquisition',
   2: 'quotation',
@@ -88,6 +100,44 @@ function toChatMessage(msg: SimulationApiMessage): ChatMessage {
   };
 }
 
+function getSessionCacheKey(stage: SimulationStage) {
+  return `simulation_session_cache:${stage}`;
+}
+
+function readSessionCache(stage: SimulationStage): SessionCache | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(getSessionCacheKey(stage));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SessionCache>;
+    if (!Array.isArray(parsed.messages)) return null;
+    return {
+      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
+      messages: parsed.messages as ChatMessage[],
+      coachNote: typeof parsed.coachNote === 'string' ? parsed.coachNote : null,
+      assessmentSummary: typeof parsed.assessmentSummary === 'string' ? parsed.assessmentSummary : null,
+      assessmentStrengths: Array.isArray(parsed.assessmentStrengths) ? parsed.assessmentStrengths.filter((item) => typeof item === 'string') : [],
+      assessmentRisks: Array.isArray(parsed.assessmentRisks) ? parsed.assessmentRisks.filter((item) => typeof item === 'string') : [],
+      traceLabel: typeof parsed.traceLabel === 'string' ? parsed.traceLabel : null,
+      difficultyLabel: typeof parsed.difficultyLabel === 'string' ? parsed.difficultyLabel : null,
+      cultureHints: Array.isArray(parsed.cultureHints) ? parsed.cultureHints.filter((item) => typeof item === 'string') : []
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache(stage: SimulationStage, cache: SessionCache) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(getSessionCacheKey(stage), JSON.stringify(cache));
+  } catch {
+    // Ignore storage failures; the live UI state still works.
+  }
+}
+
 const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   task,
   onExit,
@@ -114,6 +164,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const cachedSession = useRef<SessionCache | null>(null);
 
   const currentStageMeta =
     STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
@@ -121,6 +172,28 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   useEffect(() => {
     setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
   }, [task.stageId]);
+
+  useEffect(() => {
+    const cached = readSessionCache(currentStage);
+    cachedSession.current = cached;
+    if (!cached) {
+      setMessages([]);
+      setCurrentSessionId(null);
+      setInputValue('');
+      resetStructuredFeedback();
+      return;
+    }
+
+    setMessages(cached.messages);
+    setCurrentSessionId(cached.sessionId);
+    setCoachNote(cached.coachNote);
+    setAssessmentSummary(cached.assessmentSummary);
+    setAssessmentStrengths(cached.assessmentStrengths);
+    setAssessmentRisks(cached.assessmentRisks);
+    setTraceLabel(cached.traceLabel);
+    setDifficultyLabel(cached.difficultyLabel);
+    setCultureHints(cached.cultureHints);
+  }, [currentStage]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -163,6 +236,31 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   };
 
   useEffect(() => {
+    writeSessionCache(currentStage, {
+      sessionId: currentSessionId,
+      messages,
+      coachNote,
+      assessmentSummary,
+      assessmentStrengths,
+      assessmentRisks,
+      traceLabel,
+      difficultyLabel,
+      cultureHints
+    });
+  }, [
+    currentStage,
+    currentSessionId,
+    messages,
+    coachNote,
+    assessmentSummary,
+    assessmentStrengths,
+    assessmentRisks,
+    traceLabel,
+    difficultyLabel,
+    cultureHints
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadSession = async () => {
@@ -187,16 +285,19 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         const sessionMessages = Array.isArray(data?.messages)
           ? data.messages.map(toChatMessage)
           : [];
+        const cached = cachedSession.current;
+        const shouldUseCachedMessages =
+          Boolean(cached?.sessionId && data?.session?.id && cached.sessionId === data.session.id) &&
+          (cached?.messages.length ?? 0) > sessionMessages.length;
+        const nextMessages = shouldUseCachedMessages ? cached.messages : sessionMessages;
 
         setCurrentSessionId(data?.session?.id ?? null);
-        setMessages(sessionMessages);
+        setMessages(nextMessages);
         updateStructuredFeedback(data?.orchestration ?? undefined);
       } catch (error) {
         if (cancelled) return;
         console.error('Load simulation session failed', error);
         setSessionLoadError(error instanceof Error ? error.message : '当前会话加载失败，请刷新后重试。');
-        setMessages([]);
-        resetStructuredFeedback();
       } finally {
         if (!cancelled) {
           setLoadingSession(false);
