@@ -199,6 +199,8 @@ type ResearchAiResult = {
   durationMs: number;
   rows: Record<string, unknown>[];
   answer: string;
+  chartSuggestion?: 'line' | 'bar' | 'table';
+  followupPrompts?: string[];
   modelDegraded?: boolean;
 };
 
@@ -1004,13 +1006,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     );
   };
 
-  const runResearchAiQuery = async () => {
+  const runResearchAiQuery = async (questionOverride?: string) => {
+    const question = (questionOverride ?? researchAiQuestion).trim();
+    if (!question) return;
     try {
       setResearchAiLoading(true);
       setResearchAiError('');
       const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
         method: 'POST',
-        body: JSON.stringify({ question: researchAiQuestion.trim() })
+        body: JSON.stringify({ question })
       });
       setResearchAiResult(data);
       setResearchAiPage(1);
@@ -1084,7 +1088,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
         <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI SQL Copilot</p>
-        <h4 className="text-lg font-black text-slate-900 mt-1">自然语言查库（M1）</h4>
+            <h4 className="text-lg font-black text-slate-900 mt-1">自然语言查库（M1）</h4>
         <div className="mt-4 flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
             {AI_QUERY_TEMPLATES.map((tpl) => (
@@ -1105,7 +1109,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           />
           <div className="flex items-center gap-3">
             <button
-              onClick={runResearchAiQuery}
+              onClick={() => runResearchAiQuery()}
               disabled={researchAiLoading || !researchAiQuestion.trim()}
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
             >
@@ -1155,6 +1159,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI 结论</p>
               <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-wrap">{researchAiResult.answer}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">图表建议</span>
+                <span className="rounded-md bg-indigo-100 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                  {researchAiResult.chartSuggestion || 'table'}
+                </span>
+              </div>
+              {researchAiResult.followupPrompts?.length ? (
+                <div className="mt-3">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">推荐追问</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {researchAiResult.followupPrompts.map((prompt, idx) => (
+                      <button
+                        key={`${prompt}-${idx}`}
+                        onClick={() => {
+                          setResearchAiQuestion(prompt);
+                          void runResearchAiQuery(prompt);
+                        }}
+                        className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[11px] text-indigo-700 hover:bg-indigo-50"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <p className="mt-2 text-xs text-slate-400">行数 {researchAiResult.rowCount} · {researchAiResult.durationMs}ms</p>
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-900 p-4">
