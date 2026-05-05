@@ -98,6 +98,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<string | null>(null);
@@ -269,7 +270,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     if (restarting || sending || loadingSession) return;
 
     const confirmed = window.confirm(
-      '确定要重新开始当前阶段对话吗？当前进行中的这轮对话会被结束，并新建一条空白会话。'
+      '确定结束当前对话并开始一个新话题吗？旧对话会保留在后台记录里，但不会再带入新话题。'
     );
     if (!confirmed) return;
 
@@ -307,6 +308,25 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     }
   };
 
+  const handleEndAndExit = async () => {
+    if (endingSession || restarting || sending || loadingSession) return;
+
+    setEndingSession(true);
+    try {
+      await apiFetch(`/api/simulations/${currentStage}/end`, {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.error('End simulation session failed', error);
+    } finally {
+      setEndingSession(false);
+      setCurrentSessionId(null);
+      setMessages([]);
+      resetStructuredFeedback();
+      onExit();
+    }
+  };
+
   const displayMessages =
     messages.length > 0 || loadingSession ? messages : INITIAL_CHAT_MESSAGES;
 
@@ -316,18 +336,19 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         <div className="flex items-center gap-4">
           <button
             onClick={handleRestart}
-            disabled={restarting || sending || loadingSession}
+            disabled={restarting || endingSession || sending || loadingSession}
             className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCcw size={16} />
-            {restarting ? '重新开始中...' : '重新开始'}
+            {restarting ? '新话题创建中...' : '开始新话题'}
           </button>
           <button
-            onClick={onExit}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+            onClick={() => void handleEndAndExit()}
+            disabled={endingSession || restarting || sending || loadingSession}
+            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowLeft size={16} />
-            结束/退出练习
+            {endingSession ? '结束中...' : '结束本轮并退出'}
           </button>
           <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-2">

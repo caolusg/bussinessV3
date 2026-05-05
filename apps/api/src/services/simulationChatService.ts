@@ -151,6 +151,23 @@ export async function restartStageSession(
   });
 }
 
+export async function endStageSession(
+  prisma: Db,
+  userId: string,
+  stage: SimulationStage
+) {
+  await prisma.simulationSession.updateMany({
+    where: {
+      userId,
+      stage,
+      status: 'active'
+    },
+    data: {
+      status: 'ended'
+    }
+  });
+}
+
 function createFallbackOrchestration(): SimulationOrchestratorResult {
   return {
     roleplayReply: FALLBACK_OPPONENT_REPLY,

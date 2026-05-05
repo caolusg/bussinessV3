@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   appendStudentAndOpponent,
+  endStageSession,
   getOrCreateActiveSession,
   restartStageSession
 } from '../services/simulationChatService.js';
@@ -500,6 +501,36 @@ router.post('/:stage/restart', requireAuth, async (req, res) => {
     }));
   } catch (error) {
     console.error('Restart session failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/:stage/end', requireAuth, async (req, res) => {
+  try {
+    const paramsParsed = messageParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json(fail('UNAUTHORIZED', 'Unauthorized'));
+    }
+
+    const stage = paramsParsed.data.stage;
+    await endStageSession(prisma, userId, stage);
+
+    await logPracticeEvent(prisma, {
+      userId,
+      eventType: 'practice_session_ended',
+      metadata: {
+        stage
+      }
+    });
+
+    return res.status(200).json(ok({ ended: true }));
+  } catch (error) {
+    console.error('End session failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
