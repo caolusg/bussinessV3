@@ -840,6 +840,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 <tr>
                   <th className="px-5 py-3 text-left">时间</th>
                   <th className="px-5 py-3 text-left">事件</th>
+                  <th className="px-5 py-3 text-left">用户</th>
                   <th className="px-5 py-3 text-left">页面</th>
                   <th className="px-5 py-3 text-left">标签</th>
                   <th className="px-5 py-3 text-left">目标</th>
@@ -861,6 +862,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           {row.eventType}
                         </span>
                       </td>
+                      <td className="px-5 py-4 text-xs font-mono">{formatValue(row.userId) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.page) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.label) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.target) || '-'}</td>
@@ -874,7 +876,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td className="px-5 py-8 text-center text-slate-400" colSpan={8}>
+                    <td className="px-5 py-8 text-center text-slate-400" colSpan={9}>
                       当前筛选条件下暂无点击流
                     </td>
                   </tr>
