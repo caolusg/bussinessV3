@@ -447,7 +447,7 @@ const AppRoutes: React.FC = () => {
         realName: updatedProfile.realName,
         studentNo: updatedProfile.studentNo,
         nationality: updatedProfile.nationality ?? '',
-        age: updatedProfile.age ?? 0,
+        age: updatedProfile.age && updatedProfile.age > 0 ? updatedProfile.age : null,
         gender: updatedProfile.gender ?? '',
         hskLevel: updatedProfile.hskLevel ?? '',
         major: updatedProfile.major ?? ''
@@ -552,6 +552,7 @@ const AppRoutes: React.FC = () => {
             <SystemAdminPage
               user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
               onLogout={handleLogout}
+              onPasswordChange={handlePasswordChange}
             />
           }
         />

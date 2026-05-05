@@ -19,6 +19,11 @@ import type { SystemConfigStatus, UserProfile } from '../types';
 type SystemAdminPageProps = {
   user: UserProfile;
   onLogout: () => void;
+  onPasswordChange: (payload: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => Promise<void>;
 };
 
 type SystemConfigForm = {
@@ -35,6 +40,12 @@ type SystemConfigForm = {
 type PasswordResetForm = {
   username: string;
   password: string;
+  confirmPassword: string;
+};
+
+type AccountPasswordForm = {
+  currentPassword: string;
+  newPassword: string;
   confirmPassword: string;
 };
 
@@ -78,7 +89,7 @@ const defaultConfig: SystemConfigForm = {
 
 const formatNumber = (value: number) => new Intl.NumberFormat('zh-CN').format(value);
 
-const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => {
+const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPasswordChange }) => {
   const navigate = useNavigate();
   const [config, setConfig] = useState<SystemConfigForm>(defaultConfig);
   const [status, setStatus] = useState<SystemConfigStatus | null>(null);
@@ -88,10 +99,16 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
     password: '',
     confirmPassword: ''
   });
+  const [accountPasswordForm, setAccountPasswordForm] = useState<AccountPasswordForm>({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
   const [loading, setLoading] = useState(true);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [changingOwnPassword, setChangingOwnPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -221,6 +238,33 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
     }
   };
 
+  const changeOwnPassword = async () => {
+    try {
+      if (accountPasswordForm.newPassword.length < 6) {
+        setError('新密码至少 6 位');
+        return;
+      }
+      if (accountPasswordForm.newPassword !== accountPasswordForm.confirmPassword) {
+        setError('两次输入的新密码不一致');
+        return;
+      }
+
+      setChangingOwnPassword(true);
+      setError(null);
+      await onPasswordChange(accountPasswordForm);
+      setAccountPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setMessage('当前账号密码已修改');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '修改当前账号密码失败');
+    } finally {
+      setChangingOwnPassword(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
@@ -260,6 +304,71 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout }) => 
             </button>
           </div>
         </header>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <p className="inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.3em] text-violet-200">
+              <User size={12} />
+              Account
+            </p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight">当前账号</h2>
+            <div className="mt-5 grid gap-3 text-sm">
+              <div className="rounded-2xl bg-slate-950/50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">登录名</p>
+                <p className="mt-2 font-bold text-slate-50">{user.username}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-950/50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">邮箱</p>
+                <p className="mt-2 font-bold text-slate-50">{user.email || '未记录'}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-950/50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">身份</p>
+                <p className="mt-2 font-bold text-slate-50">{user.role || '教师/管理员'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <p className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.3em] text-cyan-200">
+              <KeyRound size={12} />
+              Password
+            </p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight">修改当前账号密码</h2>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <input
+                type="password"
+                value={accountPasswordForm.currentPassword}
+                onChange={(event) => setAccountPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-300"
+                placeholder="当前密码"
+              />
+              <input
+                type="password"
+                value={accountPasswordForm.newPassword}
+                onChange={(event) => setAccountPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
+                className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-300"
+                placeholder="新密码"
+              />
+              <input
+                type="password"
+                value={accountPasswordForm.confirmPassword}
+                onChange={(event) => setAccountPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-300"
+                placeholder="确认新密码"
+              />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => void changeOwnPassword()}
+                disabled={changingOwnPassword}
+                className="inline-flex items-center gap-2 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
+              >
+                <Save size={16} />
+                {changingOwnPassword ? '保存中...' : '保存新密码'}
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-4">

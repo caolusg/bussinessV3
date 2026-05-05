@@ -8,13 +8,13 @@ import { requireAuth } from '../middleware/requireAuth.js';
 const router = Router();
 
 const profileSchema = z.object({
-  realName: z.string().min(1),
-  studentNo: z.string().min(1),
-  nationality: z.string().min(1),
-  age: z.number().int().positive(),
-  gender: z.string().min(1),
-  hskLevel: z.string().min(1),
-  major: z.string().min(1)
+  realName: z.string().optional().default(''),
+  studentNo: z.string().optional().default(''),
+  nationality: z.string().optional().default(''),
+  age: z.number().int().nonnegative().nullable().optional(),
+  gender: z.string().optional().default(''),
+  hskLevel: z.string().optional().default(''),
+  major: z.string().optional().default('')
 });
 
 const passwordSchema = z
@@ -96,6 +96,7 @@ router.post('/student', requireAuth, async (req, res) => {
     }
 
     const { realName, studentNo, nationality, age, gender, hskLevel, major } = parsed.data;
+    const normalizedAge = age && age > 0 ? age : null;
 
     const profile = await prisma.studentProfile.upsert({
       where: { userId },
@@ -103,7 +104,7 @@ router.post('/student', requireAuth, async (req, res) => {
         realName,
         studentNo,
         nationality,
-        age,
+        age: normalizedAge,
         gender,
         hskLevel,
         major,
@@ -114,7 +115,7 @@ router.post('/student', requireAuth, async (req, res) => {
         realName,
         studentNo,
         nationality,
-        age,
+        age: normalizedAge,
         gender,
         hskLevel,
         major,

@@ -26,6 +26,9 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'EMAIL_TAKEN':
     case 'Email already exists':
       return '邮箱已被注册';
+    case 'EMAIL_REQUIRED':
+    case 'Email required':
+      return '该账号需要先绑定邮箱并完成验证';
     case 'EMAIL_NOT_VERIFIED':
     case 'Email verification required':
       return '该账号尚未完成邮箱验证，请先验证后再登录';
@@ -44,7 +47,6 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'BOOTSTRAP_RUNNING':
     case 'BOOTSTRAP_FAILED':
     case 'ROLE_MISSING':
-    case 'ROLE_FORBIDDEN':
     case 'SYSTEM_CONFIG_SAVE_FAILED':
     case 'TEACHER_PASSWORD_RESET_FAILED':
       return '服务暂时不可用，请确认 API 服务启动后再试';

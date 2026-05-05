@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { LogOut, Settings } from 'lucide-react';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile } from '../types';
 import BrandLogo from './BrandLogo';
 
 interface TopBarProps {
@@ -11,42 +10,45 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onManageProfile }) => {
+  const displayName = user.realName?.trim() || user.username;
+  const roleLabel = user.role || '用户';
+
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 fixed top-0 left-0 right-0 z-50 shadow-sm">
+    <header className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 shadow-sm">
       <div className="flex items-center gap-3">
         <BrandLogo compact />
       </div>
 
       <div className="flex items-center gap-6">
-        <div 
+        <button
+          type="button"
           onClick={onManageProfile}
-          className={`flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-gray-200 transition-all cursor-pointer group hover:border-blue-300 hover:shadow-md ${user.role === '销售学员' ? 'ring-2 ring-blue-50' : ''}`}
+          className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2 text-left transition-all hover:border-blue-300 hover:shadow-md"
         >
           <div className="relative">
-            <img 
-              src={user.avatarUrl} 
-              alt="User Avatar" 
-              className="w-9 h-9 rounded-full object-cover border border-white shadow-sm"
+            <img
+              src={user.avatarUrl}
+              alt="User Avatar"
+              className="h-9 w-9 rounded-full border border-white object-cover shadow-sm"
             />
-            {user.role === '销售学员' && (
-              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-0.5 rounded-full border-2 border-white">
-                <Settings size={10} />
-              </div>
-            )}
+            <div className="absolute -bottom-1 -right-1 rounded-full border-2 border-white bg-blue-600 p-0.5 text-white">
+              <Settings size={10} />
+            </div>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1 group-hover:text-blue-600">
-              {user.realName} ({user.role})
+            <span className="flex items-center gap-1 text-xs font-bold text-slate-800 group-hover:text-blue-600">
+              {displayName} ({roleLabel})
             </span>
-            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
               {user.company || '系统模拟账户'}
             </span>
           </div>
-        </div>
+        </button>
 
-        <button 
+        <button
+          type="button"
           onClick={onLogout}
-          className="text-slate-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50" 
+          className="rounded-full p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
           title="安全退出"
         >
           <LogOut size={20} />

@@ -139,7 +139,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </label>
           <input
             type="text"
-            required
             value={profile.realName}
             onChange={(e) => setProfile({ ...profile, realName: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -152,7 +151,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </label>
           <input
             type="text"
-            required
             value={profile.studentNo}
             onChange={(e) => setProfile({ ...profile, studentNo: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -165,7 +163,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </label>
           <input
             type="text"
-            required
             value={profile.nationality || ''}
             onChange={(e) => setProfile({ ...profile, nationality: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -179,7 +176,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </label>
           <input
             type="number"
-            required
             value={profile.age || ''}
             onChange={(e) => setProfile({ ...profile, age: Number(e.target.value) })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -191,7 +187,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
             <Users size={12} /> 性别
           </label>
           <select
-            required
             value={profile.gender || ''}
             onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -208,7 +203,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
             <Star size={12} /> HSK 水平
           </label>
           <select
-            required
             value={profile.hskLevel || ''}
             onChange={(e) => setProfile({ ...profile, hskLevel: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
@@ -229,7 +223,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </label>
           <input
             type="text"
-            required
             value={profile.major || ''}
             onChange={(e) => setProfile({ ...profile, major: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
