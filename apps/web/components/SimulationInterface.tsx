@@ -608,9 +608,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             <div ref={chatEndRef} />
           </div>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white p-5">
-            <div className="mx-auto flex w-full max-w-5xl items-end gap-4">
-              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-4 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+          <div className="shrink-0 border-t border-gray-200 bg-white p-6">
+            <div className="mx-auto flex w-full max-w-6xl items-end gap-4">
+              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-5 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
                 <textarea
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
@@ -621,20 +621,20 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     }
                   }}
                   placeholder="输入消息，与客户进行业务沟通..."
-                  className="min-h-16 max-h-40 w-full resize-none border-none bg-transparent text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                  className="min-h-24 max-h-48 w-full resize-none border-none bg-transparent text-base leading-7 text-slate-700 placeholder:text-slate-400 focus:ring-0"
                   rows={1}
                 />
               </div>
               <button
                 onClick={() => void handleSend()}
                 disabled={!inputValue.trim() || sending || loadingSession}
-                className="rounded-xl bg-blue-600 p-4 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
+                className="rounded-xl bg-blue-600 p-5 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
               >
                 <Send size={18} />
               </button>
             </div>
             {sessionLoadError && (
-              <div className="mx-auto mt-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="mx-auto mt-3 flex max-w-6xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 <span>{sessionLoadError}</span>
                 <button
                   onClick={() => setSessionReloadKey((value) => value + 1)}
@@ -647,7 +647,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </main>
 
-        <aside className="flex w-[26rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white lg:w-[30rem]">
+        <aside className="flex w-[30rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white lg:w-[36rem] xl:w-[40rem]">
           {(coachNote || assessmentSummary) && (
             <div className="border-b border-gray-100 bg-amber-50/40 p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">
