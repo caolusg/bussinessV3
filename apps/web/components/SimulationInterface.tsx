@@ -267,6 +267,18 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
   useEffect(() => {
     let cancelled = false;
+    const cached = cachedSession.current;
+    const hasRestoredConversation = Boolean(
+      cached?.sessionId && (cached.messages.length ?? 0) > 1
+    );
+
+    if (sessionReloadKey === 0 && hasRestoredConversation) {
+      setCurrentSessionId(cached?.sessionId ?? null);
+      setMessages(cached?.messages ?? []);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const loadSession = async () => {
       setLoadingSession(true);
@@ -290,7 +302,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         const sessionMessages = Array.isArray(data?.messages)
           ? data.messages.map(toChatMessage)
           : [];
-        const cached = cachedSession.current;
         const shouldUseCachedMessages =
           Boolean(cached?.sessionId && data?.session?.id && cached.sessionId === data.session.id) &&
           (cached?.messages.length ?? 0) > sessionMessages.length;
