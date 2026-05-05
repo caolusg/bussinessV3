@@ -8,6 +8,7 @@ import contentRoutes from './routes/content.js';
 import profileRoutes from './routes/profile.js';
 import simulationsRoutes from './routes/simulations.js';
 import setupRoutes from './routes/setup.js';
+import researchAiRoutes from './routes/researchAi.js';
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/simulations', simulationsRoutes);
 app.use('/api/setup', setupRoutes);
+app.use('/api/research/ai', researchAiRoutes);
 
 const port = Number(process.env.PORT ?? 8000);
 
