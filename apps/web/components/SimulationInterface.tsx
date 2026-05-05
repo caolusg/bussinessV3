@@ -533,8 +533,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </aside>
 
-        <main className="relative flex flex-1 flex-col bg-slate-100/50">
-          <div className="flex-1 space-y-6 overflow-y-auto p-6">
+        <main className="relative flex min-w-0 flex-1 flex-col bg-slate-100/50">
+          <div className="flex-1 space-y-6 overflow-y-auto p-4">
             {loadingSession && messages.length === 0 && (
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
                 正在加载当前环节会话...
@@ -548,7 +548,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`flex max-w-[80%] gap-3 md:max-w-[70%] ${
+                    className={`flex max-w-[72%] gap-3 md:max-w-[62%] ${
                       isMe ? 'flex-row-reverse' : 'flex-row'
                     }`}
                   >
@@ -597,9 +597,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             <div ref={chatEndRef} />
           </div>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white p-4">
-            <div className="mx-auto flex max-w-4xl items-end gap-3">
-              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+          <div className="shrink-0 border-t border-gray-200 bg-white p-5">
+            <div className="mx-auto flex w-full max-w-5xl items-end gap-4">
+              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-4 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
                 <textarea
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
@@ -610,20 +610,20 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     }
                   }}
                   placeholder="输入消息，与客户进行业务沟通..."
-                  className="h-10 max-h-32 w-full resize-none border-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                  className="min-h-16 max-h-40 w-full resize-none border-none bg-transparent text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
                   rows={1}
                 />
               </div>
               <button
                 onClick={() => void handleSend()}
                 disabled={!inputValue.trim() || sending || loadingSession}
-                className="rounded-xl bg-blue-600 p-3 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
+                className="rounded-xl bg-blue-600 p-4 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
               >
                 <Send size={18} />
               </button>
             </div>
             {sessionLoadError && (
-              <div className="mx-auto mt-3 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="mx-auto mt-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 <span>{sessionLoadError}</span>
                 <button
                   onClick={() => setSessionReloadKey((value) => value + 1)}
@@ -636,7 +636,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </main>
 
-        <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white">
+        <aside className="flex w-[26rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white lg:w-[30rem]">
           {(coachNote || assessmentSummary) && (
             <div className="border-b border-gray-100 bg-amber-50/40 p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">
