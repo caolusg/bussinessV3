@@ -35,7 +35,7 @@ import { apiFetch, apiRequest } from './utils/apiFetch';
 const buildDefaultUser = (role: UserRole): UserProfile => ({
   username: role === UserRole.TEACHER ? 'teacher' : 'student',
   email: '',
-  realName: role === UserRole.TEACHER ? '\u7ba1\u7406\u5458' : '\u65b0\u540c\u5b66',
+  realName: role === UserRole.TEACHER ? '\u7ba1\u7406\u5458' : '',
   studentNo: role === UserRole.TEACHER ? '' : '',
   role: role === UserRole.TEACHER ? '\u5bfc\u5e08' : '\u9500\u552e\u5b66\u5458',
   company: '\u7cfb\u7edf\u6a21\u62df\u8d26\u6237',
@@ -456,6 +456,24 @@ const AppRoutes: React.FC = () => {
 
     navigate('/');
   };
+  const handlePasswordChange = async (payload: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      clearAuth();
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    await apiRequest('/api/profile/password', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+  };
   const handleStartSimulation = () => navigate('/simulation');
   const handleExitSimulation = () => navigate('/dashboard');
   const handleTriggerCoaching = (context?: { sessionId?: string; stage?: string }) => {
@@ -522,6 +540,8 @@ const AppRoutes: React.FC = () => {
             <ProfileSetup
               initialProfile={currentUser ?? buildDefaultUser(UserRole.STUDENT)}
               onComplete={handleProfileComplete}
+              onPasswordChange={handlePasswordChange}
+              onBack={() => navigate('/dashboard')}
             />
           }
         />
@@ -558,6 +578,7 @@ const AppRoutes: React.FC = () => {
                 <ProfileSetup
                   initialProfile={currentUser}
                   onComplete={handleProfileComplete}
+                  onPasswordChange={handlePasswordChange}
                   isModal
                   onClose={() => setIsProfileModalOpen(false)}
                 />

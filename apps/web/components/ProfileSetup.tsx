@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import {
+  ArrowLeft,
   Calendar,
   ChevronRight,
   Flag,
   GraduationCap,
+  KeyRound,
   Mail,
   Star,
   User as UserIcon,
@@ -12,19 +14,69 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
+interface PasswordChangePayload {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 interface ProfileSetupProps {
   initialProfile: UserProfile;
   onComplete: (profile: UserProfile) => void;
+  onPasswordChange?: (payload: PasswordChangePayload) => Promise<void>;
   isModal?: boolean;
   onClose?: () => void;
+  onBack?: () => void;
 }
 
-const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete, isModal = false, onClose }) => {
+const ProfileSetup: React.FC<ProfileSetupProps> = ({
+  initialProfile,
+  onComplete,
+  onPasswordChange,
+  isModal = false,
+  onClose,
+  onBack
+}) => {
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState<PasswordChangePayload>({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onComplete(profile);
+  };
+
+  const handlePasswordChange = async () => {
+    if (!onPasswordChange) return;
+    setPasswordError('');
+    setPasswordMessage('');
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('新密码至少 6 位');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('两次输入的新密码不一致');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await onPasswordChange(passwordForm);
+      setPasswordMessage('密码已修改，请使用新密码登录。');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : '密码修改失败，请稍后再试');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const Content = (
@@ -39,14 +91,48 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
             </p>
           </div>
         </div>
-        {isModal && (
+        {isModal ? (
           <button type="button" onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <X size={24} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-white/20"
+          >
+            <ArrowLeft size={16} />
+            返回
           </button>
         )}
       </div>
 
       <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <UserIcon size={12} /> 登录名
+          </label>
+          <input
+            type="text"
+            value={profile.username}
+            readOnly
+            className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Mail size={12} /> 注册邮箱
+          </label>
+          <input
+            type="email"
+            value={profile.email || ''}
+            readOnly
+            className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 outline-none"
+            placeholder="当前账号未记录邮箱"
+          />
+        </div>
+
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <UserIcon size={12} /> 真实姓名
@@ -70,19 +156,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
             value={profile.studentNo}
             onChange={(e) => setProfile({ ...profile, studentNo: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-          />
-        </div>
-
-        <div className="space-y-1 col-span-2">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Mail size={12} /> 注册邮箱
-          </label>
-          <input
-            type="email"
-            value={profile.email || ''}
-            readOnly
-            className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 outline-none"
-            placeholder="当前账号未记录邮箱"
           />
         </div>
 
@@ -163,9 +236,68 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ initialProfile, onComplete,
           />
         </div>
 
+        {onPasswordChange && (
+          <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPassword((value) => !value);
+                setPasswordError('');
+                setPasswordMessage('');
+              }}
+              className="flex w-full items-center justify-between text-sm font-bold text-slate-700"
+            >
+              <span className="inline-flex items-center gap-2">
+                <KeyRound size={16} /> 修改密码
+              </span>
+              <span className="text-xs text-blue-600">{showPassword ? '收起' : '展开'}</span>
+            </button>
+
+            {showPassword && (
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                  placeholder="当前密码"
+                />
+                <input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                  placeholder="新密码"
+                />
+                <input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                  placeholder="确认新密码"
+                />
+                <div className="col-span-3 flex items-center justify-between">
+                  <div className="text-xs">
+                    {passwordError && <span className="font-semibold text-red-600">{passwordError}</span>}
+                    {passwordMessage && <span className="font-semibold text-emerald-700">{passwordMessage}</span>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePasswordChange}
+                    disabled={changingPassword}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                  >
+                    {changingPassword ? '保存中...' : '保存新密码'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           type="submit"
-          className="col-span-2 mt-4 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 transform active:scale-[0.99]"
+          className="col-span-2 mt-2 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 transform active:scale-[0.99]"
         >
           {isModal ? '保存修改' : '开启商务模拟之旅'}
           {!isModal && <ChevronRight size={20} />}
