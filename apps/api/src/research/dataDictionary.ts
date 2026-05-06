@@ -50,6 +50,7 @@ Clickstream business rules:
 - Clickstream metadata_json may contain page, route, label, target, role, tagName, id, and other UI context.
 - "click flow", "clickstream", "click data", "page view", "button click", "click", "dianji", and Chinese terms "\u70b9\u51fb", "\u70b9\u51fb\u6d41", "\u70b9\u51fb\u6570\u636e" usually mean practice_events clickstream.
 - Chinese questions containing "\u70b9\u51fb", "\u70b9\u51fb\u6d41", "\u70b9\u51fb\u6570\u636e", or "\u9875\u9762\u6d4f\u89c8" mean clickstream.
+- Classify clickstream intent from the current user question first. Do not inherit clickstream filters only because previous context mentioned clickstream.
 - For today's clickstream, use practice_events.created_at >= CURRENT_DATE.
 - For recent N days, use practice_events.created_at >= CURRENT_DATE - INTERVAL 'N days'.
 - For "is there clickstream data today", query practice_events directly and return counts grouped by event_type and date.
@@ -61,6 +62,8 @@ Student activity business rules:
 - Use practice_events for learning/practice events and count distinct practice_events.user_id for active users.
 - Use teaching_group_members only when the user asks for group/class breakdown or student membership scope.
 - If grouping by teaching group, join teaching_group_members on practice_events.user_id = teaching_group_members.user_id, then join teaching_groups on group_id = id.
+- For teaching-group active student counts/trends, do not filter event_type to ('ui_click', 'page_view') unless the current question explicitly asks for clickstream/click/page-view activity.
+- "teaching group active students" means distinct student users from practice_events joined to teaching_group_members, across all relevant practice_events in the requested time window.
 
 SQL generation rules:
 - Return only one PostgreSQL SELECT statement.
@@ -70,6 +73,7 @@ SQL generation rules:
 - Prefer aggregate summaries for research questions.
 - Never query password_hash, email, real_name, name, student_no, or other directly identifying fields.
 - If the current user message corrects a previous result, treat it as new evidence and generate a direct verification query.
+- The current user question has priority over previous context. Previous context may clarify references, but must not override the current question's metric, time range, grouping, or event_type filters.
 `.trim();
 }
 
