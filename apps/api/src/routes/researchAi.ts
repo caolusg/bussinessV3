@@ -56,6 +56,11 @@ function normalizeFollowups(prompts: string[], fallbackQuestion: string) {
   return buildFallbackFollowups(fallbackQuestion).slice(0, 3);
 }
 
+function normalizeGeneratedSql(sql: string) {
+  const withoutCodeFence = sql.replace(/```sql|```/gi, '').trim();
+  return withoutCodeFence.replace(/;\s*$/, '').trim();
+}
+
 function assertReadOnlySql(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
   if (!normalized.startsWith('select')) throw new Error('仅允许 SELECT 查询');
@@ -118,7 +123,7 @@ router.post('/query', requireAuth, async (req, res) => {
       messages: []
     });
 
-    const sql = sqlCompletion.content.replace(/```sql|```/gi, '').trim();
+    const sql = normalizeGeneratedSql(sqlCompletion.content);
     assertReadOnlySql(sql);
 
     const startedAt = Date.now();
