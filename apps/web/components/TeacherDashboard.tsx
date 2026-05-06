@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -387,6 +387,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchAiContext, setResearchAiContext] = useState<ResearchAiContextItem[]>([]);
   const [researchAiTurns, setResearchAiTurns] = useState<ResearchAiConversationTurn[]>([]);
   const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
+  const researchAiChatEndRef = useRef<HTMLDivElement | null>(null);
 
   const [scenarios, setScenarios] = useState([
     { id: 1, name: '1. 获客阶段：商务礼仪与名片交换', stage: 1, type: 'Built-in', active: true, prompt: '你是一个严格的采购经理...' },
@@ -1338,6 +1339,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     try {
       setResearchAiLoading(true);
       setResearchAiError('');
+      setResearchAiQuestion('');
       const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
         method: 'POST',
         body: JSON.stringify({ question, context: researchAiContext.slice(-6) })
@@ -1413,6 +1415,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       // ignore localStorage failures
     }
   }, []);
+
+  useEffect(() => {
+    researchAiChatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [researchAiTurns.length, researchAiLoading, researchAiError]);
+
+  const handleResearchAiKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (!researchAiLoading && researchAiQuestion.trim()) {
+      void runResearchAiQuery();
+    }
+  };
 
   const renderResearchLab = () => (
     <div className="space-y-6">
@@ -1571,6 +1585,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               ) : null}
             </div>
           )}
+          <div ref={researchAiChatEndRef} />
         </div>
 
         <div className="border-t border-slate-100 bg-white p-4">
@@ -1579,12 +1594,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             <textarea
               value={researchAiQuestion}
               onChange={(event) => setResearchAiQuestion(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
-                  void runResearchAiQuery();
-                }
-              }}
+              onKeyDown={handleResearchAiKeyDown}
               placeholder="向数据提出问题，例如：近 7 天学生练习事件数量趋势如何？"
               className="min-h-[72px] flex-1 resize-none rounded-2xl border border-slate-200 p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
             />
@@ -1618,6 +1628,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <textarea
             value={researchAiQuestion}
             onChange={(event) => setResearchAiQuestion(event.target.value)}
+            onKeyDown={handleResearchAiKeyDown}
             placeholder="例如：近30天按分组统计活跃学生数，并按日期升序"
             className="min-h-[100px] w-full rounded-2xl border border-slate-200 p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           />
