@@ -80,9 +80,9 @@ function extractJsonObject(text: string) {
 function buildFallbackFollowups(question: string) {
   const normalizedQuestion = question.replace(/\s+/g, ' ').trim().slice(0, 60);
   return [
-    `把「${normalizedQuestion}」按教学分组对比，并按指标降序展示`,
-    `把「${normalizedQuestion}」按近7天趋势拆解，说明波动最大的日期`,
-    `基于「${normalizedQuestion}」再补充异常样本明细（最多20条）`
+    `Compare "${normalizedQuestion}" by teaching group and sort by the metric descending`,
+    `Break down "${normalizedQuestion}" by recent 7-day trend and identify the largest fluctuation date`,
+    `Add anomaly sample details for "${normalizedQuestion}" with at most 20 rows`
   ];
 }
 
@@ -101,17 +101,17 @@ function normalizeGeneratedSql(sql: string) {
 
 function assertReadOnlySql(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
-  if (!normalized.startsWith('select')) throw new Error('仅允许 SELECT 查询');
-  if (normalized.includes(';')) throw new Error('禁止多语句查询');
+  if (!normalized.startsWith('select')) throw new Error('Only SELECT queries are allowed');
+  if (normalized.includes(';')) throw new Error('Multiple SQL statements are not allowed');
   const banned = [' insert ', ' update ', ' delete ', ' drop ', ' alter ', ' truncate ', ' create ', ' grant ', ' revoke ', ' copy '];
   for (const keyword of banned) {
-    if (normalized.includes(keyword)) throw new Error(`检测到危险关键字: ${keyword.trim()}`);
+    if (normalized.includes(keyword)) throw new Error(`Dangerous SQL keyword detected: ${keyword.trim()}`);
   }
   const fromMatches = [...normalized.matchAll(/\b(from|join)\s+"?([a-z0-9_]+)"?/g)];
   for (const m of fromMatches) {
     const table = m[2];
     if (table && !allowedTables.has(table)) {
-      throw new Error(`不允许访问数据表: ${table}`);
+      throw new Error(`Table is not allowed: ${table}`);
     }
   }
 }
@@ -132,13 +132,33 @@ function isRecoverableSqlGenerationError(error: unknown) {
   );
 }
 
+function toJsonSafeValue(value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)
+      ? Number(value)
+      : value.toString();
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(toJsonSafeValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, toJsonSafeValue(item)])
+    );
+  }
+  return value;
+}
+
+function toJsonSafeRows(rows: Record<string, unknown>[]) {
+  return rows.map((row) => toJsonSafeValue(row) as Record<string, unknown>);
+}
+
 function evaluateSqlRisk(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
   const risks: string[] = [];
-  if (!/\blimit\s+\d+\b/.test(normalized)) risks.push('缺少 LIMIT，可能返回过多数据');
-  if (!/\bwhere\b/.test(normalized)) risks.push('未包含 WHERE 条件，可能全表扫描');
-  if (normalized.includes('select *')) risks.push('使用 SELECT *，建议按需选择字段');
-  if (!/\b(group by|order by)\b/.test(normalized)) risks.push('未包含分组/排序，分析维度可能不明确');
+  if (!/\blimit\s+\d+\b/.test(normalized)) risks.push('Missing LIMIT may return too many rows');
+  if (!/\bwhere\b/.test(normalized)) risks.push('Missing WHERE may scan the full table');
+  if (normalized.includes('select *')) risks.push('SELECT * is used; choose needed columns instead');
+  if (!/\b(group by|order by)\b/.test(normalized)) risks.push('Missing GROUP BY or ORDER BY may make the analysis unclear');
   return {
     level: risks.length >= 3 ? 'high' : risks.length >= 1 ? 'medium' : 'low',
     items: risks
@@ -158,18 +178,18 @@ router.post('/query', requireAuth, async (req, res) => {
   try {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ ok: false, error: '请求参数无效' });
+      return res.status(400).json({ ok: false, error: 'Invalid request parameters' });
     }
 
     const allow = await requireResearcher(req.user?.id);
     if (!allow) {
-      return res.status(403).json({ ok: false, error: '无权限使用研究分析助手' });
+      return res.status(403).json({ ok: false, error: 'No permission to use research analysis' });
     }
 
     const question = parsed.data.question;
     const context = parsed.data.context ?? [];
     const contextText = context.length
-      ? `\n历史追问上下文:\n${context.map((item, idx) => `${idx + 1}. Q:${item.question}\nA:${item.answer}`).join('\n')}`
+      ? `\nPrevious follow-up context:\n${context.map((item, idx) => `${idx + 1}. Q:${item.question}\nA:${item.answer}`).join('\n')}`
       : '';
     const sqlCompletion = await generateCoachingReply({
       stage: 'quotation',
@@ -178,7 +198,7 @@ router.post('/query', requireAuth, async (req, res) => {
     });
 
     if (sqlCompletion.degraded) {
-      throw new Error('AI 未配置或调用失败，无法生成 SQL。请先在系统管理中配置 AI API Key，并确认模型服务可访问。');
+      throw new Error('AI is not configured or the model call failed. Configure the AI API key in System Admin and confirm the model service is reachable.');
     }
 
     let sql = normalizeGeneratedSql(sqlCompletion.content);
@@ -206,15 +226,16 @@ router.post('/query', requireAuth, async (req, res) => {
       rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql);
       durationMs = Date.now() - startedAt;
     }
+    const safeRows = toJsonSafeRows(rows);
 
     const summary = await generateCoachingReply({
       stage: 'quotation',
-      question: `基于以下查询结果，给出3条中文洞察（简短）：\n问题: ${question}${contextText}\nSQL: ${sql}\n结果(JSON): ${JSON.stringify(rows).slice(0, 12000)}`,
+      question: `Based on the query results below, provide 3 concise Chinese insights.\nQuestion: ${question}${contextText}\nSQL: ${sql}\nResult JSON: ${JSON.stringify(safeRows).slice(0, 12000)}`,
       messages: []
     });
     const recommendation = await generateCoachingReply({
       stage: 'quotation',
-      question: `你是数据分析助手。根据问题与结果，返回 JSON：{"chartSuggestion":"line|bar|table","followupPrompts":["..."]}。followupPrompts给2-3条中文追问，避免空泛。\n问题:${question}${contextText}\nSQL:${sql}\n结果样例(JSON):${JSON.stringify(rows).slice(0, 8000)}`,
+      question: `You are a data analysis assistant. Return JSON only: {"chartSuggestion":"line|bar|table","followupPrompts":["..."]}. Provide 2-3 specific Chinese follow-up prompts.\nQuestion:${question}${contextText}\nSQL:${sql}\nResult sample JSON:${JSON.stringify(safeRows).slice(0, 8000)}`,
       messages: []
     });
 
@@ -247,7 +268,7 @@ router.post('/query', requireAuth, async (req, res) => {
         sql,
         rowCount: rows.length,
         durationMs,
-        rows,
+        rows: safeRows,
         answer: summary.content,
         chartSuggestion,
         followupPrompts,
@@ -256,7 +277,7 @@ router.post('/query', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '查询失败';
+    const message = error instanceof Error ? error.message : 'Query failed';
     return res.status(400).json({ ok: false, error: message });
   }
 });
