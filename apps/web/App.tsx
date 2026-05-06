@@ -80,12 +80,45 @@ type AuthMe = {
   profileCompleted: boolean;
 };
 
-const buildUserFromAuth = (me: AuthMe): UserProfile => {
+type StudentProfileData = {
+  realName?: string | null;
+  studentNo?: string | null;
+  nationality?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  hskLevel?: string | null;
+  major?: string | null;
+};
+
+const buildUserFromAuth = (me: AuthMe, studentProfile?: StudentProfileData | null): UserProfile => {
   const role = me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT;
+  const defaultUser = buildDefaultUser(role);
   return {
-    ...buildDefaultUser(role),
+    ...defaultUser,
     username: me.user.username,
-    email: me.user.email ?? ''
+    email: me.user.email ?? '',
+    realName: studentProfile?.realName ?? defaultUser.realName,
+    studentNo: studentProfile?.studentNo ?? defaultUser.studentNo,
+    nationality: studentProfile?.nationality ?? '',
+    age: studentProfile?.age ?? undefined,
+    gender: studentProfile?.gender ?? '',
+    hskLevel: studentProfile?.hskLevel ?? '',
+    major: studentProfile?.major ?? ''
+  };
+};
+
+const loadAuthenticatedUser = async (token?: string | null) => {
+  const requestOptions = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  const me = await apiRequest<AuthMe>('/api/auth/me', requestOptions);
+  let studentProfile: StudentProfileData | null = null;
+
+  if (me.roles.includes('student')) {
+    studentProfile = await apiRequest<StudentProfileData | null>('/api/profile/student', requestOptions);
+  }
+
+  return {
+    me,
+    user: buildUserFromAuth(me, studentProfile)
   };
 };
 
@@ -158,6 +191,7 @@ const AppRoutes: React.FC = () => {
   // Global Auth State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const [selectedStageId, setSelectedStageId] = useState<number>(1);
@@ -225,6 +259,40 @@ const AppRoutes: React.FC = () => {
   const clearAuth = () => {
     localStorage.removeItem('access_token');
   };
+
+  useEffect(() => {
+    if (setupLoading || !setupStatus?.setupComplete) return;
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      setCurrentUser(null);
+      setRole(null);
+      setAuthLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAuthLoading(true);
+    loadAuthenticatedUser(token)
+      .then((authenticated) => {
+        if (cancelled) return;
+        setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+        setCurrentUser(authenticated.user);
+      })
+      .catch(() => {
+        localStorage.removeItem('access_token');
+        if (cancelled) return;
+        setCurrentUser(null);
+        setRole(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setupLoading, setupStatus?.setupComplete]);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -309,12 +377,10 @@ const AppRoutes: React.FC = () => {
       if (!registerResult.verificationRequired && registerResult.token) {
         localStorage.setItem('access_token', registerResult.token);
 
-        const me = await apiRequest<AuthMe>('/api/auth/me', {
-          headers: { Authorization: `Bearer ${registerResult.token}` }
-        });
+        const authenticated = await loadAuthenticatedUser(registerResult.token);
 
-        setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
-        setCurrentUser(buildUserFromAuth(me));
+        setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+        setCurrentUser(authenticated.user);
 
         navigate('/');
 
@@ -402,12 +468,10 @@ const AppRoutes: React.FC = () => {
 
       localStorage.setItem('access_token', token);
 
-      const me = await apiRequest<AuthMe>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const authenticated = await loadAuthenticatedUser(token);
 
-      setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
-      setCurrentUser(buildUserFromAuth(me));
+      setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+      setCurrentUser(authenticated.user);
       navigate('/');
       return { kind: 'logged_in' };
     }
@@ -424,14 +488,12 @@ const AppRoutes: React.FC = () => {
     const token = tokenResult.token;
     localStorage.setItem('access_token', token);
 
-    const me = await apiRequest<AuthMe>('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const authenticated = await loadAuthenticatedUser(token);
 
-    setRole(me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
-    setCurrentUser(buildUserFromAuth(me));
+    setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+    setCurrentUser(authenticated.user);
 
-    if (me.roles.includes('teacher')) {
+    if (authenticated.me.roles.includes('teacher')) {
       navigate('/teacher');
     } else {
       navigate('/');
@@ -531,6 +593,14 @@ const AppRoutes: React.FC = () => {
         <Route path="/setup" element={<SetupWizard status={setupStatus} onStatusChange={setSetupStatus} />} />
         <Route path="*" element={<Navigate to="/setup" replace />} />
       </Routes>
+    );
+  }
+
+  if (authLoading && localStorage.getItem('access_token') && !currentUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
+        正在读取账号资料...
+      </div>
     );
   }
 
