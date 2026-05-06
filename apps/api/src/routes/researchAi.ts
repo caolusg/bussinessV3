@@ -30,6 +30,8 @@ function buildSqlPrompt(question: string, contextText: string, previous?: { sql:
     'The current user question is the source of truth. Previous context is only for pronoun/reference resolution.',
     'Do not carry event_type filters, grouping dimensions, or time windows from previous context unless the current question repeats or clearly implies them.',
     'Only use event_type IN (\'ui_click\', \'page_view\') when the current question itself asks about clickstream/click/page-view data.',
+    'For AI help questions, prefer ai_interaction_logs prompt_version = \'coach-v1\' and practice_events event_type IN (\'coach_context_opened\', \'coach_question_asked\', \'ai_coach_answer_copied\').',
+    'For copied AI information, query practice_events event_type = \'ai_coach_answer_copied\' and inspect metadata_json answer_excerpt/question fields.',
     'For teaching-group active student counts or trends, count distinct practice_events.user_id joined through teaching_group_members and do not restrict event_type unless the current question asks for clickstream.',
     'Return only SQL. Do not include explanations, markdown, comments, or prose.',
     'The query must be read-only, start with SELECT, use only the allowed tables/columns, and include LIMIT 200.',

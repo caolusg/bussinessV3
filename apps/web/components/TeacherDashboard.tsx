@@ -303,8 +303,10 @@ const buildResearchChartData = (rows: Record<string, unknown>[]) => {
 
 
 const AI_QUERY_TEMPLATES = [
+  '最近30天学生求助AI教练的次数趋势（按天）',
+  '统计学生最常向AI教练求助的问题类型',
+  '列出最近30天学生复制了哪些AI教练回复摘要',
   '近30天按分组统计活跃学生数，并按日期升序',
-  '统计每个分组的人数，并按人数降序',
   '近7天学生练习事件数量趋势（按天）'
 ];
 

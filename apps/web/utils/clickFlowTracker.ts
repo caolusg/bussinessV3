@@ -109,6 +109,30 @@ export function trackUiClick(input: {
   });
 }
 
+export function trackPracticeEvent(input: {
+  eventType: string;
+  page: string;
+  route?: string;
+  label?: string;
+  target?: string;
+  sessionId?: string | null;
+  stage?: string | null;
+  resourceId?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  enqueue({
+    eventType: input.eventType,
+    page: input.page,
+    route: input.route ?? `${window.location.pathname}${window.location.search}`,
+    label: normalizeText(input.label) || undefined,
+    target: normalizeText(input.target) || undefined,
+    sessionId: input.sessionId ?? null,
+    stage: input.stage ?? null,
+    resourceId: input.resourceId ?? null,
+    metadata: input.metadata
+  });
+}
+
 export function installGlobalClickTracking() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => undefined;
 

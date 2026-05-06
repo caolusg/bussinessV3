@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   BookOpen,
   Bot,
+  Copy,
   HelpCircle,
   Loader2,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MOCK_COACHING_SESSION, OPPONENT_PROFILE } from '../constants';
 import { apiRequest } from '../utils/apiFetch';
+import { trackPracticeEvent } from '../utils/clickFlowTracker';
 
 interface CoachingReviewProps {
   onClose: () => void;
@@ -137,6 +139,26 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
     } finally {
       setAsking(false);
     }
+  };
+
+  const copyCoachAnswer = async (turn: CoachingTurn) => {
+    await navigator.clipboard.writeText(turn.answer);
+    trackPracticeEvent({
+      eventType: 'ai_coach_answer_copied',
+      page: 'coach',
+      label: '复制 AI 教练回复',
+      target: 'button',
+      sessionId,
+      stage: context?.session.stage ?? null,
+      metadata: {
+        source: 'coach_reply',
+        turnId: turn.id,
+        question: turn.question.slice(0, 500),
+        answer_excerpt: turn.answer.slice(0, 1000),
+        answer_length: turn.answer.length,
+        degraded: turn.degraded
+      }
+    });
   };
 
   const toggleAnnotation = (msgId: string) => {
@@ -303,9 +325,20 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
                       <p className="text-xs font-black text-slate-400">你的问题</p>
                       <p className="mt-2 text-sm font-semibold text-slate-800">{turn.question}</p>
                       <div className="mt-4 rounded-2xl bg-blue-50 p-5">
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600">
-                          AI 教练{turn.degraded ? ' · fallback' : ''}
-                        </p>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-black uppercase tracking-widest text-blue-600">
+                            AI 教练{turn.degraded ? ' · fallback' : ''}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void copyCoachAnswer(turn)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white text-blue-600 transition hover:bg-blue-100"
+                            aria-label="复制 AI 教练回复"
+                            title="复制 AI 教练回复"
+                          >
+                            <Copy size={14} />
+                          </button>
+                        </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{turn.answer}</p>
                       </div>
                     </div>

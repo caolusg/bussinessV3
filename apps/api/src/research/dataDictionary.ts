@@ -3,7 +3,8 @@ export const DEFAULT_RESEARCH_ALLOWED_TABLES = [
   'teaching_group_members',
   'users',
   'student_profile',
-  'practice_events'
+  'practice_events',
+  'ai_interaction_logs'
 ] as const;
 
 export function getResearchAllowedTables() {
@@ -31,18 +32,23 @@ Tables and columns:
   Meaning: student learning profile. Do not expose real_name, name, student_no, email, or password_hash.
 - practice_events: id, user_id, stage_id, session_id, resource_id, event_type, metadata_json, created_at
   Meaning: behavior and research event log. This includes clickstream and learning/practice events.
+- ai_interaction_logs: id, user_id, session_id, message_id, stage_id, provider, model, prompt_version, system_prompt, input_messages_json, output_text, output_json, latency_ms, degraded, error_code, error_message, created_at
+  Meaning: every server-side AI model call. This is the primary table for analyzing how AI helped learners, what the learner asked, and what the AI returned.
 
 Foreign-key relationships:
 - teaching_group_members.group_id = teaching_groups.id
 - teaching_group_members.user_id = users.id
 - student_profile.user_id = users.id
 - practice_events.user_id = users.id
+- ai_interaction_logs.user_id = users.id
+- ai_interaction_logs.session_id = practice_events.session_id when comparing AI calls with behavior events in the same practice session
 
 Critical column rules:
 - teaching_groups has column "id"; it does not have "group_id".
 - teaching_groups has column "name"; it does not have "group_name".
 - teaching_group_members has columns "group_id" and "user_id".
 - practice_events has "event_type" and "metadata_json"; click details are JSON fields in metadata_json.
+- ai_interaction_logs uses "prompt_version" to distinguish AI use cases. "coach-v1" means the student explicitly asked the AI coach for help. "v1" means the AI generated the role-play opponent response.
 
 Clickstream business rules:
 - Clickstream data is stored in practice_events.
@@ -56,6 +62,18 @@ Clickstream business rules:
 - For "is there clickstream data today", query practice_events directly and return counts grouped by event_type and date.
 - Do not join teaching_group_members for clickstream questions unless the user explicitly asks for teaching-group breakdown.
 - Teacher/admin clicks can also be logged in practice_events. A join to teaching_group_members can remove those rows because teachers are usually not group members.
+
+AI help and adoption business rules:
+- The teacher's main AI-help research questions are about when learners ask the AI coach for help, what they ask, what the AI answers, and whether they copy or reuse AI-provided information.
+- For "when users ask AI for help", "AI help", "AI coach", "求助AI", "请求AI", or "追问AI", use ai_interaction_logs where prompt_version = 'coach-v1'. You may also use practice_events.event_type = 'coach_question_asked' for the click/behavior event.
+- For role-play AI opponent responses, use ai_interaction_logs where prompt_version = 'v1'. Do not mix this with explicit AI coach help unless the question asks for all AI interactions.
+- The learner's question to the AI coach is stored in ai_interaction_logs.input_messages_json->>'question' and also in practice_events.metadata_json->>'question' for coach_question_asked events.
+- The AI coach answer is stored in ai_interaction_logs.output_text.
+- AI fallback/degraded status is ai_interaction_logs.degraded.
+- Opening the AI coach context is logged as practice_events.event_type = 'coach_context_opened'. This shows help-seeking intent before a question is submitted.
+- Copying an AI coach answer is logged as practice_events.event_type = 'ai_coach_answer_copied'. The copied content preview is in metadata_json->>'answer_excerpt'; the related learner question is metadata_json->>'question'; answer length is metadata_json->>'answer_length'.
+- To analyze copied AI information, query practice_events with event_type = 'ai_coach_answer_copied' and group/list metadata_json->>'answer_excerpt', metadata_json->>'question', user_id, session_id, and created_at.
+- To compare AI help with later activity, join ai_interaction_logs and practice_events by user_id/session_id/stage_id and time windows. Use cautious wording because exact causality is not guaranteed.
 
 Student activity business rules:
 - Student practice activity is broader than clickstream.
@@ -88,5 +106,7 @@ Answer rules for research analysis:
 - If rows are empty, say no matching records were found for this query scope.
 - If rows contain counts, state the counts plainly.
 - For clickstream results, call them "clickstream/click events" and distinguish ui_click from page_view when present.
+- For AI-help results, distinguish explicit AI coach help (prompt_version = 'coach-v1') from role-play AI responses (prompt_version = 'v1').
+- For copied AI content, summarize copied themes from answer_excerpt/question rather than exposing raw full transcripts unless the user asks for samples.
 `.trim();
 }
