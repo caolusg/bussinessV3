@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { generateCoachingReply } from '../ai/compatibleAiClient.js';
+import {
+  buildResearchAnswerRulesPrompt,
+  buildResearchDataDictionaryPrompt,
+  getResearchAllowedTables
+} from '../research/dataDictionary.js';
 
 const router = Router();
 
@@ -15,42 +20,9 @@ const schema = z.object({
 });
 const chartSuggestionSchema = z.enum(['line', 'bar', 'table']);
 
-const DEFAULT_ALLOWED_TABLES = [
-  'teaching_groups',
-  'teaching_group_members',
-  'users',
-  'student_profile',
-  'practice_events'
-];
-
-const allowedTables = new Set(
-  (process.env.RESEARCH_AI_ALLOWED_TABLES || DEFAULT_ALLOWED_TABLES.join(','))
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-);
-
-const RESEARCH_SQL_SCHEMA = `
-Allowed PostgreSQL tables and columns:
-- teaching_groups: id, name, description, color, is_active, created_at, updated_at
-- teaching_group_members: group_id, user_id, assigned_by, created_at
-- users: id, username, status, created_at, updated_at
-- student_profile: user_id, nationality, age, gender, hsk_level, major, completed_at
-- practice_events: id, user_id, stage_id, session_id, resource_id, event_type, metadata_json, created_at
-
-Join hints:
-- teaching_group_members.group_id = teaching_groups.id
-- teaching_group_members.user_id = users.id
-- practice_events.user_id = users.id
-- student_profile.user_id = users.id
-
-Important column rules:
-- teaching_groups has name, not group_name.
-- teaching_groups has id, not group_id.
-- teaching_group_members has group_id and user_id.
-- For active student counts, count distinct practice_events.user_id.
-- For daily trends, use DATE(practice_events.created_at).
-`.trim();
+const allowedTables = new Set(getResearchAllowedTables());
+const researchDataDictionaryPrompt = buildResearchDataDictionaryPrompt([...allowedTables]);
+const researchAnswerRulesPrompt = buildResearchAnswerRulesPrompt();
 
 function buildSqlPrompt(question: string, contextText: string, previous?: { sql: string; error: string }) {
   return [
@@ -58,7 +30,7 @@ function buildSqlPrompt(question: string, contextText: string, previous?: { sql:
     'Return only SQL. Do not include explanations, markdown, comments, or prose.',
     'The query must be read-only, start with SELECT, use only the allowed tables/columns, and include LIMIT 200.',
     'Do not select directly identifying fields such as username, real_name, student_no, email, or password_hash.',
-    RESEARCH_SQL_SCHEMA,
+    researchDataDictionaryPrompt,
     previous
       ? `Previous SQL failed. Fix it using the schema above.\nFailed SQL:\n${previous.sql}\nDatabase error:\n${previous.error}`
       : '',
@@ -80,9 +52,9 @@ function extractJsonObject(text: string) {
 function buildFallbackFollowups(question: string) {
   const normalizedQuestion = question.replace(/\s+/g, ' ').trim().slice(0, 60);
   return [
-    `Compare "${normalizedQuestion}" by teaching group and sort by the metric descending`,
-    `Break down "${normalizedQuestion}" by recent 7-day trend and identify the largest fluctuation date`,
-    `Add anomaly sample details for "${normalizedQuestion}" with at most 20 rows`
+    `Count "${normalizedQuestion}" by event type`,
+    `Show daily trend for "${normalizedQuestion}"`,
+    `List recent details for "${normalizedQuestion}"`
   ];
 }
 
@@ -230,12 +202,29 @@ router.post('/query', requireAuth, async (req, res) => {
 
     const summary = await generateCoachingReply({
       stage: 'quotation',
-      question: `Based on the query results below, provide 3 concise Chinese insights.\nQuestion: ${question}${contextText}\nSQL: ${sql}\nResult JSON: ${JSON.stringify(safeRows).slice(0, 12000)}`,
+      question: [
+        researchAnswerRulesPrompt,
+        'Relevant business semantics:',
+        researchDataDictionaryPrompt,
+        `Question: ${question}${contextText}`,
+        `SQL: ${sql}`,
+        `Result JSON: ${JSON.stringify(safeRows).slice(0, 12000)}`
+      ].join('\n'),
       messages: []
     });
     const recommendation = await generateCoachingReply({
       stage: 'quotation',
-      question: `You are a data analysis assistant. Return JSON only: {"chartSuggestion":"line|bar|table","followupPrompts":["..."]}. Provide 2-3 specific Chinese follow-up prompts.\nQuestion:${question}${contextText}\nSQL:${sql}\nResult sample JSON:${JSON.stringify(safeRows).slice(0, 8000)}`,
+      question: [
+        'You are a data analysis assistant.',
+        'Return JSON only: {"chartSuggestion":"line|bar|table","followupPrompts":["..."]}.',
+        'followupPrompts must be 2-3 concise Chinese follow-up questions.',
+        'Do not return English prompts.',
+        'Use the research data dictionary and business semantics below.',
+        researchDataDictionaryPrompt,
+        `Question:${question}${contextText}`,
+        `SQL:${sql}`,
+        `Result sample JSON:${JSON.stringify(safeRows).slice(0, 8000)}`
+      ].join('\n'),
       messages: []
     });
 
