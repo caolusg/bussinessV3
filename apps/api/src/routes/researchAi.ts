@@ -30,6 +30,42 @@ const allowedTables = new Set(
     .filter(Boolean)
 );
 
+const RESEARCH_SQL_SCHEMA = `
+Allowed PostgreSQL tables and columns:
+- teaching_groups: id, name, description, color, is_active, created_at, updated_at
+- teaching_group_members: group_id, user_id, assigned_by, created_at
+- users: id, username, status, created_at, updated_at
+- student_profile: user_id, nationality, age, gender, hsk_level, major, completed_at
+- practice_events: id, user_id, stage_id, session_id, resource_id, event_type, metadata_json, created_at
+
+Join hints:
+- teaching_group_members.group_id = teaching_groups.id
+- teaching_group_members.user_id = users.id
+- practice_events.user_id = users.id
+- student_profile.user_id = users.id
+
+Important column rules:
+- teaching_groups has name, not group_name.
+- teaching_groups has id, not group_id.
+- teaching_group_members has group_id and user_id.
+- For active student counts, count distinct practice_events.user_id.
+- For daily trends, use DATE(practice_events.created_at).
+`.trim();
+
+function buildSqlPrompt(question: string, contextText: string, previous?: { sql: string; error: string }) {
+  return [
+    'Convert the user question into one PostgreSQL SELECT query.',
+    'Return only SQL. Do not include explanations, markdown, comments, or prose.',
+    'The query must be read-only, start with SELECT, use only the allowed tables/columns, and include LIMIT 200.',
+    'Do not select directly identifying fields such as username, real_name, student_no, email, or password_hash.',
+    RESEARCH_SQL_SCHEMA,
+    previous
+      ? `Previous SQL failed. Fix it using the schema above.\nFailed SQL:\n${previous.sql}\nDatabase error:\n${previous.error}`
+      : '',
+    `User question: ${question}${contextText}`
+  ].filter(Boolean).join('\n\n');
+}
+
 function extractJsonObject(text: string) {
   const trimmed = text.trim();
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
@@ -80,6 +116,22 @@ function assertReadOnlySql(sql: string) {
   }
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRecoverableSqlGenerationError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes('42703') ||
+    message.includes('column') ||
+    message.includes('does not exist') ||
+    message.includes('missing from-clause') ||
+    message.includes('relation') ||
+    message.includes('syntax error')
+  );
+}
+
 function evaluateSqlRisk(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
   const risks: string[] = [];
@@ -121,7 +173,7 @@ router.post('/query', requireAuth, async (req, res) => {
       : '';
     const sqlCompletion = await generateCoachingReply({
       stage: 'quotation',
-      question: `把下面问题转成一个 PostgreSQL SELECT 语句。仅返回 SQL，不要解释。\n问题: ${question}${contextText}\n可用表: ${[...allowedTables].join(',')}\n必须带 LIMIT 200。`,
+      question: buildSqlPrompt(question, contextText),
       messages: []
     });
 
@@ -129,12 +181,31 @@ router.post('/query', requireAuth, async (req, res) => {
       throw new Error('AI 未配置或调用失败，无法生成 SQL。请先在系统管理中配置 AI API Key，并确认模型服务可访问。');
     }
 
-    const sql = normalizeGeneratedSql(sqlCompletion.content);
+    let sql = normalizeGeneratedSql(sqlCompletion.content);
     assertReadOnlySql(sql);
 
-    const startedAt = Date.now();
-    const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql);
-    const durationMs = Date.now() - startedAt;
+    let startedAt = Date.now();
+    let rows: Record<string, unknown>[];
+    let durationMs: number;
+    try {
+      rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql);
+      durationMs = Date.now() - startedAt;
+    } catch (error) {
+      if (!isRecoverableSqlGenerationError(error)) throw error;
+
+      const retryCompletion = await generateCoachingReply({
+        stage: 'quotation',
+        question: buildSqlPrompt(question, contextText, { sql, error: getErrorMessage(error) }),
+        messages: []
+      });
+      if (retryCompletion.degraded) throw error;
+
+      sql = normalizeGeneratedSql(retryCompletion.content);
+      assertReadOnlySql(sql);
+      startedAt = Date.now();
+      rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql);
+      durationMs = Date.now() - startedAt;
+    }
 
     const summary = await generateCoachingReply({
       stage: 'quotation',
