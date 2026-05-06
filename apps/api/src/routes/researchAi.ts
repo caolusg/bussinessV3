@@ -58,7 +58,9 @@ function normalizeFollowups(prompts: string[], fallbackQuestion: string) {
 
 function normalizeGeneratedSql(sql: string) {
   const withoutCodeFence = sql.replace(/```sql|```/gi, '').trim();
-  return withoutCodeFence.replace(/;\s*$/, '').trim();
+  const selectStart = withoutCodeFence.search(/\bselect\b/i);
+  if (selectStart < 0) return withoutCodeFence;
+  return withoutCodeFence.slice(selectStart).replace(/;\s*$/, '').trim();
 }
 
 function assertReadOnlySql(sql: string) {
@@ -122,6 +124,10 @@ router.post('/query', requireAuth, async (req, res) => {
       question: `把下面问题转成一个 PostgreSQL SELECT 语句。仅返回 SQL，不要解释。\n问题: ${question}${contextText}\n可用表: ${[...allowedTables].join(',')}\n必须带 LIMIT 200。`,
       messages: []
     });
+
+    if (sqlCompletion.degraded) {
+      throw new Error('AI 未配置或调用失败，无法生成 SQL。请先在系统管理中配置 AI API Key，并确认模型服务可访问。');
+    }
 
     const sql = normalizeGeneratedSql(sqlCompletion.content);
     assertReadOnlySql(sql);
