@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronRight,
   HelpCircle,
+  MoreHorizontal,
   RotateCcw,
   Send,
   User,
@@ -148,6 +149,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [sending, setSending] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
+  const [sessionActionsOpen, setSessionActionsOpen] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionReloadKey, setSessionReloadKey] = useState(0);
@@ -354,6 +356,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     setMessages((prev) => [...(prev.length > 0 ? prev : INITIAL_CHAT_MESSAGES), optimistic]);
     setInputValue('');
+    setSessionActionsOpen(false);
     setSending(true);
 
     try {
@@ -614,32 +617,48 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <div className="flex shrink-0 flex-col gap-2">
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleRestart}
-                    disabled={restarting || endingSession || sending || loadingSession}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RotateCcw size={15} />
-                    {restarting ? '新话题中' : '新话题'}
-                  </button>
-                  <button
-                    onClick={() => void handleEndAndExit()}
-                    disabled={endingSession || restarting || sending || loadingSession}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <ArrowLeft size={15} />
-                    {endingSession ? '退出中' : '结束退出'}
-                  </button>
-                </div>
+              <div className="relative flex shrink-0 flex-col gap-2">
+                {sessionActionsOpen && (
+                  <div className="absolute bottom-full right-0 z-20 mb-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
+                    <button
+                      onClick={() => {
+                        setSessionActionsOpen(false);
+                        void handleRestart();
+                      }}
+                      disabled={restarting || endingSession || sending || loadingSession}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <RotateCcw size={16} />
+                      {restarting ? '新话题创建中...' : '开始新话题'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSessionActionsOpen(false);
+                        void handleEndAndExit();
+                      }}
+                      disabled={endingSession || restarting || sending || loadingSession}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ArrowLeft size={16} />
+                      {endingSession ? '结束中...' : '结束本轮并退出'}
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => void handleSend()}
                   disabled={!inputValue.trim() || sending || loadingSession}
                   aria-label="发送消息"
-                  className="inline-flex h-16 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
+                  className="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
                 >
                   <Send size={18} />
+                </button>
+                <button
+                  onClick={() => setSessionActionsOpen((open) => !open)}
+                  disabled={restarting || endingSession || sending || loadingSession}
+                  aria-label="会话操作"
+                  className="inline-flex h-10 w-16 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <MoreHorizontal size={20} />
                 </button>
               </div>
             </div>
