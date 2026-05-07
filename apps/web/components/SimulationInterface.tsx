@@ -339,7 +339,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     const optimisticId = `tmp-${Date.now()}`;
     const optimisticText = inputValue.trim();
-    const nextTurn = (messages[messages.length - 1]?.turnIndex ?? 0) + 1;
+    const visibleMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
+    const nextTurn = (visibleMessages[visibleMessages.length - 1]?.turnIndex ?? 0) + 1;
     const optimistic: ChatMessage = {
       id: optimisticId,
       sender: 'USER',
@@ -351,7 +352,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       turnIndex: nextTurn
     };
 
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => [...(prev.length > 0 ? prev : INITIAL_CHAT_MESSAGES), optimistic]);
     setInputValue('');
     setSending(true);
 
