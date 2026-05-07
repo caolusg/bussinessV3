@@ -165,6 +165,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const sessionActionsRef = useRef<HTMLDivElement>(null);
   const cachedSession = useRef<SessionCache | null>(null);
   const [hydratedStage, setHydratedStage] = useState<SimulationStage | null>(null);
 
@@ -202,6 +203,29 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!sessionActionsOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!sessionActionsRef.current?.contains(event.target as Node)) {
+        setSessionActionsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSessionActionsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [sessionActionsOpen]);
 
   const resetStructuredFeedback = () => {
     setCoachNote(null);
@@ -617,9 +641,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <div className="relative flex shrink-0 flex-col gap-2">
+              <div ref={sessionActionsRef} className="relative flex shrink-0 flex-col gap-2">
                 {sessionActionsOpen && (
-                  <div className="absolute bottom-full right-0 z-20 mb-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
+                  <div className="absolute bottom-0 right-full z-20 mr-3 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
                     <button
                       onClick={() => {
                         setSessionActionsOpen(false);
@@ -656,6 +680,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   onClick={() => setSessionActionsOpen((open) => !open)}
                   disabled={restarting || endingSession || sending || loadingSession}
                   aria-label="会话操作"
+                  aria-expanded={sessionActionsOpen}
+                  title="会话操作"
                   className="inline-flex h-10 w-16 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <MoreHorizontal size={20} />
