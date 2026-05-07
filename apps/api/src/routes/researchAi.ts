@@ -79,23 +79,33 @@ function normalizeGeneratedSql(sql: string) {
 
 function assertReadOnlySql(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
-  if (!normalized.startsWith('select')) throw new Error('Only SELECT queries are allowed');
+  if (!normalized.startsWith('select')) throw new Error('AI 生成的查询不是只读 SELECT，系统已阻止执行。请换一种更明确的问法重试。');
   if (normalized.includes(';')) throw new Error('Multiple SQL statements are not allowed');
-  const banned = [' insert ', ' update ', ' delete ', ' drop ', ' alter ', ' truncate ', ' create ', ' grant ', ' revoke ', ' copy '];
+  const banned = ['insert', 'update', 'delete', 'drop', 'alter', 'truncate', 'create', 'grant', 'revoke', 'copy'];
   for (const keyword of banned) {
-    if (normalized.includes(keyword)) throw new Error(`Dangerous SQL keyword detected: ${keyword.trim()}`);
+    if (new RegExp(`\\b${keyword}\\b`, 'i').test(normalized)) throw new Error(`检测到不允许的 SQL 关键字：${keyword}`);
   }
   const fromMatches = [...normalized.matchAll(/\b(from|join)\s+"?([a-z0-9_]+)"?/g)];
   for (const m of fromMatches) {
     const table = m[2];
     if (table && !allowedTables.has(table)) {
-      throw new Error(`Table is not allowed: ${table}`);
+      throw new Error(`查询引用了不允许的数据表：${table}`);
     }
   }
 }
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isRecoverableSqlSafetyError(error: unknown) {
+  const message = getErrorMessage(error);
+  return (
+    message.includes('不是只读 SELECT') ||
+    message.includes('Multiple SQL statements') ||
+    message.includes('不允许的 SQL 关键字') ||
+    message.includes('不允许的数据表')
+  );
 }
 
 function isRecoverableSqlGenerationError(error: unknown) {
@@ -183,7 +193,21 @@ router.post('/query', requireAuth, async (req, res) => {
     }
 
     let sql = normalizeGeneratedSql(sqlCompletion.content);
-    assertReadOnlySql(sql);
+    try {
+      assertReadOnlySql(sql);
+    } catch (error) {
+      if (!isRecoverableSqlSafetyError(error)) throw error;
+
+      const retryCompletion = await generateCoachingReply({
+        stage: 'quotation',
+        question: buildSqlPrompt(question, contextText, { sql, error: getErrorMessage(error) }),
+        messages: []
+      });
+      if (retryCompletion.degraded) throw error;
+
+      sql = normalizeGeneratedSql(retryCompletion.content);
+      assertReadOnlySql(sql);
+    }
 
     let startedAt = Date.now();
     let rows: Record<string, unknown>[];
