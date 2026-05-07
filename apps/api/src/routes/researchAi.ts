@@ -12,7 +12,7 @@ import {
 const router = Router();
 
 const schema = z.object({
-  question: z.string().trim().min(4).max(1000),
+  question: z.string().trim().min(1).max(1000),
   context: z.array(z.object({
     question: z.string().trim().min(1).max(1000),
     answer: z.string().trim().min(1).max(4000)
@@ -156,7 +156,10 @@ router.post('/query', requireAuth, async (req, res) => {
   try {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ ok: false, error: 'Invalid request parameters' });
+      return res.status(400).json({
+        ok: false,
+        error: '请求参数不完整：请输入问题，问题最长 1000 字，上下文最多保留 6 轮。'
+      });
     }
 
     const allow = await requireResearcher(req.user?.id);

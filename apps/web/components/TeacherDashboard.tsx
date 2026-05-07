@@ -245,6 +245,15 @@ type ResearchAiConversationTurn = {
   result: ResearchAiResult;
 };
 
+const sanitizeResearchAiContext = (items: ResearchAiContextItem[]) =>
+  items
+    .map((item) => ({
+      question: String(item.question ?? '').trim().slice(0, 1000),
+      answer: String(item.answer ?? '').trim().slice(0, 4000)
+    }))
+    .filter((item) => item.question && item.answer)
+    .slice(-6);
+
 type AiLogSummary = {
   log: Record<string, unknown> & {
     id: string;
@@ -389,7 +398,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchAiContext, setResearchAiContext] = useState<ResearchAiContextItem[]>([]);
   const [researchAiTurns, setResearchAiTurns] = useState<ResearchAiConversationTurn[]>([]);
   const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
-  const researchAiChatEndRef = useRef<HTMLDivElement | null>(null);
+  const researchAiScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [scenarios, setScenarios] = useState([
     { id: 1, name: '1. 获客阶段：商务礼仪与名片交换', stage: 1, type: 'Built-in', active: true, prompt: '你是一个严格的采购经理...' },
@@ -1342,9 +1351,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       setResearchAiLoading(true);
       setResearchAiError('');
       setResearchAiQuestion('');
+      const requestContext = sanitizeResearchAiContext(researchAiContext);
       const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
         method: 'POST',
-        body: JSON.stringify({ question, context: researchAiContext.slice(-6) })
+        body: JSON.stringify({ question, context: requestContext })
       });
       setResearchAiResult(data);
       setResearchAiTurns((current) => [
@@ -1356,7 +1366,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         }
       ].slice(-12));
       setResearchAiContext((current) => {
-        const next = [...current, { question: data.question, answer: data.answer }].slice(-6);
+        const next = sanitizeResearchAiContext([...current, { question: data.question, answer: data.answer }]);
         try {
           localStorage.setItem('research_ai_context', JSON.stringify(next));
         } catch {
@@ -1381,6 +1391,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       });
     } catch (error) {
       setResearchAiError(error instanceof Error ? error.message : 'AI 分析请求失败');
+      setResearchAiQuestion((current) => current || question);
     } finally {
       setResearchAiLoading(false);
     }
@@ -1412,14 +1423,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       const raw = localStorage.getItem('research_ai_context');
       if (!raw) return;
       const parsed = JSON.parse(raw) as ResearchAiContextItem[];
-      if (Array.isArray(parsed)) setResearchAiContext(parsed.slice(-6));
+      if (Array.isArray(parsed)) setResearchAiContext(sanitizeResearchAiContext(parsed));
     } catch {
       // ignore localStorage failures
     }
   }, []);
 
   useEffect(() => {
-    researchAiChatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const scroller = researchAiScrollRef.current;
+    if (!scroller) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [researchAiTurns.length, researchAiLoading, researchAiError]);
 
   const handleResearchAiKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1431,8 +1449,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const renderResearchLab = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+    <div className="flex h-[calc(100vh-10rem)] min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="flex-none bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Lab</p>
@@ -1466,8 +1484,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="border-b border-slate-100 p-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white rounded-3xl border border-slate-100 shadow-sm">
+        <div className="flex-none border-b border-slate-100 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Data Chat</p>
@@ -1527,7 +1545,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </div>
 
-        <div className="max-h-[560px] overflow-y-auto bg-slate-50/60 p-6">
+        <div ref={researchAiScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6">
           {researchAiTurns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
               <Sparkles size={22} className="mx-auto text-indigo-500" />
@@ -1556,6 +1574,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">模型降级</span>
                         ) : null}
                       </div>
+                      <details className="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                        <summary className="cursor-pointer text-xs font-black text-slate-500">查看 SQL 与结果预览</summary>
+                        <pre className="mt-3 max-h-44 overflow-auto rounded-xl bg-slate-900 p-3 text-xs leading-5 text-slate-100">
+                          {turn.result.sql}
+                        </pre>
+                        {turn.result.rows.length > 0 ? (() => {
+                          const columns = Array.from(new Set(turn.result.rows.flatMap((row) => Object.keys(row)))).slice(0, 6);
+                          const previewRows = turn.result.rows.slice(0, 5);
+                          return (
+                            <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white">
+                              <table className="min-w-full text-xs">
+                                <thead className="bg-slate-50 text-slate-500">
+                                  <tr>{columns.map((col) => <th key={col} className="px-3 py-2 text-left font-black">{col}</th>)}</tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {previewRows.map((row, idx) => (
+                                    <tr key={idx}>
+                                      {columns.map((col) => <td key={col} className="px-3 py-2 text-slate-700">{formatCell(row[col])}</td>)}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })() : null}
+                      </details>
                       {turn.result.followupPrompts?.length ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {turn.result.followupPrompts.slice(0, 3).map((prompt) => (
@@ -1587,11 +1631,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               ) : null}
             </div>
           )}
-          <div ref={researchAiChatEndRef} />
         </div>
 
-        <div className="border-t border-slate-100 bg-white p-4">
-          {researchAiError ? <p className="mb-2 text-xs font-bold text-rose-500">{researchAiError}</p> : null}
+        <div className="flex-none border-t border-slate-100 bg-white p-4">
+          {researchAiError ? (
+            <div className="mb-3 flex items-start gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold leading-5 text-rose-600">
+              <AlertCircle size={15} className="mt-0.5 flex-none" />
+              <span className="whitespace-pre-wrap break-words">{researchAiError}</span>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea
               value={researchAiQuestion}
@@ -1612,6 +1660,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       </div>
 
+      <div className="hidden">
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
         <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI SQL Copilot</p>
             <h4 className="text-lg font-black text-slate-900 mt-1">自然语言查库（M1）</h4>
@@ -2015,6 +2064,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </section>
         </>
       )}
+      </div>
     </div>
   );
 
