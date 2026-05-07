@@ -465,23 +465,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     >
       <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
         <div className="flex items-center gap-4">
-          <button
-            onClick={handleRestart}
-            disabled={restarting || endingSession || sending || loadingSession}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RotateCcw size={16} />
-            {restarting ? '新话题创建中...' : '开始新话题'}
-          </button>
-          <button
-            onClick={() => void handleEndAndExit()}
-            disabled={endingSession || restarting || sending || loadingSession}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ArrowLeft size={16} />
-            {endingSession ? '结束中...' : '结束本轮并退出'}
-          </button>
-          <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-800">
               当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
@@ -631,14 +614,34 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <button
-                onClick={() => void handleSend()}
-                disabled={!inputValue.trim() || sending || loadingSession}
-                aria-label="发送消息"
-                className="rounded-xl bg-blue-600 p-5 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
-              >
-                <Send size={18} />
-              </button>
+              <div className="flex shrink-0 flex-col gap-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRestart}
+                    disabled={restarting || endingSession || sending || loadingSession}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RotateCcw size={15} />
+                    {restarting ? '新话题中' : '新话题'}
+                  </button>
+                  <button
+                    onClick={() => void handleEndAndExit()}
+                    disabled={endingSession || restarting || sending || loadingSession}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ArrowLeft size={15} />
+                    {endingSession ? '退出中' : '结束退出'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => void handleSend()}
+                  disabled={!inputValue.trim() || sending || loadingSession}
+                  aria-label="发送消息"
+                  className="inline-flex h-16 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </div>
             {sessionLoadError && (
               <div className="mx-auto mt-3 flex max-w-6xl items-center justify-between gap-3 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
