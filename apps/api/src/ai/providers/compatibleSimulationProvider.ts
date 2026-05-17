@@ -58,10 +58,23 @@ export class CompatibleSimulationProvider implements SimulationProvider {
   async generateReply(
     input: SimulationOrchestratorInput
   ): Promise<SimulationOrchestratorResult> {
+    const productCatalogContext = input.productCatalogContext?.trim();
+    const systemPrompt = [
+      input.scenario?.systemPrompt,
+      productCatalogContext
+        ? [
+            '以下是我方上传的产品目录资料。你扮演客户时必须阅读并参考这些产品信息。',
+            '客户可以围绕产品类别、型号、规格、价格、目录内容、交付或采购需求提出更具体的问题。',
+            '不要逐字复述目录；要像真实采购方一样基于目录信息追问、比较或要求澄清。',
+            productCatalogContext
+          ].join('\n')
+        : null
+    ].filter(Boolean).join('\n\n');
+
     const roleplay = await generateRoleplayReply({
       stage: input.stage,
       messages: input.messages,
-      systemPrompt: input.scenario?.systemPrompt
+      systemPrompt
     });
 
     return {
@@ -73,7 +86,7 @@ export class CompatibleSimulationProvider implements SimulationProvider {
       },
       trace: {
         provider: getAiProviderName(),
-        usedTools: [],
+        usedTools: productCatalogContext ? ['product_catalog_context'] : [],
         usedWebSearch: false,
         degraded: roleplay.degraded,
         promptVersion: input.scenario?.promptVersion ?? 'v1',

@@ -273,7 +273,8 @@ export async function appendStudentAndOpponent(
   prisma: Db,
   sessionId: string,
   content: string,
-  stage?: SimulationStage
+  stage?: SimulationStage,
+  productCatalogContext?: string | null
 ) {
   const { studentMessage, nextTurn, history, scenario } = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
@@ -361,6 +362,7 @@ export async function appendStudentAndOpponent(
     orchestration = await simulationOrchestrator.generate({
       stage: stage ?? 'quotation',
       messages: history,
+      productCatalogContext,
       scenario
     });
   } catch {

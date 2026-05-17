@@ -94,7 +94,11 @@ const cleanOcrField = (value: string) =>
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .trim();
-const cleanOcrTerm = (value: string) => cleanOcrField(value).replace(/\s*([；;:：])\s*$/g, '').trim();
+const cleanOcrTerm = (value: string) =>
+  cleanOcrField(value)
+    .replace(/^[^\u4e00-\u9fff]+/, '')
+    .replace(/\s*([；;:：])\s*$/g, '')
+    .trim();
 const isLikelyOcrNoise = (item: ParsedResource) => {
   const term = item.term.trim();
   const explanation = item.explanation.trim();
@@ -113,9 +117,22 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
     .map((line, index) => {
       const tabParts = line.split(/\t+/).map((part) => part.trim()).filter(Boolean);
       const normalized = line.replace(/\s+/g, ' ').trim();
+      const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
+      const firstLatinIndex = contentFirst.search(/[a-zà-ž]/i);
       const spacedParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
       const parts = tabParts.length >= 2 ? tabParts : spacedParts;
       const localId = `bulk-${startOrder + index}-${line}`;
+
+      if (tabParts.length < 2 && firstLatinIndex > 0) {
+        return {
+          localId,
+          term: cleanOcrTerm(contentFirst.slice(0, firstLatinIndex)),
+          explanation: cleanOcrField(contentFirst.slice(firstLatinIndex)),
+          example: '',
+          sortOrder: startOrder + index,
+          isActive: true
+        };
+      }
 
       if (parts.length >= 3) {
         const [rawTerm, rawPinyin, ...rawRest] = parts;
@@ -361,17 +378,18 @@ const TeachingResourceManager: React.FC = () => {
       setOcrStatus('未识别到有效文本');
       return;
     }
+    const localResources = parseResourceRows(text, nextSortOrder);
+    setBulkResources(localResources);
     setOcrProgress(82);
     setOcrStatus('本地 OCR 完成，正在用 DeepSeek 清洗词条');
     try {
-      await runAiCleanup(text);
+      await runAiCleanup(text, localResources);
     } catch {
-      updateBulkText(text);
       setOcrStatus('DeepSeek 清洗失败，已使用本地 OCR 结果');
     }
   };
 
-  const runAiCleanup = async (ocrText: string) => {
+  const runAiCleanup = async (ocrText: string, localResources: ParsedResource[]) => {
     const result = await apiRequest<ResourceOcrResponse>('/api/admin/resources/ocr-text-cleanup', {
       method: 'POST',
       body: JSON.stringify({
@@ -381,8 +399,11 @@ const TeachingResourceManager: React.FC = () => {
       })
     });
     const resources = resourcesFromAiOcr(result.resources, nextSortOrder);
-    if (!resources.length) {
-      throw new Error('DeepSeek 未提取到有效资源');
+    if (resources.length < Math.max(3, Math.floor(localResources.length * 0.6))) {
+      setBulkResources(localResources);
+      setBulkText(ocrText);
+      setOcrStatus(`DeepSeek 清洗结果偏少，已保留本地 OCR 解析：${localResources.length} 条`);
+      return;
     }
     setBulkResources(resources);
     setBulkText(result.rawText || resources.map((resource) =>

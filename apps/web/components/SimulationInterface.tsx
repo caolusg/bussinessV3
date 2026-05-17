@@ -3,22 +3,29 @@ import {
   ArrowLeft,
   Bot,
   ChevronRight,
+  FileText,
   HelpCircle,
+  Loader2,
+  Paperclip,
   RotateCcw,
   Send,
   User,
-  Users
+  Users,
+  X
 } from 'lucide-react';
+import * as Tesseract from 'tesseract.js';
 import type {
   ChatMessage,
   SimulationOrchestration,
-  TaskDetail
+  TaskDetail,
+  UserProfile
 } from '../types';
 import { INITIAL_CHAT_MESSAGES, OPPONENT_PROFILE, STAGES } from '../constants';
 import { apiFetch, apiRequest } from '../utils/apiFetch';
 
 interface SimulationInterfaceProps {
   task: TaskDetail;
+  currentUser?: UserProfile | null;
   onExit: () => void;
   onTriggerCoaching: (context?: { sessionId?: string; stage?: string }) => void;
   onTriggerGroupDiscussion: () => void;
@@ -56,6 +63,13 @@ type SessionCache = {
   traceLabel: string | null;
   difficultyLabel: string | null;
   cultureHints: string[];
+};
+
+type DocumentContext = {
+  id: string;
+  fileName: string;
+  kind: 'pdf' | 'word' | 'image' | 'text';
+  text: string;
 };
 
 const stageKeyMap: Record<number, SimulationStage> = {
@@ -130,6 +144,68 @@ function getSessionCacheKey(stage: SimulationStage) {
   return `simulation_session_cache:${stage}`;
 }
 
+function getDocumentContextCacheKey(stage: SimulationStage) {
+  return `simulation_document_context:${stage}`;
+}
+
+function readDocumentContexts(stage: SimulationStage): DocumentContext[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.sessionStorage.getItem(getDocumentContextCacheKey(stage));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Partial<DocumentContext>[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item.id && item.fileName && item.text)
+      .map((item) => ({
+        id: String(item.id),
+        fileName: String(item.fileName),
+        kind: item.kind === 'pdf' || item.kind === 'word' || item.kind === 'image' || item.kind === 'text'
+          ? item.kind
+          : 'text',
+        text: String(item.text).slice(0, 6000)
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function writeDocumentContexts(stage: SimulationStage, contexts: DocumentContext[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(getDocumentContextCacheKey(stage), JSON.stringify(contexts));
+  } catch {
+    // Ignore storage failures; uploaded context still applies to the current page state.
+  }
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function detectDocumentKind(file: File): DocumentContext['kind'] {
+  const name = file.name.toLowerCase();
+  if (file.type.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
+  if (file.type.includes('word') || name.endsWith('.docx')) return 'word';
+  if (file.type.startsWith('image/')) return 'image';
+  return 'text';
+}
+
+function buildDocumentContextPrompt(contexts: DocumentContext[]) {
+  const text = contexts
+    .map((context, index) => [
+      `【资料 ${index + 1}：${context.fileName}】`,
+      context.text.slice(0, 5000)
+    ].join('\n'))
+    .join('\n\n');
+  return text.slice(0, 12000);
+}
+
 function readSessionCache(stage: SimulationStage): SessionCache | null {
   if (typeof window === 'undefined') return null;
 
@@ -166,6 +242,7 @@ function writeSessionCache(stage: SimulationStage, cache: SessionCache) {
 
 const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   task,
+  currentUser,
   onExit,
   onTriggerCoaching,
   onTriggerGroupDiscussion
@@ -187,20 +264,32 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [traceLabel, setTraceLabel] = useState<string | null>(null);
   const [difficultyLabel, setDifficultyLabel] = useState<string | null>(null);
   const [cultureHints, setCultureHints] = useState<string[]>([]);
+  const [documentContexts, setDocumentContexts] = useState<DocumentContext[]>([]);
+  const [uploadingContext, setUploadingContext] = useState(false);
   const [currentStage, setCurrentStage] = useState<SimulationStage>(
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const cachedSession = useRef<SessionCache | null>(null);
   const [hydratedStage, setHydratedStage] = useState<SimulationStage | null>(null);
 
   const currentStageMeta =
     STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
+  const currentUserName = currentUser?.realName?.trim() || currentUser?.username?.trim() || '我方';
 
   useEffect(() => {
     setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
     setActiveTask(task);
   }, [task.stageId]);
+
+  useEffect(() => {
+    setDocumentContexts(readDocumentContexts(currentStage));
+  }, [currentStage]);
+
+  useEffect(() => {
+    writeDocumentContexts(currentStage, documentContexts);
+  }, [currentStage, documentContexts]);
 
   useEffect(() => {
     let ignore = false;
@@ -398,6 +487,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     const optimisticId = `tmp-${Date.now()}`;
     const optimisticText = inputValue.trim();
+    const productCatalogContext = buildDocumentContextPrompt(documentContexts);
     const visibleMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
     const nextTurn = (visibleMessages[visibleMessages.length - 1]?.turnIndex ?? 0) + 1;
     const optimistic: ChatMessage = {
@@ -422,7 +512,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         orchestration?: SimulationOrchestration;
       }>(`/api/simulations/${currentStage}/message`, {
         method: 'POST',
-        body: JSON.stringify({ content: optimisticText })
+        body: JSON.stringify({
+          content: optimisticText,
+          productCatalogContext: productCatalogContext || null
+        })
       });
 
       if (!res.ok) {
@@ -448,6 +541,60 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       alert(error instanceof Error ? error.message : '发送失败，请稍后重试');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleContextFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || uploadingContext) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('文件不能超过 8MB。');
+      return;
+    }
+
+    setUploadingContext(true);
+    try {
+      let text = '';
+      const kind = detectDocumentKind(file);
+      if (kind === 'image') {
+        const result = await Tesseract.recognize(file, 'chi_sim+eng');
+        text = result.data.text.trim();
+      } else {
+        const dataUrl = await readFileAsDataUrl(file);
+        const parsed = await apiRequest<{
+          fileName: string;
+          mimeType: string;
+          text: string;
+        }>('/api/simulations/context-file', {
+          method: 'POST',
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type,
+            dataUrl
+          })
+        });
+        text = parsed.text.trim();
+      }
+
+      if (!text) {
+        alert('没有读取到可用文本。扫描版 PDF 请先转成图片上传，或使用可复制文字的 PDF/Word。');
+        return;
+      }
+
+      setDocumentContexts((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-${file.name}`,
+          fileName: file.name,
+          kind,
+          text: text.slice(0, 6000)
+        }
+      ].slice(-4));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '资料读取失败，请换一个文件试试。');
+    } finally {
+      setUploadingContext(false);
     }
   };
 
@@ -632,7 +779,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                       <div className="mb-1 flex items-center gap-2">
                         <span className="text-xs font-medium text-gray-400">
-                          {isMe ? '我方：张明' : isSystem ? 'AI 教练' : `对方：${OPPONENT_PROFILE.name}`}
+                          {isMe ? `我方：${currentUserName}` : isSystem ? 'AI 教练' : `对方：${OPPONENT_PROFILE.name}`}
                         </span>
                         <span className="text-[10px] text-gray-300">{msg.timestamp}</span>
                       </div>
@@ -657,8 +804,44 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
 
           <div className="shrink-0 border-t border-gray-200 bg-white p-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              onChange={handleContextFileUpload}
+              className="hidden"
+            />
             <div className="mx-auto flex w-full max-w-6xl items-end gap-4">
               <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-5 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                {documentContexts.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {documentContexts.map((context) => (
+                      <div
+                        key={context.id}
+                        className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800"
+                        title={context.fileName}
+                      >
+                        <FileText size={14} />
+                        <span className="max-w-56 truncate">{context.fileName}</span>
+                        <span className="text-[10px] font-bold uppercase text-blue-400">
+                          {context.kind}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDocumentContexts((current) =>
+                              current.filter((item) => item.id !== context.id)
+                            )
+                          }
+                          className="rounded-full p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
+                          aria-label={`移除 ${context.fileName}`}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
@@ -674,6 +857,16 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                 />
               </div>
               <div className="flex shrink-0 flex-col gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingContext || loadingSession}
+                  aria-label="上传产品资料"
+                  title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
+                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
+                  {uploadingContext ? '读取中...' : '上传资料'}
+                </button>
                 <button
                   onClick={() => void handleSend()}
                   disabled={!inputValue.trim() || sending || loadingSession}

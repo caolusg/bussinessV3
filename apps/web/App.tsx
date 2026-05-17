@@ -655,6 +655,7 @@ const AppRoutes: React.FC = () => {
             <>
               <SimulationInterface
                 task={currentTaskDetail}
+                currentUser={currentUser}
                 onExit={handleExitSimulation}
                 onTriggerCoaching={handleTriggerCoaching}
                 onTriggerGroupDiscussion={handleTriggerGroupDiscussion}

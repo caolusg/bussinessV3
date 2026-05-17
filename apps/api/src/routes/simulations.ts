@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { PDFParse } from 'pdf-parse';
+import * as mammoth from 'mammoth';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
@@ -41,7 +43,14 @@ const messageParamsSchema = z.object({
 });
 
 const messageBodySchema = z.object({
-  content: z.string().min(1).max(2000)
+  content: z.string().min(1).max(2000),
+  productCatalogContext: z.string().trim().max(12000).optional().nullable().default(null)
+});
+
+const contextFileBodySchema = z.object({
+  fileName: z.string().trim().min(1).max(240),
+  mimeType: z.string().trim().max(160).optional().default(''),
+  dataUrl: z.string().trim().min(1).max(12_000_000)
 });
 
 const coachParamsSchema = z.object({
@@ -113,6 +122,79 @@ function buildSuggestedCoachQuestions(messages: Array<{ role: string; content: s
     ...base.slice(1)
   ];
 }
+
+function dataUrlToBuffer(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match || match[2] !== ';base64') {
+    throw new Error('Invalid file data');
+  }
+  return Buffer.from(match[3], 'base64');
+}
+
+function normalizeExtractedText(text: string) {
+  return text
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 12000);
+}
+
+async function extractTextFromContextFile(args: {
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}) {
+  const lowerName = args.fileName.toLowerCase();
+  const buffer = dataUrlToBuffer(args.dataUrl);
+
+  if (args.mimeType.includes('pdf') || lowerName.endsWith('.pdf')) {
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return normalizeExtractedText(result.text);
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  if (
+    args.mimeType.includes('wordprocessingml') ||
+    lowerName.endsWith('.docx')
+  ) {
+    const result = await mammoth.extractRawText({ buffer });
+    return normalizeExtractedText(result.value);
+  }
+
+  if (args.mimeType.startsWith('text/') || lowerName.endsWith('.txt')) {
+    return normalizeExtractedText(buffer.toString('utf8'));
+  }
+
+  throw new Error('Unsupported file type');
+}
+
+router.post('/context-file', requireAuth, async (req, res) => {
+  try {
+    const parsed = contextFileBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid context file'));
+    }
+
+    const text = await extractTextFromContextFile(parsed.data);
+    if (!text) {
+      return res.status(400).json(fail('EMPTY_FILE_TEXT', 'No readable text found'));
+    }
+
+    return res.status(200).json(ok({
+      fileName: parsed.data.fileName,
+      mimeType: parsed.data.mimeType,
+      text
+    }));
+  } catch (error) {
+    console.error('Extract simulation context file failed:', error);
+    return res.status(400).json(fail('CONTEXT_FILE_PARSE_FAILED', 'Could not read file text'));
+  }
+});
 
 router.get('/session', requireAuth, async (req, res) => {
   try {
@@ -375,6 +457,7 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
 
     const stage = paramsParsed.data.stage;
     const content = bodyParsed.data.content;
+    const productCatalogContext = bodyParsed.data.productCatalogContext;
 
     const session = await getOrCreateActiveSession(prisma, userId, stage);
     await ensureSessionGreeting(prisma, session.id);
@@ -383,7 +466,8 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
       prisma,
       session.id,
       content,
-      stage
+      stage,
+      productCatalogContext
     );
 
     await logPracticeEvent(prisma, {
@@ -408,6 +492,9 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
       systemPrompt: scenario?.systemPrompt ?? undefined,
       inputMessages: {
         latestStudentMessage: content,
+        productCatalogContext: productCatalogContext
+          ? productCatalogContext.slice(0, 12000)
+          : null,
         stage,
         scenarioId: scenario?.id ?? null,
         scenarioName: scenario?.name ?? null,

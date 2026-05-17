@@ -13,7 +13,7 @@ import researchAiRoutes from './routes/researchAi.js';
 
 const app = express();
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 const defaultAllowedOrigins = [
   'http://localhost:3000',

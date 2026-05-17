@@ -16,6 +16,7 @@ export type SimulationHistoryMessage = {
 export type SimulationOrchestratorInput = {
   stage: SimulationStage;
   messages: SimulationHistoryMessage[];
+  productCatalogContext?: string | null;
   scenario?: {
     id?: string;
     name?: string;
