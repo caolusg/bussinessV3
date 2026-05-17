@@ -96,16 +96,6 @@ const cleanOcrTerm = (value: string) =>
     .replace(/^[^\u4e00-\u9fff]+/, '')
     .replace(/\s*([；;:：])\s*$/g, '')
     .trim();
-const isLikelyOcrNoise = (item: ParsedResource) => {
-  const term = item.term.trim();
-  const explanation = item.explanation.trim();
-  if (!term || !explanation) return true;
-  if (!hasChinese(term)) return true;
-  if (/^[\W_]+$/.test(term)) return true;
-  if (term === explanation && !hasLatinText(explanation) && term.length > 8) return true;
-  return false;
-};
-
 const parseLooseOcrLine = (line: string, localId: string, sortOrder: number): ParsedResource => {
   const normalized = normalizeOcrSpacing(line).replace(/\s+/g, ' ').trim();
   const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
@@ -211,9 +201,10 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
         isActive: true
       };
     })
-    .filter((item) => !isLikelyOcrNoise(item))
     .map((item, index) => ({
       ...item,
+      term: item.term || item.explanation || `未命名词条 ${startOrder + index}`,
+      explanation: item.explanation || item.term || `未命名词条 ${startOrder + index}`,
       sortOrder: startOrder + index
     }));
 
