@@ -14,6 +14,7 @@ const RequireAuth: React.FC = () => {
     token ? 'checking' : 'invalid'
   );
   const [roles, setRoles] = useState<Array<'student' | 'teacher'>>([]);
+  const [profileCompleted, setProfileCompleted] = useState(true);
 
   useEffect(() => {
     if (!token) {
@@ -27,6 +28,7 @@ const RequireAuth: React.FC = () => {
       .then((me) => {
         if (!cancelled) {
           setRoles(me.roles);
+          setProfileCompleted(me.profileCompleted);
           setStatus('valid');
         }
       })
@@ -61,6 +63,14 @@ const RequireAuth: React.FC = () => {
     !roles.includes('teacher')
   ) {
     return <Navigate to="/login/teacher" replace state={{ from: location }} />;
+  }
+
+  if (
+    roles.includes('student') &&
+    !profileCompleted &&
+    !location.pathname.startsWith('/profile')
+  ) {
+    return <Navigate to="/profile" replace state={{ from: location }} />;
   }
 
   return <Outlet />;

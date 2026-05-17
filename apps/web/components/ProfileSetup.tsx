@@ -47,9 +47,27 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
+
+    const requiredFields = [
+      profile.realName,
+      profile.studentNo,
+      profile.nationality,
+      profile.gender,
+      profile.hskLevel,
+      profile.major
+    ];
+    const missingText = requiredFields.some((value) => !value?.trim());
+    const missingAge = !profile.age || profile.age <= 0;
+    if (missingText || missingAge) {
+      setSubmitError('请先填写完整的学习档案信息。');
+      return;
+    }
+
     onComplete(profile);
   };
 
@@ -285,6 +303,12 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {submitError && (
+          <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {submitError}
           </div>
         )}
 

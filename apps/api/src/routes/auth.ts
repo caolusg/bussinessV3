@@ -112,6 +112,28 @@ const getUserRoles = async (userId: string) => {
   return roles.map((r: { role: { key: string } }) => r.role.key);
 };
 
+const isStudentProfileComplete = (profile: {
+  realName: string | null;
+  studentNo: string | null;
+  nationality: string | null;
+  age: number | null;
+  gender: string | null;
+  hskLevel: string | null;
+  major: string | null;
+  completedAt: Date | null;
+} | null) =>
+  Boolean(
+    profile?.completedAt &&
+      profile.realName?.trim() &&
+      profile.studentNo?.trim() &&
+      profile.nationality?.trim() &&
+      profile.age &&
+      profile.age > 0 &&
+      profile.gender?.trim() &&
+      profile.hskLevel?.trim() &&
+      profile.major?.trim()
+  );
+
 const ensureActiveUser = (status: string) =>
   status === ACCOUNT_STATUS_ACTIVE ||
   (!EMAIL_VERIFICATION_REQUIRED && status === ACCOUNT_STATUS_PENDING);
@@ -770,9 +792,18 @@ router.get('/me', requireAuth, async (req, res) => {
     if (roles.includes('student')) {
       const profile = await prisma.studentProfile.findUnique({
         where: { userId },
-        select: { completedAt: true }
+        select: {
+          realName: true,
+          studentNo: true,
+          nationality: true,
+          age: true,
+          gender: true,
+          hskLevel: true,
+          major: true,
+          completedAt: true
+        }
       });
-      profileCompleted = Boolean(profile?.completedAt);
+      profileCompleted = isStudentProfileComplete(profile);
     }
 
     return res.status(200).json(ok({ user, roles, profileCompleted }));

@@ -122,6 +122,12 @@ const loadAuthenticatedUser = async (token?: string | null) => {
   };
 };
 
+const getPostLoginPath = (me: AuthMe) => {
+  if (me.roles.includes('teacher')) return '/teacher';
+  if (me.roles.includes('student') && !me.profileCompleted) return '/profile';
+  return '/';
+};
+
 const resourceTitleByType: Record<ContentResource['type'], string> = {
   vocabulary: '商务词汇',
   phrases: '常用句式',
@@ -382,7 +388,7 @@ const AppRoutes: React.FC = () => {
         setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
         setCurrentUser(authenticated.user);
 
-        navigate('/');
+        navigate(getPostLoginPath(authenticated.me));
 
         return { kind: 'logged_in' };
       }
@@ -472,7 +478,7 @@ const AppRoutes: React.FC = () => {
 
       setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
       setCurrentUser(authenticated.user);
-      navigate('/');
+      navigate(getPostLoginPath(authenticated.me));
       return { kind: 'logged_in' };
     }
 
@@ -493,11 +499,7 @@ const AppRoutes: React.FC = () => {
     setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
     setCurrentUser(authenticated.user);
 
-    if (authenticated.me.roles.includes('teacher')) {
-      navigate('/teacher');
-    } else {
-      navigate('/');
-    }
+    navigate(getPostLoginPath(authenticated.me));
 
     return { kind: 'logged_in' };
   };

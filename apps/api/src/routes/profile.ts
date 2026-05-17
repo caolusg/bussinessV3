@@ -8,13 +8,13 @@ import { requireAuth } from '../middleware/requireAuth.js';
 const router = Router();
 
 const profileSchema = z.object({
-  realName: z.string().optional().default(''),
-  studentNo: z.string().optional().default(''),
-  nationality: z.string().optional().default(''),
-  age: z.number().int().nonnegative().nullable().optional(),
-  gender: z.string().optional().default(''),
-  hskLevel: z.string().optional().default(''),
-  major: z.string().optional().default('')
+  realName: z.string().trim().min(1),
+  studentNo: z.string().trim().min(1),
+  nationality: z.string().trim().min(1),
+  age: z.number().int().positive(),
+  gender: z.string().trim().min(1),
+  hskLevel: z.string().trim().min(1),
+  major: z.string().trim().min(1)
 });
 
 const passwordSchema = z
