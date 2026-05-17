@@ -112,6 +112,21 @@ const resourcePayloadSchema = z.object({
   isActive: z.coerce.boolean().default(true)
 });
 
+const resourceBulkPayloadSchema = z.object({
+  stageId: z.string().uuid(),
+  type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary'),
+  replaceExisting: z.coerce.boolean().default(false),
+  resources: z.array(
+    z.object({
+      term: z.string().trim().min(1).max(160),
+      explanation: z.string().trim().min(1).max(2000),
+      example: z.string().trim().max(2000).optional().nullable().default(null),
+      sortOrder: z.coerce.number().int().min(0).default(0),
+      isActive: z.coerce.boolean().default(true)
+    })
+  ).min(1).max(500)
+});
+
 const resourceParamsSchema = z.object({
   resourceId: z.string().uuid()
 });
@@ -794,6 +809,46 @@ router.post('/resources', async (req, res) => {
     return res.status(201).json(ok({ resource }));
   } catch (error) {
     console.error('Create learning resource failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/resources/bulk', async (req, res) => {
+  try {
+    const parsed = resourceBulkPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid bulk resource payload'));
+    }
+
+    const { stageId, type, replaceExisting, resources } = parsed.data;
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (replaceExisting) {
+        await tx.learningResource.updateMany({
+          where: { stageId, type, isActive: true },
+          data: { isActive: false }
+        });
+      }
+
+      const created = await tx.learningResource.createMany({
+        data: resources.map((resource, index) => ({
+          stageId,
+          type,
+          term: resource.term,
+          explanation: resource.explanation,
+          example: resource.example || null,
+          sortOrder: resource.sortOrder || index,
+          isActive: resource.isActive
+        })),
+        skipDuplicates: false
+      });
+
+      return created;
+    });
+
+    return res.status(201).json(ok({ createdCount: result.count }));
+  } catch (error) {
+    console.error('Bulk create learning resources failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

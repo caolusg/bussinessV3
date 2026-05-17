@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Edit3, Loader2, Plus, RefreshCw, Save, Search, X } from 'lucide-react';
+import { BookOpen, Edit3, ImagePlus, Loader2, Plus, RefreshCw, Save, Search, Upload, X } from 'lucide-react';
 import { apiRequest } from '../utils/apiFetch';
 
 type ManagedResource = {
@@ -42,6 +42,14 @@ type ResourceForm = {
   isActive: boolean;
 };
 
+type ParsedResource = {
+  term: string;
+  explanation: string;
+  example: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
 const RESOURCE_TYPES: Array<{ value: ManagedResource['type']; label: string }> = [
   { value: 'vocabulary', label: '商务词汇' },
   { value: 'phrases', label: '常用句式' },
@@ -61,6 +69,58 @@ const emptyForm = (stageId = ''): ResourceForm => ({
 const typeLabel = (type: ManagedResource['type']) =>
   RESOURCE_TYPES.find((item) => item.value === type)?.label ?? type;
 
+const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const normalized = line.replace(/^\d+[\s.、-]*/, '').trim();
+      const tabParts = normalized.split(/\t+/).map((part) => part.trim()).filter(Boolean);
+      const wideParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
+      const parts = tabParts.length >= 2 ? tabParts : wideParts;
+
+      if (parts.length >= 3) {
+        return {
+          term: parts[0],
+          explanation: `拼音：${parts[1]}；英文：${parts.slice(2).join(' ')}`,
+          example: '',
+          sortOrder: startOrder + index,
+          isActive: true
+        };
+      }
+
+      if (parts.length === 2) {
+        return {
+          term: parts[0],
+          explanation: parts[1],
+          example: '',
+          sortOrder: startOrder + index,
+          isActive: true
+        };
+      }
+
+      const match = normalized.match(/^([\u4e00-\u9fff（）()、·]+)\s+(.+)$/u);
+      if (match) {
+        return {
+          term: match[1],
+          explanation: match[2],
+          example: '',
+          sortOrder: startOrder + index,
+          isActive: true
+        };
+      }
+
+      return {
+        term: normalized,
+        explanation: normalized,
+        example: '',
+        sortOrder: startOrder + index,
+        isActive: true
+      };
+    })
+    .filter((item) => item.term && item.explanation);
+
 const TeachingResourceManager: React.FC = () => {
   const [data, setData] = useState<ResourceManagerData | null>(null);
   const [selectedStageId, setSelectedStageId] = useState('');
@@ -70,6 +130,10 @@ const TeachingResourceManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [bulkImagePreview, setBulkImagePreview] = useState('');
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const loadData = () => {
     setLoading(true);
@@ -104,6 +168,14 @@ const TeachingResourceManager: React.FC = () => {
         .includes(keyword)
     );
   }, [search, selectedStage]);
+  const nextSortOrder = useMemo(
+    () => Math.max(0, ...(selectedStage?.resources ?? []).map((resource) => resource.sortOrder)) + 1,
+    [selectedStage]
+  );
+  const parsedBulkResources = useMemo(
+    () => parseResourceRows(bulkText, nextSortOrder),
+    [bulkText, nextSortOrder]
+  );
 
   const resetForm = (stageId = selectedStageId) => {
     setEditingId('');
@@ -164,6 +236,44 @@ const TeachingResourceManager: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : '资源停用失败');
       setSaving(false);
+    }
+  };
+
+  const handleBulkImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setBulkImagePreview(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  };
+
+  const importBulkResources = async () => {
+    if (!selectedStageId || !parsedBulkResources.length) return;
+
+    setBulkSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/api/admin/resources/bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          stageId: selectedStageId,
+          type: form.type,
+          replaceExisting,
+          resources: parsedBulkResources
+        })
+      });
+      setBulkText('');
+      setBulkImagePreview('');
+      setReplaceExisting(false);
+      await apiRequest<ResourceManagerData>('/api/admin/resources/manager').then((payload) => {
+        setData(payload);
+        setSelectedStageId(selectedStageId);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '批量导入失败');
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -332,6 +442,85 @@ const TeachingResourceManager: React.FC = () => {
             </div>
           </div>
 
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                    Batch Import
+                  </p>
+                  <h4 className="mt-1 text-lg font-black text-slate-900">截图批量导入</h4>
+                </div>
+                <Upload className="text-indigo-500" size={20} />
+              </div>
+
+              <div className="space-y-4">
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-4 py-5 text-center transition hover:bg-indigo-50">
+                  <ImagePlus className="text-indigo-500" size={24} />
+                  <span className="mt-2 text-sm font-black text-slate-700">上传商务词汇截图</span>
+                  <span className="mt-1 text-xs leading-5 text-slate-400">
+                    截图用于对照；把 OCR 识别出的表格文本粘贴到下方即可批量入库。
+                  </span>
+                  <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
+                </label>
+
+                {bulkImagePreview && (
+                  <img
+                    src={bulkImagePreview}
+                    alt="商务词汇截图预览"
+                    className="max-h-52 w-full rounded-2xl border border-slate-100 object-contain"
+                  />
+                )}
+
+                <label className="block">
+                  <span className="text-xs font-black text-slate-400">OCR 文本 / 表格文本</span>
+                  <textarea
+                    value={bulkText}
+                    onChange={(event) => setBulkText(event.target.value)}
+                    placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
+                    className="mt-2 h-36 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                  />
+                </label>
+
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-700">将导入 {parsedBulkResources.length} 条</p>
+                    <p className="mt-1 text-xs text-slate-400">导入类型使用当前右侧表单的类型选择。</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-black text-slate-500">
+                    <input
+                      type="checkbox"
+                      checked={replaceExisting}
+                      onChange={(event) => setReplaceExisting(event.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    覆盖本阶段同类型旧资源
+                  </label>
+                </div>
+
+                {parsedBulkResources.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto rounded-2xl border border-slate-100">
+                    {parsedBulkResources.slice(0, 8).map((resource) => (
+                      <div key={`${resource.sortOrder}-${resource.term}`} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+                        <p className="text-sm font-black text-slate-800">{resource.term}</p>
+                        <p className="mt-1 line-clamp-1 text-xs text-slate-500">{resource.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={importBulkResources}
+                  disabled={bulkSaving || !selectedStageId || !parsedBulkResources.length}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+                  批量导入资源
+                </button>
+              </div>
+            </section>
+
           <form onSubmit={saveResource} className="self-start rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <div>
@@ -444,6 +633,7 @@ const TeachingResourceManager: React.FC = () => {
               </button>
             </div>
           </form>
+          </div>
         </section>
       </div>
     </div>
