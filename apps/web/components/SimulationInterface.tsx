@@ -144,41 +144,6 @@ function getSessionCacheKey(stage: SimulationStage) {
   return `simulation_session_cache:${stage}`;
 }
 
-function getDocumentContextCacheKey(stage: SimulationStage) {
-  return `simulation_document_context:${stage}`;
-}
-
-function readDocumentContexts(stage: SimulationStage): DocumentContext[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.sessionStorage.getItem(getDocumentContextCacheKey(stage));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Partial<DocumentContext>[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item) => item.id && item.fileName && item.text)
-      .map((item) => ({
-        id: String(item.id),
-        fileName: String(item.fileName),
-        kind: item.kind === 'pdf' || item.kind === 'word' || item.kind === 'image' || item.kind === 'text'
-          ? item.kind
-          : 'text',
-        text: String(item.text).slice(0, 6000)
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function writeDocumentContexts(stage: SimulationStage, contexts: DocumentContext[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(getDocumentContextCacheKey(stage), JSON.stringify(contexts));
-  } catch {
-    // Ignore storage failures; uploaded context still applies to the current page state.
-  }
-}
-
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -283,14 +248,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
     setActiveTask(task);
   }, [task.stageId]);
-
-  useEffect(() => {
-    setDocumentContexts(readDocumentContexts(currentStage));
-  }, [currentStage]);
-
-  useEffect(() => {
-    writeDocumentContexts(currentStage, documentContexts);
-  }, [currentStage, documentContexts]);
 
   useEffect(() => {
     let ignore = false;
@@ -638,6 +595,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       setCurrentSessionId(data?.session?.id ?? null);
       setMessages(sessionMessages);
       setInputValue('');
+      setDocumentContexts([]);
       updateStructuredFeedback(data?.orchestration ?? undefined);
     } catch (error) {
       console.error('Simulation restart error', error);
@@ -661,6 +619,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       setEndingSession(false);
       setCurrentSessionId(null);
       setMessages([]);
+      setDocumentContexts([]);
       resetStructuredFeedback();
       onExit();
     }

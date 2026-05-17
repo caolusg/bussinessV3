@@ -25,6 +25,13 @@ type StudentCompleteEmailPayload = {
   mode: 'complete_email';
 };
 
+type StudentRenameUsernamePayload = {
+  username: string;
+  password: string;
+  newUsername: string;
+  mode: 'rename_username';
+};
+
 type TeacherLoginPayload = {
   username: string;
   password: string;
@@ -34,6 +41,7 @@ export type LoginActionPayload =
   | StudentLoginPayload
   | StudentRegisterPayload
   | StudentCompleteEmailPayload
+  | StudentRenameUsernamePayload
   | TeacherLoginPayload;
 
 export type LoginActionResult =
@@ -47,6 +55,10 @@ export type LoginActionResult =
       identifier: string;
       email: string;
       previewUrl?: string;
+    }
+  | {
+      kind: 'username_change_required';
+      identifier: string;
     };
 
 interface LoginViewProps {
@@ -55,6 +67,7 @@ interface LoginViewProps {
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
+  const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<UserRole>(
     initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT
@@ -70,11 +83,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailSetupRequired, setEmailSetupRequired] = useState(false);
+  const [usernameChangeRequired, setUsernameChangeRequired] = useState(false);
   const [pendingIdentifier, setPendingIdentifier] = useState('');
 
   useEffect(() => {
     setActiveTab(initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT);
     setEmailSetupRequired(false);
+    setUsernameChangeRequired(false);
     setPendingIdentifier('');
     setError(null);
     setMessage(null);
@@ -116,6 +131,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
       case 'Failed to fetch':
       case 'NetworkError':
         return '服务暂时不可用，请确认 API 服务启动后再试';
+      case 'INVALID_USERNAME':
+      case 'USERNAME_CHANGE_REQUIRED':
+      case 'Username change required':
+        return '用户名必须以英文字母开头，且只能使用英文或数字';
       default:
         return raw;
     }
@@ -123,6 +142,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
 
   const resetEmailSetup = () => {
     setEmailSetupRequired(false);
+    setUsernameChangeRequired(false);
     setPendingIdentifier('');
   };
 
@@ -132,6 +152,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     if (activeTab === UserRole.STUDENT && (studentMode === 'register' || emailSetupRequired)) {
       if (!formData.email.trim()) {
         setError('请输入邮箱地址');
+        return;
+      }
+    }
+
+    if (activeTab === UserRole.STUDENT && (studentMode === 'register' || usernameChangeRequired)) {
+      if (!usernamePattern.test(formData.username.trim())) {
+        setError('用户名必须以英文字母开头，且只能使用英文或数字');
         return;
       }
     }
@@ -148,7 +175,14 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
     setMessage(null);
 
     const payload: LoginActionPayload =
-      activeTab === UserRole.STUDENT && emailSetupRequired
+      activeTab === UserRole.STUDENT && usernameChangeRequired
+        ? {
+            username: pendingIdentifier || formData.username.trim(),
+            password: formData.password,
+            newUsername: formData.username.trim(),
+            mode: 'rename_username'
+          }
+        : activeTab === UserRole.STUDENT && emailSetupRequired
         ? {
             username: pendingIdentifier || formData.username.trim(),
             password: formData.password,
@@ -178,8 +212,18 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
       const result = await onLogin(activeTab, payload);
       if (result.kind === 'email_required') {
         setEmailSetupRequired(true);
+        setUsernameChangeRequired(false);
         setPendingIdentifier(result.identifier);
         setMessage('该账号需要先绑定并验证邮箱。请输入可接收邮件的邮箱地址。');
+        return;
+      }
+
+      if (result.kind === 'username_change_required') {
+        setUsernameChangeRequired(true);
+        setEmailSetupRequired(false);
+        setPendingIdentifier(result.identifier);
+        setFormData((current) => ({ ...current, username: '' }));
+        setMessage('当前用户名含有非法字符，请修改为只包含英文或数字的新用户名。');
         return;
       }
 
@@ -245,7 +289,11 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
                 <UserPlus size={14} className="text-slate-400" />
-                {activeTab === UserRole.STUDENT && !isStudentRegister ? '用户名或邮箱' : '用户名'}
+                {usernameChangeRequired
+                  ? '新用户名'
+                  : activeTab === UserRole.STUDENT && !isStudentRegister
+                    ? '用户名或邮箱'
+                    : '用户名'}
               </label>
               <input
                 type="text"
@@ -258,11 +306,18 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all disabled:text-slate-500"
                 placeholder={
-                  activeTab === UserRole.STUDENT && !isStudentRegister
+                  usernameChangeRequired
+                    ? '请输入新用户名'
+                    : activeTab === UserRole.STUDENT && !isStudentRegister
                     ? '请输入用户名或注册邮箱'
                     : '请输入用户名'
                 }
               />
+              {(isStudentRegister || usernameChangeRequired) && (
+                <p className="text-[11px] leading-5 text-slate-400">
+                  必须以英文字母开头，且只能使用英文或数字。
+                </p>
+              )}
             </div>
 
             {showEmailInput && (
@@ -330,7 +385,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               disabled={isSubmitting}
               className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
             >
-              {emailSetupRequired
+              {usernameChangeRequired
+                ? '修改用户名并登录'
+                : emailSetupRequired
                 ? '发送验证邮件'
                 : isStudentRegister
                   ? '创建学生账号'
@@ -340,7 +397,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
               <ArrowRight size={18} />
             </button>
 
-            {activeTab === UserRole.STUDENT && (
+            {activeTab === UserRole.STUDENT && !usernameChangeRequired && (
               <div className="text-center text-xs text-slate-500">
                 {isStudentRegister ? '已有账号？' : '还没有账号？'}
                 <button
