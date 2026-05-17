@@ -44,6 +44,7 @@ type ResourceForm = {
 };
 
 type ParsedResource = {
+  localId: string;
   term: string;
   explanation: string;
   example: string;
@@ -79,14 +80,16 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
     .map((line) => stripLeadingIndex(line))
     .filter(Boolean)
     .map((line, index) => {
+      const tabParts = line.split(/\t+/).map((part) => part.trim()).filter(Boolean);
       const normalized = line.replace(/\s+/g, ' ').trim();
-      const tabParts = normalized.split(/\t+/).map((part) => part.trim()).filter(Boolean);
       const spacedParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
       const parts = tabParts.length >= 2 ? tabParts : spacedParts;
+      const localId = `bulk-${startOrder + index}-${line}`;
 
       if (parts.length >= 3) {
         const [term, maybePinyin, ...rest] = parts;
         return {
+          localId,
           term,
           explanation: looksLikePinyin(maybePinyin)
             ? `拼音：${maybePinyin}；英文：${rest.join(' ')}`
@@ -100,6 +103,7 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       if (parts.length === 2) {
         const [first, second] = parts;
         return {
+          localId,
           term: first,
           explanation: looksLikePinyin(second) ? `拼音：${second}` : second,
           example: '',
@@ -111,6 +115,7 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       const match = normalized.match(/^(.+?)\s+([a-zà-ž].+)$/i);
       if (match) {
         return {
+          localId,
           term: match[1],
           explanation: match[2],
           example: '',
@@ -120,6 +125,7 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       }
 
       return {
+        localId,
         term: normalized,
         explanation: normalized,
         example: '',
@@ -139,6 +145,7 @@ const TeachingResourceManager: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [bulkText, setBulkText] = useState('');
+  const [bulkResources, setBulkResources] = useState<ParsedResource[]>([]);
   const [bulkImagePreview, setBulkImagePreview] = useState('');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -183,10 +190,9 @@ const TeachingResourceManager: React.FC = () => {
     () => Math.max(0, ...(selectedStage?.resources ?? []).map((resource) => resource.sortOrder)) + 1,
     [selectedStage]
   );
-  const parsedBulkResources = useMemo(
-    () => parseResourceRows(bulkText, nextSortOrder),
-    [bulkText, nextSortOrder]
-  );
+  useEffect(() => {
+    setBulkResources(parseResourceRows(bulkText, nextSortOrder));
+  }, [bulkText, nextSortOrder]);
 
   const resetForm = (stageId = selectedStageId) => {
     setEditingId('');
@@ -250,6 +256,36 @@ const TeachingResourceManager: React.FC = () => {
     }
   };
 
+  const updateBulkResource = (
+    localId: string,
+    field: keyof Pick<ParsedResource, 'term' | 'explanation' | 'example' | 'sortOrder' | 'isActive'>,
+    value: string | number | boolean
+  ) => {
+    setBulkResources((current) =>
+      current.map((resource) =>
+        resource.localId === localId ? { ...resource, [field]: value } : resource
+      )
+    );
+  };
+
+  const deleteBulkResource = (localId: string) => {
+    setBulkResources((current) => current.filter((resource) => resource.localId !== localId));
+  };
+
+  const addBulkResource = () => {
+    setBulkResources((current) => [
+      ...current,
+      {
+        localId: `manual-${Date.now()}`,
+        term: '',
+        explanation: '',
+        example: '',
+        sortOrder: nextSortOrder + current.length,
+        isActive: true
+      }
+    ]);
+  };
+
   const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -287,7 +323,16 @@ const TeachingResourceManager: React.FC = () => {
   };
 
   const importBulkResources = async () => {
-    if (!selectedStageId || !parsedBulkResources.length) return;
+    const resourcesToImport = bulkResources
+      .map(({ localId: _localId, ...resource }) => ({
+        ...resource,
+        term: resource.term.trim(),
+        explanation: resource.explanation.trim(),
+        example: resource.example.trim()
+      }))
+      .filter((resource) => resource.term && resource.explanation);
+
+    if (!selectedStageId || !resourcesToImport.length) return;
 
     setBulkSaving(true);
     setError('');
@@ -299,10 +344,11 @@ const TeachingResourceManager: React.FC = () => {
           stageId: selectedStageId,
           type: form.type,
           replaceExisting,
-          resources: parsedBulkResources
+          resources: resourcesToImport
         })
       });
       setBulkText('');
+      setBulkResources([]);
       setBulkImagePreview('');
       setReplaceExisting(false);
       await apiRequest<ResourceManagerData>('/api/admin/resources/manager').then((payload) => {
@@ -387,8 +433,8 @@ const TeachingResourceManager: React.FC = () => {
           </div>
         </aside>
 
-        <section className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+        <section className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(560px,1.25fr)_minmax(360px,0.75fr)]">
+          <div className="order-2 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -481,7 +527,7 @@ const TeachingResourceManager: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="order-1 space-y-6">
             <section className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
               <div className="mb-5 flex items-center justify-between">
                 <div>
@@ -527,72 +573,145 @@ const TeachingResourceManager: React.FC = () => {
                   </div>
                 )}
 
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-black text-slate-500">原始 OCR 文本校正</p>
+                    <button
+                      type="button"
+                      onClick={() => setBulkText('')}
+                      className="text-xs font-black text-slate-400 hover:text-rose-500"
+                    >
+                      清空文本
+                    </button>
+                  </div>
+                  <textarea
+                    value={bulkText}
+                    onChange={(event) => setBulkText(event.target.value)}
+                    placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
+                    className="h-44 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                  />
+                </div>
+
                 <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black text-slate-400">自动提取结果</p>
                       <p className="mt-1 text-sm font-black text-slate-700">
-                        已识别 {parsedBulkResources.length} 条词汇
+                        待导入 {bulkResources.length} 条资源，可直接修改或删除
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-black text-slate-500">
-                      <input
-                        type="checkbox"
-                        checked={replaceExisting}
-                        onChange={(event) => setReplaceExisting(event.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      覆盖本阶段旧词汇
-                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs font-black text-slate-500">
+                        <input
+                          type="checkbox"
+                          checked={replaceExisting}
+                          onChange={(event) => setReplaceExisting(event.target.checked)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        覆盖本阶段旧词汇
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addBulkResource}
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100"
+                      >
+                        <Plus size={14} />
+                        添加
+                      </button>
+                    </div>
                   </div>
 
-                  {parsedBulkResources.length > 0 ? (
-                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {parsedBulkResources.map((resource) => (
+                  {bulkResources.length > 0 ? (
+                    <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                      {bulkResources.map((resource) => (
                         <article
-                          key={`${resource.sortOrder}-${resource.term}`}
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                          key={resource.localId}
+                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-black text-slate-900">{resource.term}</p>
-                              <p className="mt-1 text-xs leading-5 text-slate-600">{resource.explanation}</p>
-                              {resource.example && (
-                                <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                                  例句：{resource.example}
-                                </p>
-                              )}
-                            </div>
+                          <div className="mb-3 flex items-center justify-between gap-3">
                             <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-600">
-                              {resource.sortOrder}
+                              #{resource.sortOrder}
                             </span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 text-[11px] font-black text-slate-400">
+                                <input
+                                  type="checkbox"
+                                  checked={resource.isActive}
+                                  onChange={(event) =>
+                                    updateBulkResource(resource.localId, 'isActive', event.target.checked)
+                                  }
+                                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                启用
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkResource(resource.localId)}
+                                className="rounded-lg bg-rose-50 p-2 text-rose-500 hover:bg-rose-100"
+                                title="删除此条"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
                           </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.8fr_84px]">
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">词汇 / 标题</span>
+                              <input
+                                value={resource.term}
+                                onChange={(event) =>
+                                  updateBulkResource(resource.localId, 'term', event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">解释</span>
+                              <input
+                                value={resource.explanation}
+                                onChange={(event) =>
+                                  updateBulkResource(resource.localId, 'explanation', event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">排序</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={resource.sortOrder}
+                                onChange={(event) =>
+                                  updateBulkResource(resource.localId, 'sortOrder', Number(event.target.value))
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                          </div>
+                          <label className="mt-3 block">
+                            <span className="text-[10px] font-black text-slate-400">示例，可选</span>
+                            <input
+                              value={resource.example}
+                              onChange={(event) =>
+                                updateBulkResource(resource.localId, 'example', event.target.value)
+                              }
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                            />
+                          </label>
                         </article>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-400">
-                      上传截图后会在这里自动展示提取出的词汇
+                      上传截图或粘贴 OCR 文本后，会在这里生成可编辑的导入草稿
                     </div>
                   )}
                 </section>
 
-                <details className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
-                  <summary className="cursor-pointer list-none text-xs font-black text-slate-500">
-                    原始 OCR 文本校正
-                  </summary>
-                  <textarea
-                    value={bulkText}
-                    onChange={(event) => setBulkText(event.target.value)}
-                    placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
-                    className="mt-3 h-36 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  />
-                </details>
-
                 <button
                   type="button"
                   onClick={importBulkResources}
-                  disabled={bulkSaving || ocrRunning || !selectedStageId || !parsedBulkResources.length}
+                  disabled={bulkSaving || ocrRunning || !selectedStageId || !bulkResources.length}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
