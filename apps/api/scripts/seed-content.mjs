@@ -210,7 +210,7 @@ const main = async () => {
 
     const scenarioData = {
       name: `${titleZh}默认对手`,
-      opponentName: 'David',
+      opponentName: '郑远航',
       opponentRole: '采购总监',
       systemPrompt: [
         '你是国际贸易场景里的客户/采购方角色扮演对象。',

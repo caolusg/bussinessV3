@@ -17,7 +17,12 @@ const FALLBACK_REPLY_HISTORY = new Set([
   COMPATIBLE_CLIENT_FALLBACK_REPLY
 ]);
 const DEFAULT_OPPONENT_GREETING =
-  '你好，我是 David。我们可以直接开始这轮业务沟通，请先说明你的方案。';
+  '你好，我是中国商通外贸公司的采购经理郑远航，请先介绍贵公司的产品。';
+
+const buildOpponentGreeting = (opponentName?: string | null) =>
+  opponentName?.trim()
+    ? `你好，我是中国商通外贸公司的采购经理${opponentName.trim()}，请先介绍贵公司的产品。`
+    : DEFAULT_OPPONENT_GREETING;
 
 type Db = Pick<
   PrismaClient,
@@ -28,6 +33,16 @@ type Db = Pick<
   | 'simulationMessage'
   | '$transaction'
 >;
+
+type ActiveScenario = {
+  id: string;
+  name: string;
+  opponentName: string | null;
+  opponentRole: string | null;
+  systemPrompt: string;
+  difficulty: string;
+  promptVersion: string;
+};
 
 const simulationOrchestrator = new SimulationOrchestrator(
   new CompatibleSimulationProvider()
@@ -65,7 +80,7 @@ export async function getOrCreateActiveSession(
   const scenarioId = stageRecord?.aiScenarios[0]?.id;
 
   if (existing) {
-    if (!existing.stageId && stageRecord) {
+    if (stageRecord && (!existing.stageId || existing.scenarioId !== scenarioId || existing.taskId !== taskId)) {
       return prisma.simulationSession.update({
         where: { id: existing.id },
         data: {
@@ -171,11 +186,21 @@ export async function endStageSession(
 }
 
 export async function ensureSessionGreeting(prisma: Db, sessionId: string) {
+  const session = await prisma.simulationSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      scenario: {
+        select: { opponentName: true }
+      }
+    }
+  });
+  const greeting = buildOpponentGreeting(session?.scenario?.opponentName);
+
   const existingGreeting = await prisma.simulationMessage.findFirst({
     where: {
       sessionId,
       role: 'opponent',
-      content: DEFAULT_OPPONENT_GREETING
+      turnIndex: { lte: 0 }
     },
     select: { id: true }
   });
@@ -191,7 +216,7 @@ export async function ensureSessionGreeting(prisma: Db, sessionId: string) {
     data: {
       sessionId,
       role: 'opponent',
-      content: DEFAULT_OPPONENT_GREETING,
+      content: greeting,
       turnIndex: minTurn._min.turnIndex == null ? 0 : minTurn._min.turnIndex - 1
     }
   });
@@ -211,7 +236,9 @@ function createFallbackOrchestration(): SimulationOrchestratorResult {
       provider: 'compatible',
       usedTools: [],
       usedWebSearch: false,
-      degraded: true
+      degraded: true,
+      promptVersion: 'v1',
+      scenarioId: null
     }
   };
 }
@@ -248,7 +275,7 @@ export async function appendStudentAndOpponent(
   content: string,
   stage?: SimulationStage
 ) {
-  const { studentMessage, nextTurn, history } = await prisma.$transaction(
+  const { studentMessage, nextTurn, history, scenario } = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
       const maxTurn = await tx.simulationMessage.aggregate({
         where: { sessionId },
@@ -279,7 +306,52 @@ export async function appendStudentAndOpponent(
           content: message.content
         }));
 
-      return { studentMessage, nextTurn, history };
+      const session = await tx.simulationSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          scenario: {
+            select: {
+              id: true,
+              name: true,
+              opponentName: true,
+              opponentRole: true,
+              systemPrompt: true,
+              difficulty: true,
+              promptVersion: true,
+              isActive: true
+            }
+          },
+          businessStage: {
+            include: {
+              aiScenarios: {
+                where: { isActive: true, isDefault: true },
+                take: 1
+              }
+            }
+          }
+        }
+      });
+
+      const activeScenario = session?.scenario?.isActive
+        ? session.scenario
+        : session?.businessStage?.aiScenarios[0];
+
+      return {
+        studentMessage,
+        nextTurn,
+        history,
+        scenario: activeScenario
+          ? {
+              id: activeScenario.id,
+              name: activeScenario.name,
+              opponentName: activeScenario.opponentName,
+              opponentRole: activeScenario.opponentRole,
+              systemPrompt: activeScenario.systemPrompt,
+              difficulty: activeScenario.difficulty,
+              promptVersion: activeScenario.promptVersion
+            } satisfies ActiveScenario
+          : null
+      };
     }
   );
 
@@ -288,7 +360,8 @@ export async function appendStudentAndOpponent(
   try {
     orchestration = await simulationOrchestrator.generate({
       stage: stage ?? 'quotation',
-      messages: history
+      messages: history,
+      scenario
     });
   } catch {
     orchestration = createFallbackOrchestration();
@@ -307,5 +380,5 @@ export async function appendStudentAndOpponent(
     }
   });
 
-  return { studentMessage, opponentMessage, orchestration };
+  return { studentMessage, opponentMessage, orchestration, scenario };
 }

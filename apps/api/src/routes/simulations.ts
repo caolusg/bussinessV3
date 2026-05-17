@@ -379,7 +379,7 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     const session = await getOrCreateActiveSession(prisma, userId, stage);
     await ensureSessionGreeting(prisma, session.id);
 
-    const { studentMessage, opponentMessage, orchestration } = await appendStudentAndOpponent(
+    const { studentMessage, opponentMessage, orchestration, scenario } = await appendStudentAndOpponent(
       prisma,
       session.id,
       content,
@@ -404,10 +404,16 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
       sessionId: session.id,
       messageId: opponentMessage.id,
       provider: orchestration.trace.provider,
-      promptVersion: 'v1',
+      promptVersion: scenario?.promptVersion ?? orchestration.trace.promptVersion ?? 'v1',
+      systemPrompt: scenario?.systemPrompt ?? undefined,
       inputMessages: {
         latestStudentMessage: content,
-        stage
+        stage,
+        scenarioId: scenario?.id ?? null,
+        scenarioName: scenario?.name ?? null,
+        opponentName: scenario?.opponentName ?? null,
+        opponentRole: scenario?.opponentRole ?? null,
+        difficulty: scenario?.difficulty ?? null
       },
       outputText: orchestration.roleplayReply,
       outputJson: {

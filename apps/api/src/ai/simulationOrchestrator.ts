@@ -16,6 +16,15 @@ export type SimulationHistoryMessage = {
 export type SimulationOrchestratorInput = {
   stage: SimulationStage;
   messages: SimulationHistoryMessage[];
+  scenario?: {
+    id?: string;
+    name?: string;
+    opponentName?: string | null;
+    opponentRole?: string | null;
+    systemPrompt?: string | null;
+    difficulty?: string | null;
+    promptVersion?: string | null;
+  } | null;
 };
 
 export type SimulationAssessment = {
@@ -40,6 +49,8 @@ export type SimulationOrchestratorResult = {
     usedTools?: string[];
     usedWebSearch?: boolean;
     degraded?: boolean;
+    promptVersion?: string | null;
+    scenarioId?: string | null;
   };
 };
 

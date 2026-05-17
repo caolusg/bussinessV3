@@ -21,16 +21,16 @@ export const USER_PROFILE: UserProfile = {
 };
 
 export const OPPONENT_PROFILE: OpponentProfile = {
-  name: 'David',
+  name: '郑远航',
   role: '采购总监',
-  avatarInitials: 'DA'
+  avatarInitials: 'ZY'
 };
 
 export const INITIAL_CHAT_MESSAGES: ChatMessage[] = [
   {
     id: 'm1',
     sender: 'OPPONENT',
-    text: '你好，我是 David。我们可以直接开始这轮业务沟通，请先说明你的方案。',
+    text: '你好，我是中国商通外贸公司的采购经理郑远航，请先介绍贵公司的产品。',
     timestamp: '10:30'
   }
 ];

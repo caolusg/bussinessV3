@@ -116,6 +116,22 @@ const resourceParamsSchema = z.object({
   resourceId: z.string().uuid()
 });
 
+const scenarioPayloadSchema = z.object({
+  stageId: z.string().uuid(),
+  name: z.string().trim().min(1).max(160),
+  opponentName: z.string().trim().max(120).optional().nullable().default(null),
+  opponentRole: z.string().trim().max(120).optional().nullable().default(null),
+  systemPrompt: z.string().trim().min(1).max(12000),
+  difficulty: z.string().trim().min(1).max(40).default('standard'),
+  promptVersion: z.string().trim().min(1).max(40).default('v1'),
+  isDefault: z.coerce.boolean().default(true),
+  isActive: z.coerce.boolean().default(true)
+});
+
+const scenarioParamsSchema = z.object({
+  scenarioId: z.string().uuid()
+});
+
 const groupPayloadSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).optional().nullable().default(null),
@@ -817,6 +833,130 @@ router.delete('/resources/:resourceId', async (req, res) => {
     return res.status(200).json(ok({ resource }));
   } catch (error) {
     console.error('Disable learning resource failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/scenarios/manager', requireAuth, async (_req, res) => {
+  try {
+    const stages = await prisma.businessStage.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        key: true,
+        sortOrder: true,
+        titleZh: true,
+        titleEn: true,
+        aiScenarios: {
+          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          select: {
+            id: true,
+            stageId: true,
+            name: true,
+            opponentName: true,
+            opponentRole: true,
+            systemPrompt: true,
+            difficulty: true,
+            promptVersion: true,
+            isDefault: true,
+            isActive: true,
+            updatedAt: true
+          }
+        }
+      }
+    });
+
+    return res.status(200).json(ok({
+      stages,
+      totals: {
+        stageCount: stages.length,
+        scenarioCount: stages.reduce((sum, stage) => sum + stage.aiScenarios.length, 0),
+        activeScenarioCount: stages.reduce((sum, stage) =>
+          sum + stage.aiScenarios.filter((scenario) => scenario.isActive).length
+        , 0)
+      }
+    }));
+  } catch (error) {
+    console.error('Get scenario manager failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/scenarios', requireAuth, async (req, res) => {
+  try {
+    const parsed = scenarioPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid scenario payload'));
+    }
+
+    if (parsed.data.isDefault) {
+      await prisma.stageAiScenario.updateMany({
+        where: { stageId: parsed.data.stageId, isDefault: true },
+        data: { isDefault: false }
+      });
+    }
+
+    const scenario = await prisma.stageAiScenario.create({
+      data: {
+        ...parsed.data,
+        createdBy: req.user?.id
+      }
+    });
+
+    return res.status(201).json(ok({ scenario }));
+  } catch (error) {
+    console.error('Create AI scenario failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/scenarios/:scenarioId', requireAuth, async (req, res) => {
+  try {
+    const params = scenarioParamsSchema.safeParse(req.params);
+    const parsed = scenarioPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid scenario payload'));
+    }
+
+    if (parsed.data.isDefault) {
+      await prisma.stageAiScenario.updateMany({
+        where: {
+          stageId: parsed.data.stageId,
+          isDefault: true,
+          id: { not: params.data.scenarioId }
+        },
+        data: { isDefault: false }
+      });
+    }
+
+    const scenario = await prisma.stageAiScenario.update({
+      where: { id: params.data.scenarioId },
+      data: parsed.data
+    });
+
+    return res.status(200).json(ok({ scenario }));
+  } catch (error) {
+    console.error('Update AI scenario failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/scenarios/:scenarioId', requireAuth, async (req, res) => {
+  try {
+    const params = scenarioParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid scenario id'));
+    }
+
+    const scenario = await prisma.stageAiScenario.update({
+      where: { id: params.data.scenarioId },
+      data: { isActive: false, isDefault: false }
+    });
+
+    return res.status(200).json(ok({ scenario }));
+  } catch (error) {
+    console.error('Disable AI scenario failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

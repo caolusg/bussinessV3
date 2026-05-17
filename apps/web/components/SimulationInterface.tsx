@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Bot,
   ChevronRight,
   HelpCircle,
-  MoreHorizontal,
   RotateCcw,
   Send,
   User,
@@ -149,7 +148,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [sending, setSending] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
-  const [sessionActionsOpen, setSessionActionsOpen] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionReloadKey, setSessionReloadKey] = useState(0);
@@ -165,7 +163,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const sessionActionsRef = useRef<HTMLDivElement>(null);
   const cachedSession = useRef<SessionCache | null>(null);
   const [hydratedStage, setHydratedStage] = useState<SimulationStage | null>(null);
 
@@ -203,29 +200,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  useEffect(() => {
-    if (!sessionActionsOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!sessionActionsRef.current?.contains(event.target as Node)) {
-        setSessionActionsOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSessionActionsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [sessionActionsOpen]);
 
   const resetStructuredFeedback = () => {
     setCoachNote(null);
@@ -380,7 +354,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     setMessages((prev) => [...(prev.length > 0 ? prev : INITIAL_CHAT_MESSAGES), optimistic]);
     setInputValue('');
-    setSessionActionsOpen(false);
     setSending(true);
 
     try {
@@ -641,33 +614,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   rows={1}
                 />
               </div>
-              <div ref={sessionActionsRef} className="relative flex shrink-0 flex-col gap-2">
-                {sessionActionsOpen && (
-                  <div className="absolute bottom-0 right-full z-20 mr-3 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
-                    <button
-                      onClick={() => {
-                        setSessionActionsOpen(false);
-                        void handleRestart();
-                      }}
-                      disabled={restarting || endingSession || sending || loadingSession}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <RotateCcw size={16} />
-                      {restarting ? '新话题创建中...' : '开始新话题'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSessionActionsOpen(false);
-                        void handleEndAndExit();
-                      }}
-                      disabled={endingSession || restarting || sending || loadingSession}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <ArrowLeft size={16} />
-                      {endingSession ? '结束中...' : '结束本轮并退出'}
-                    </button>
-                  </div>
-                )}
+              <div className="flex shrink-0 flex-col gap-2">
                 <button
                   onClick={() => void handleSend()}
                   disabled={!inputValue.trim() || sending || loadingSession}
@@ -677,14 +624,24 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   <Send size={18} />
                 </button>
                 <button
-                  onClick={() => setSessionActionsOpen((open) => !open)}
+                  onClick={() => void handleRestart()}
                   disabled={restarting || endingSession || sending || loadingSession}
-                  aria-label="会话操作"
-                  aria-expanded={sessionActionsOpen}
-                  title="会话操作"
-                  className="inline-flex h-10 w-16 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="开始新的练习"
+                  title="开始新的练习"
+                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <MoreHorizontal size={20} />
+                  <RotateCcw size={14} />
+                  {restarting ? '创建中...' : '开始新的练习'}
+                </button>
+                <button
+                  onClick={() => void handleEndAndExit()}
+                  disabled={endingSession || restarting || sending || loadingSession}
+                  aria-label="结束本轮对话"
+                  title="结束本轮对话"
+                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ArrowLeft size={14} />
+                  {endingSession ? '结束中...' : '结束本轮对话'}
                 </button>
               </div>
             </div>

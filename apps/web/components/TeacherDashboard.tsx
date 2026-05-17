@@ -284,6 +284,56 @@ type AiLogSummary = {
   links: Record<string, string | null>;
 };
 
+type PromptStage = {
+  id: string;
+  key: string;
+  sortOrder: number;
+  titleZh: string;
+  titleEn?: string | null;
+  aiScenarios: PromptScenario[];
+};
+
+type PromptScenario = {
+  id: string;
+  stageId: string;
+  stage: number;
+  stageKey: string;
+  stageTitle: string;
+  name: string;
+  opponentName?: string | null;
+  opponentRole?: string | null;
+  systemPrompt: string;
+  difficulty: string;
+  promptVersion: string;
+  isDefault: boolean;
+  isActive: boolean;
+  type: string;
+  updatedAt?: string;
+};
+
+type ScenarioManagerResponse = {
+  stages: Array<Omit<PromptStage, 'aiScenarios'> & {
+    aiScenarios: Array<Omit<PromptScenario, 'stage' | 'stageKey' | 'stageTitle' | 'type'>>;
+  }>;
+  totals: {
+    stageCount: number;
+    scenarioCount: number;
+    activeScenarioCount: number;
+  };
+};
+
+type ScenarioFormState = {
+  stageId: string;
+  name: string;
+  opponentName: string;
+  opponentRole: string;
+  systemPrompt: string;
+  difficulty: string;
+  promptVersion: string;
+  isDefault: boolean;
+  isActive: boolean;
+};
+
 const PAGE_SIZE = 25;
 
 const formatValue = (value: unknown) => {
@@ -339,11 +389,38 @@ const DATE_RANGES = [
   { value: '30d', label: '近 30 天' }
 ] as const;
 
+const defaultScenarioForm: ScenarioFormState = {
+  stageId: '',
+  name: '',
+  opponentName: '郑远航',
+  opponentRole: '采购总监',
+  systemPrompt: '',
+  difficulty: 'standard',
+  promptVersion: 'v1',
+  isDefault: true,
+  isActive: true
+};
+
+const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptScenario[] =>
+  stages.flatMap((stage) =>
+    stage.aiScenarios.map((scenario) => ({
+      ...scenario,
+      stage: stage.sortOrder,
+      stageKey: stage.key,
+      stageTitle: `${stage.titleZh}${stage.titleEn ? ` (${stage.titleEn})` : ''}`,
+      type: scenario.isDefault ? 'Built-in' : 'Custom'
+    }))
+  );
+
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
   const [activeTab, setActiveTab] = useState<TeacherTab>('PROMPT');
-  const [selectedScenarioId, setSelectedScenarioId] = useState<number | null>(null);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingScenarios, setIsLoadingScenarios] = useState(false);
+  const [scenarioError, setScenarioError] = useState('');
+  const [scenarioStages, setScenarioStages] = useState<PromptStage[]>([]);
+  const [scenarioForm, setScenarioForm] = useState<ScenarioFormState>(defaultScenarioForm);
   const [accountPasswordForm, setAccountPasswordForm] = useState<PasswordChangePayload>({
     currentPassword: '',
     newPassword: '',
@@ -400,13 +477,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
   const researchAiScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [scenarios, setScenarios] = useState([
+  const [legacyScenarios] = useState([
     { id: 1, name: '1. 获客阶段：商务礼仪与名片交换', stage: 1, type: 'Built-in', active: true, prompt: '你是一个严格的采购经理...' },
     { id: 2, name: '2. 报价阶段：术语 FOB/CIF 详解', stage: 2, type: 'Built-in', active: true, prompt: '重点考察 FOB 术语理解...' },
     { id: 3, name: '3. 磋商阶段：价格异议处理策略', stage: 3, type: 'Built-in', active: true, prompt: '针对价格分歧进行极限施压...' },
     { id: 4, name: '4. 合同阶段：法律术语与风险规避', stage: 4, type: 'Built-in', active: true, prompt: '法律严密性审核...' },
     { id: 5, name: '5. 备货阶段：生产进度与质量监控', stage: 5, type: 'Draft', active: false, prompt: '' }
   ]);
+  const [scenarios, setScenarios] = useState<PromptScenario[]>([]);
 
   const tableGroups = useMemo(() => {
     return adminTables.reduce<Record<string, AdminTableMeta[]>>((acc, table) => {
@@ -428,6 +506,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
   const totalPages = tableData ? Math.max(1, Math.ceil(tableData.total / tableData.pageSize)) : 1;
   const currentScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId);
+
+  const loadScenarios = async () => {
+    setIsLoadingScenarios(true);
+    setScenarioError('');
+    try {
+      const data = await apiRequest<ScenarioManagerResponse>('/api/admin/scenarios/manager');
+      setScenarioStages(data.stages.map((stage) => ({
+        ...stage,
+        aiScenarios: stage.aiScenarios.map((scenario) => ({
+          ...scenario,
+          stage: stage.sortOrder,
+          stageKey: stage.key,
+          stageTitle: `${stage.titleZh}${stage.titleEn ? ` (${stage.titleEn})` : ''}`,
+          type: scenario.isDefault ? 'Built-in' : 'Custom'
+        }))
+      })));
+      setScenarios(flattenPromptStages(data.stages));
+    } catch (error) {
+      setScenarioError(error instanceof Error ? error.message : '提示词模板加载失败');
+    } finally {
+      setIsLoadingScenarios(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'PROMPT') return;
+    void loadScenarios();
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || adminTables.length > 0) return;
@@ -682,26 +788,104 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     };
   }, [selectedTable, selectedRow]);
 
-  const handleClone = (scenario: typeof scenarios[number]) => {
+  const legacyHandleClone = (scenario: typeof scenarios[number]) => {
     setScenarios([
       ...scenarios,
       {
         ...scenario,
-        id: Date.now(),
+        id: String(Date.now()),
         name: `${scenario.name} (副本)`,
         type: 'Custom',
-        active: false
+        isActive: false
       }
     ]);
   };
 
-  const handleSave = () => {
+  const legacyHandleSave = () => {
     setIsSaving(true);
     setTimeout(() => {
       setIsSaving(false);
       setIsAddingNew(false);
       setSelectedScenarioId(null);
     }, 1000);
+  };
+
+  const openScenarioEditor = (scenario: PromptScenario) => {
+    setSelectedScenarioId(scenario.id);
+    setIsAddingNew(false);
+    setScenarioForm({
+      stageId: scenario.stageId,
+      name: scenario.name,
+      opponentName: scenario.opponentName ?? '',
+      opponentRole: scenario.opponentRole ?? '',
+      systemPrompt: scenario.systemPrompt,
+      difficulty: scenario.difficulty,
+      promptVersion: scenario.promptVersion,
+      isDefault: scenario.isDefault,
+      isActive: scenario.isActive
+    });
+  };
+
+  const openNewScenario = () => {
+    setSelectedScenarioId(null);
+    setIsAddingNew(true);
+    setScenarioForm({
+      ...defaultScenarioForm,
+      stageId: scenarioStages[0]?.id ?? ''
+    });
+  };
+
+  const handleClone = (scenario: PromptScenario) => {
+    setSelectedScenarioId(null);
+    setIsAddingNew(true);
+    setScenarioForm({
+      stageId: scenario.stageId,
+      name: `${scenario.name} (副本)`,
+      opponentName: scenario.opponentName ?? '',
+      opponentRole: scenario.opponentRole ?? '',
+      systemPrompt: scenario.systemPrompt,
+      difficulty: scenario.difficulty,
+      promptVersion: scenario.promptVersion,
+      isDefault: false,
+      isActive: true
+    });
+  };
+
+  const handleSave = async () => {
+    if (!scenarioForm.stageId || !scenarioForm.name.trim() || !scenarioForm.systemPrompt.trim()) {
+      setScenarioError('请填写场景、名称和提示词。');
+      return;
+    }
+
+    setIsSaving(true);
+    setScenarioError('');
+    const payload = {
+      ...scenarioForm,
+      opponentName: scenarioForm.opponentName.trim() || null,
+      opponentRole: scenarioForm.opponentRole.trim() || null
+    };
+
+    try {
+      if (isAddingNew) {
+        await apiRequest('/api/admin/scenarios', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+      } else if (selectedScenarioId) {
+        await apiRequest(`/api/admin/scenarios/${selectedScenarioId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+      }
+
+      await loadScenarios();
+      setIsAddingNew(false);
+      setSelectedScenarioId(null);
+    } catch (error) {
+      setScenarioError(error instanceof Error ? error.message : '提示词模板保存失败');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const switchTable = (tableKey: string) => {
@@ -2403,10 +2587,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </Link>
             {activeTab === 'PROMPT' && (
               <button
-                onClick={() => {
-                  setIsAddingNew(true);
-                  setSelectedScenarioId(null);
-                }}
+                onClick={openNewScenario}
                 className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 text-xs"
               >
                 <Plus size={16} /> 新增模板/资源
@@ -2418,19 +2599,27 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         <div className="p-10 max-w-7xl mx-auto w-full">
           {activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(isLoadingScenarios || scenarioError) && (
+                <div className={`md:col-span-2 lg:col-span-3 rounded-2xl border px-5 py-4 text-sm font-semibold ${
+                  scenarioError ? 'border-red-200 bg-red-50 text-red-700' : 'border-indigo-100 bg-indigo-50 text-indigo-700'
+                }`}>
+                  {scenarioError || '正在加载提示词模板...'}
+                </div>
+              )}
               {scenarios.map((scenario) => (
                 <div key={scenario.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group p-6 flex flex-col h-full">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">
                       Stage {scenario.stage}
                     </span>
-                    {scenario.type === 'Built-in' && <Lock size={14} className="text-slate-300" />}
+                    {scenario.isDefault && <Lock size={14} className="text-slate-300" />}
                   </div>
 
                   <h3 className="font-bold text-slate-800 mb-2 leading-tight flex-1">{scenario.name}</h3>
+                  <p className="text-xs font-semibold text-slate-400">{scenario.opponentName || '未设置对手'} / {scenario.opponentRole || '未设置角色'}</p>
 
                   <div className="flex items-center gap-2 pt-6 mt-6 border-t border-slate-50">
-                    <button onClick={() => setSelectedScenarioId(scenario.id)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all">
+                    <button onClick={() => openScenarioEditor(scenario)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all">
                       <Edit3 size={14} /> 编辑
                     </button>
                     <button onClick={() => handleClone(scenario)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-all">
@@ -2440,7 +2629,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 </div>
               ))}
 
-              <button onClick={() => setIsAddingNew(true)} className="bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 p-8 flex flex-col items-center justify-center gap-4 hover:bg-white hover:border-indigo-300 transition-all group">
+              <button onClick={openNewScenario} className="bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 p-8 flex flex-col items-center justify-center gap-4 hover:bg-white hover:border-indigo-300 transition-all group">
                 <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:shadow-lg transition-all">
                   <Plus size={24} />
                 </div>
@@ -2476,8 +2665,57 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       type="text"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
                       placeholder="例如：6. 报关阶段：单证审核实务"
-                      defaultValue={currentScenario?.name}
+                      value={scenarioForm.name}
+                      onChange={(event) => setScenarioForm({ ...scenarioForm, name: event.target.value })}
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">所属阶段</label>
+                      <select
+                        value={scenarioForm.stageId}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, stageId: event.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                      >
+                        <option value="">请选择阶段</option>
+                        {scenarioStages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.sortOrder}. {stage.titleZh}{stage.titleEn ? ` (${stage.titleEn})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Prompt 版本</label>
+                      <input
+                        type="text"
+                        value={scenarioForm.promptVersion}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, promptVersion: event.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">采购经理姓名</label>
+                      <input
+                        type="text"
+                        value={scenarioForm.opponentName}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, opponentName: event.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">角色/职位</label>
+                      <input
+                        type="text"
+                        value={scenarioForm.opponentRole}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, opponentRole: event.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -2485,7 +2723,33 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     <textarea
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:ring-4 focus:ring-indigo-50 outline-none h-48 leading-relaxed"
                       placeholder="描述 AI 角色性格、博弈目标及对话约束..."
-                      defaultValue={currentScenario?.prompt}
+                      value={scenarioForm.systemPrompt}
+                      onChange={(event) => setScenarioForm({ ...scenarioForm, systemPrompt: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={scenarioForm.isDefault}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, isDefault: event.target.checked })}
+                      />
+                      默认启用
+                    </label>
+                    <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={scenarioForm.isActive}
+                        onChange={(event) => setScenarioForm({ ...scenarioForm, isActive: event.target.checked })}
+                      />
+                      可用
+                    </label>
+                    <input
+                      type="text"
+                      value={scenarioForm.difficulty}
+                      onChange={(event) => setScenarioForm({ ...scenarioForm, difficulty: event.target.value })}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-600 outline-none"
+                      placeholder="difficulty"
                     />
                   </div>
                 </div>

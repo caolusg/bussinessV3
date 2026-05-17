@@ -60,7 +60,8 @@ export class CompatibleSimulationProvider implements SimulationProvider {
   ): Promise<SimulationOrchestratorResult> {
     const roleplay = await generateRoleplayReply({
       stage: input.stage,
-      messages: input.messages
+      messages: input.messages,
+      systemPrompt: input.scenario?.systemPrompt
     });
 
     return {
@@ -74,7 +75,9 @@ export class CompatibleSimulationProvider implements SimulationProvider {
         provider: getAiProviderName(),
         usedTools: [],
         usedWebSearch: false,
-        degraded: roleplay.degraded
+        degraded: roleplay.degraded,
+        promptVersion: input.scenario?.promptVersion ?? 'v1',
+        scenarioId: input.scenario?.id ?? null
       }
     };
   }

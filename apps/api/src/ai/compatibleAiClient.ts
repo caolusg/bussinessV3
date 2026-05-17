@@ -91,6 +91,7 @@ async function resolveAiConfig(): Promise<ResolvedAiConfig> {
 export async function generateRoleplayReply(args: {
   stage: string;
   messages: Array<{ role: 'student' | 'coach'; content: string }>;
+  systemPrompt?: string | null;
 }): Promise<RoleplayReplyResult> {
   const runtimeConfig = await resolveAiConfig();
   if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
@@ -100,7 +101,7 @@ export async function generateRoleplayReply(args: {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
 
-  const systemPrompt = [
+  const systemPrompt = args.systemPrompt?.trim() || [
     '你是国际贸易场景中的客户/采购方角色扮演对象。',
     STAGE_PROMPTS[args.stage] ?? STAGE_PROMPTS.quotation,
     '必须用中文回复。请基于学生刚才的话，直接给出自然、简洁、带有商务压力的对话回复。',
