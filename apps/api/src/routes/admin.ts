@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import * as mammoth from 'mammoth';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
@@ -132,6 +133,12 @@ const resourceOcrTextPayloadSchema = z.object({
   ocrText: z.string().trim().min(1).max(80_000),
   stageTitle: z.string().trim().max(160).optional().nullable().default(null),
   type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary')
+});
+
+const resourceImportFilePayloadSchema = z.object({
+  fileName: z.string().trim().min(1).max(240),
+  mimeType: z.string().trim().max(160).optional().default(''),
+  contentBase64: z.string().min(1).max(8_000_000)
 });
 
 const resourceParamsSchema = z.object({
@@ -856,6 +863,34 @@ router.post('/resources/bulk', async (req, res) => {
     return res.status(201).json(ok({ createdCount: result.count }));
   } catch (error) {
     console.error('Bulk create learning resources failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/resources/import-file-text', async (req, res) => {
+  try {
+    const parsed = resourceImportFilePayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid resource import file payload'));
+    }
+
+    const { fileName, mimeType, contentBase64 } = parsed.data;
+    const normalizedName = fileName.toLowerCase();
+    const buffer = Buffer.from(contentBase64, 'base64');
+    let text = '';
+
+    if (normalizedName.endsWith('.docx') || mimeType.includes('wordprocessingml')) {
+      const result = await mammoth.extractRawText({ buffer });
+      text = result.value;
+    } else if (normalizedName.endsWith('.txt') || mimeType.startsWith('text/')) {
+      text = buffer.toString('utf8');
+    } else {
+      return res.status(400).json(fail('UNSUPPORTED_FILE_TYPE', 'Unsupported resource import file type'));
+    }
+
+    return res.status(200).json(ok({ text: text.trim(), fileName }));
+  } catch (error) {
+    console.error('Resource import file parse failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

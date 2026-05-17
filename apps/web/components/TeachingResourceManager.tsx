@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Edit3, ImagePlus, Loader2, Plus, RefreshCw, Save, Search, Upload, X } from 'lucide-react';
+import { BookOpen, Edit3, FileText, ImagePlus, Loader2, Plus, RefreshCw, Save, Search, Upload, X } from 'lucide-react';
 import * as Tesseract from 'tesseract.js';
 import { apiRequest } from '../utils/apiFetch';
 
@@ -52,6 +52,11 @@ type ParsedResource = {
   isActive: boolean;
 };
 
+type ResourceImportFileTextResponse = {
+  text: string;
+  fileName: string;
+};
+
 const RESOURCE_TYPES: Array<{ value: ManagedResource['type']; label: string }> = [
   { value: 'vocabulary', label: '商务词汇' },
   { value: 'phrases', label: '常用句式' },
@@ -70,16 +75,9 @@ const emptyForm = (stageId = ''): ResourceForm => ({
 
 const typeLabel = (type: ManagedResource['type']) =>
   RESOURCE_TYPES.find((item) => item.value === type)?.label ?? type;
-const LATIN_CHAR_PATTERN = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]/;
-const LATIN_TEXT_PATTERN = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]{2,}/;
 const normalizeOcrSpacing = (value: string) => value.replace(/[\u00a0\u3000]/g, ' ');
 const stripLeadingIndex = (line: string) =>
   normalizeOcrSpacing(line).trim().replace(/^\d+[\s.、:：)-]*/, '').trim();
-
-const looksLikePinyin = (value: string) => LATIN_CHAR_PATTERN.test(value) && !/^[\u4e00-\u9fff]+$/.test(value);
-
-const hasChinese = (value: string) => /[\u4e00-\u9fff]/.test(value);
-const hasLatinText = (value: string) => LATIN_TEXT_PATTERN.test(value);
 const mergeChineseSpaces = (value: string) =>
   normalizeOcrSpacing(value)
     .replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1')
@@ -96,115 +94,24 @@ const cleanOcrTerm = (value: string) =>
     .replace(/^[^\u4e00-\u9fff]+/, '')
     .replace(/\s*([；;:：])\s*$/g, '')
     .trim();
-const parseLooseOcrLine = (line: string, localId: string, sortOrder: number): ParsedResource => {
-  const normalized = normalizeOcrSpacing(line).replace(/\s+/g, ' ').trim();
-  const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
-  const firstLatinIndex = contentFirst.search(LATIN_CHAR_PATTERN);
-
-  if (firstLatinIndex > 0) {
-    return {
-      localId,
-      term: cleanOcrTerm(contentFirst.slice(0, firstLatinIndex)),
-      explanation: cleanOcrField(contentFirst.slice(firstLatinIndex)),
-      example: '',
-      sortOrder,
-      isActive: true
-    };
-  }
-
-  return {
-    localId,
-    term: cleanOcrTerm(contentFirst || normalized),
-    explanation: cleanOcrField(contentFirst || normalized),
-    example: '',
-    sortOrder,
-    isActive: true
-  };
-};
+const extractChineseTerm = (line: string) => cleanOcrTerm(line.match(/[\u4e00-\u9fff]+/g)?.join('') ?? '');
 
 const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =>
   text
     .split(/\r?\n/)
     .map((line) => stripLeadingIndex(line))
     .filter(Boolean)
-    .map((line, index) => {
-      const tabParts = line.split(/\t+/).map((part) => part.trim()).filter(Boolean);
-      const normalized = normalizeOcrSpacing(line).replace(/\s+/g, ' ').trim();
-      const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
-      const firstLatinIndex = contentFirst.search(LATIN_CHAR_PATTERN);
-      const spacedParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
-      const parts = tabParts.length >= 2 ? tabParts : spacedParts;
-      const localId = `bulk-${startOrder + index}-${line}`;
-
-      if (hasChinese(normalized) && hasLatinText(normalized) && parts.length < 3) {
-        return parseLooseOcrLine(line, localId, startOrder + index);
-      }
-
-      if (tabParts.length < 2 && firstLatinIndex > 0) {
-        return {
-          localId,
-          term: cleanOcrTerm(contentFirst.slice(0, firstLatinIndex)),
-          explanation: cleanOcrField(contentFirst.slice(firstLatinIndex)),
-          example: '',
-          sortOrder: startOrder + index,
-          isActive: true
-        };
-      }
-
-      if (parts.length >= 3) {
-        const [rawTerm, rawPinyin, ...rawRest] = parts;
-        const term = cleanOcrTerm(rawTerm);
-        const maybePinyin = cleanOcrField(rawPinyin);
-        const rest = rawRest.map(cleanOcrField).filter(Boolean);
-        return {
-          localId,
-          term,
-          explanation: looksLikePinyin(maybePinyin)
-            ? `拼音：${maybePinyin}；英文：${rest.join(' ')}`
-            : [maybePinyin, ...rest].join(' '),
-          example: '',
-          sortOrder: startOrder + index,
-          isActive: true
-        };
-      }
-
-      if (parts.length === 2) {
-        const [first, second] = parts.map(cleanOcrField);
-        return {
-          localId,
-          term: cleanOcrTerm(first),
-          explanation: looksLikePinyin(second) ? `拼音：${second}` : second,
-          example: '',
-          sortOrder: startOrder + index,
-          isActive: true
-        };
-      }
-
-      const match = normalized.match(/^(.+?)\s+([A-Za-zÀ-ÖØ-öø-ÿĀ-ž].+)$/);
-      if (match) {
-        return {
-          localId,
-          term: cleanOcrTerm(match[1]),
-          explanation: cleanOcrField(match[2]),
-          example: '',
-          sortOrder: startOrder + index,
-          isActive: true
-        };
-      }
-
-      return {
-        localId,
-        term: cleanOcrTerm(normalized),
-        explanation: cleanOcrField(normalized),
-        example: '',
-        sortOrder: startOrder + index,
-        isActive: true
-      };
-    })
+    .map((line, index) => ({
+      localId: `bulk-${startOrder + index}-${line}`,
+      term: extractChineseTerm(line),
+      explanation: extractChineseTerm(line),
+      example: '',
+      sortOrder: startOrder + index,
+      isActive: true
+    }))
+    .filter((item) => item.term)
     .map((item, index) => ({
       ...item,
-      term: item.term || item.explanation || `未命名词条 ${startOrder + index}`,
-      explanation: item.explanation || item.term || `未命名词条 ${startOrder + index}`,
       sortOrder: startOrder + index
     }));
 
@@ -223,6 +130,7 @@ const TeachingResourceManager: React.FC = () => {
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [ocrRunning, setOcrRunning] = useState(false);
+  const [documentReading, setDocumentReading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrStatus, setOcrStatus] = useState('');
   const [showManualForm, setShowManualForm] = useState(false);
@@ -387,8 +295,60 @@ const TeachingResourceManager: React.FC = () => {
     setOcrStatus(`本地 OCR 解析完成：${localResources.length} 条`);
   };
 
+  const readFileAsBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const value = String(reader.result || '');
+        resolve(value.includes(',') ? value.split(',').pop() || '' : value);
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleBulkDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setDocumentReading(true);
+    setError('');
+    setOcrStatus(`正在读取文档：${file.name}`);
+
+    try {
+      let text = '';
+      if (file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.txt')) {
+        text = await file.text();
+      } else {
+        const contentBase64 = await readFileAsBase64(file);
+        const result = await apiRequest<ResourceImportFileTextResponse>(
+          '/api/admin/resources/import-file-text',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type,
+              contentBase64
+            })
+          }
+        );
+        text = result.text;
+      }
+
+      updateBulkText(text);
+      setOcrProgress(100);
+      setOcrStatus(`文档读取完成：${parseResourceRows(text, nextSortOrder).length} 条中文词汇`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '文档读取失败');
+      setOcrStatus('文档读取失败');
+    } finally {
+      setDocumentReading(false);
+    }
+  };
+
   const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
 
     setOcrRunning(true);
@@ -629,7 +589,7 @@ const TeachingResourceManager: React.FC = () => {
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
                     Batch Import
                   </p>
-                  <h4 className="mt-1 text-lg font-black text-slate-900">截图批量导入</h4>
+                  <h4 className="mt-1 text-lg font-black text-slate-900">文档批量导入</h4>
                   <p className="mt-1 text-xs text-slate-400">
                     当前阶段：{selectedStage ? `${selectedStage.sortOrder}. ${selectedStage.titleZh}` : '未选择'}
                   </p>
@@ -640,13 +600,44 @@ const TeachingResourceManager: React.FC = () => {
               <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[360px_minmax(0,1fr)]">
                 <div className="space-y-4">
                   <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-4 py-5 text-center transition hover:bg-indigo-50">
-                    <ImagePlus className="text-indigo-500" size={24} />
-                    <span className="mt-2 text-sm font-black text-slate-700">上传商务词汇截图</span>
+                    <FileText className="text-indigo-500" size={24} />
+                    <span className="mt-2 text-sm font-black text-slate-700">上传 Word / Text 文档</span>
                     <span className="mt-1 text-xs leading-5 text-slate-400">
-                      截图保留在这里对照，右侧生成可编辑导入草稿。
+                      优先使用教师整理好的文本资料，系统只提取每行中文词汇。
+                    </span>
+                    <input
+                      type="file"
+                      accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={handleBulkDocument}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center transition hover:bg-slate-100">
+                    <ImagePlus className="text-indigo-500" size={24} />
+                    <span className="mt-2 text-sm font-black text-slate-700">上传截图辅助 OCR</span>
+                    <span className="mt-1 text-xs leading-5 text-slate-400">
+                      图片识别只作为补充，识别后仍可在右侧手动校正。
                     </span>
                     <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
                   </label>
+
+                  {(ocrRunning || documentReading || ocrStatus) && (
+                    <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{ocrStatus || '正在读取资料'}</span>
+                        {(ocrRunning || documentReading) && <Loader2 className="animate-spin" size={14} />}
+                      </div>
+                      {ocrRunning && (
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
+                          <div
+                            className="h-full rounded-full bg-indigo-500 transition-all"
+                            style={{ width: `${ocrProgress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {bulkImagePreview && (
                     <div className="space-y-4">
@@ -655,20 +646,6 @@ const TeachingResourceManager: React.FC = () => {
                         alt="商务词汇截图预览"
                         className="max-h-[420px] w-full rounded-2xl border border-slate-100 bg-white object-contain"
                       />
-                      {(ocrRunning || ocrStatus) && (
-                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
-                          <div className="flex items-center justify-between gap-3">
-                            <span>{ocrStatus || '正在识别图片'}</span>
-                            <span>{ocrProgress}%</span>
-                          </div>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
-                            <div
-                              className="h-full rounded-full bg-indigo-500 transition-all"
-                              style={{ width: `${ocrProgress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -817,7 +794,7 @@ const TeachingResourceManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={importBulkResources}
-                  disabled={bulkSaving || ocrRunning || !selectedStageId || !bulkResources.length}
+                  disabled={bulkSaving || ocrRunning || documentReading || !selectedStageId || !bulkResources.length}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
