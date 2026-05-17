@@ -104,7 +104,7 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
     .map((line, index) => ({
       localId: `bulk-${startOrder + index}-${line}`,
       term: extractChineseTerm(line),
-      explanation: extractChineseTerm(line),
+      explanation: '',
       example: '',
       sortOrder: startOrder + index,
       isActive: true
@@ -381,10 +381,10 @@ const TeachingResourceManager: React.FC = () => {
       .map(({ localId: _localId, ...resource }) => ({
         ...resource,
         term: resource.term.trim(),
-        explanation: resource.explanation.trim(),
+        explanation: resource.explanation.trim() || resource.term.trim(),
         example: resource.example.trim()
       }))
-      .filter((resource) => resource.term && resource.explanation);
+      .filter((resource) => resource.term);
 
     if (!selectedStageId || !resourcesToImport.length) return;
 
@@ -600,8 +600,14 @@ const TeachingResourceManager: React.FC = () => {
               <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[360px_minmax(0,1fr)]">
                 <div className="space-y-4">
                   <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-4 py-5 text-center transition hover:bg-indigo-50">
-                    <FileText className="text-indigo-500" size={24} />
-                    <span className="mt-2 text-sm font-black text-slate-700">上传 Word / Text 文档</span>
+                    {documentReading ? (
+                      <Loader2 className="animate-spin text-indigo-500" size={24} />
+                    ) : (
+                      <FileText className="text-indigo-500" size={24} />
+                    )}
+                    <span className="mt-2 text-sm font-black text-slate-700">
+                      {documentReading ? '文档读取中...' : '上传 Word / Text 文档'}
+                    </span>
                     <span className="mt-1 text-xs leading-5 text-slate-400">
                       优先使用教师整理好的文本资料，系统只提取每行中文词汇。
                     </span>
@@ -614,8 +620,14 @@ const TeachingResourceManager: React.FC = () => {
                   </label>
 
                   <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center transition hover:bg-slate-100">
-                    <ImagePlus className="text-indigo-500" size={24} />
-                    <span className="mt-2 text-sm font-black text-slate-700">上传截图辅助 OCR</span>
+                    {ocrRunning ? (
+                      <Loader2 className="animate-spin text-indigo-500" size={24} />
+                    ) : (
+                      <ImagePlus className="text-indigo-500" size={24} />
+                    )}
+                    <span className="mt-2 text-sm font-black text-slate-700">
+                      {ocrRunning ? '截图识别中...' : '上传截图辅助 OCR'}
+                    </span>
                     <span className="mt-1 text-xs leading-5 text-slate-400">
                       图片识别只作为补充，识别后仍可在右侧手动校正。
                     </span>
@@ -653,7 +665,7 @@ const TeachingResourceManager: React.FC = () => {
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
                     <div className="mb-3 flex items-center justify-between">
-                      <p className="text-xs font-black text-slate-500">原始 OCR 文本校正</p>
+                      <p className="text-xs font-black text-slate-500">文本校正</p>
                       <button
                         type="button"
                         onClick={() => {

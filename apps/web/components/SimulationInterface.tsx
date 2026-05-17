@@ -266,6 +266,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [cultureHints, setCultureHints] = useState<string[]>([]);
   const [documentContexts, setDocumentContexts] = useState<DocumentContext[]>([]);
   const [uploadingContext, setUploadingContext] = useState(false);
+  const [uploadingContextStatus, setUploadingContextStatus] = useState('');
   const [currentStage, setCurrentStage] = useState<SimulationStage>(
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
@@ -554,13 +555,16 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     }
 
     setUploadingContext(true);
+    setUploadingContextStatus(`正在读取：${file.name}`);
     try {
       let text = '';
       const kind = detectDocumentKind(file);
       if (kind === 'image') {
+        setUploadingContextStatus(`正在识别图片：${file.name}`);
         const result = await Tesseract.recognize(file, 'chi_sim+eng');
         text = result.data.text.trim();
       } else {
+        setUploadingContextStatus(`正在解析文档：${file.name}`);
         const dataUrl = await readFileAsDataUrl(file);
         const parsed = await apiRequest<{
           fileName: string;
@@ -578,6 +582,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       }
 
       if (!text) {
+        setUploadingContextStatus('没有读取到可用文本');
         alert('没有读取到可用文本。扫描版 PDF 请先转成图片上传，或使用可复制文字的 PDF/Word。');
         return;
       }
@@ -591,7 +596,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           text: text.slice(0, 6000)
         }
       ].slice(-4));
+      setUploadingContextStatus(`已加入资料：${file.name}`);
     } catch (error) {
+      setUploadingContextStatus('资料读取失败');
       alert(error instanceof Error ? error.message : '资料读取失败，请换一个文件试试。');
     } finally {
       setUploadingContext(false);
@@ -879,6 +886,18 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   >
                     <Send size={18} />
                   </button>
+                </div>
+                <div
+                  className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                    uploadingContext
+                      ? 'border-blue-100 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-500'
+                  }`}
+                >
+                  {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
+                  <span className="truncate">
+                    {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
+                  </span>
                 </div>
                 <div className="flex w-36 shrink-0 flex-col gap-2">
                   <button

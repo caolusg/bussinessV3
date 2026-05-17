@@ -1,5 +1,5 @@
 import React from 'react';
-import { Circle, Loader2 } from 'lucide-react';
+import { Circle, CheckCircle2 } from 'lucide-react';
 import { STAGES } from '../constants';
 import type { Stage } from '../types';
 
@@ -33,22 +33,22 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               className="group relative z-10 flex cursor-pointer flex-col items-center"
             >
               {isSelected && (
-                <div className="absolute top-0 h-10 w-10 rounded-full ring-2 ring-blue-600 ring-offset-2" />
+                <div className="absolute top-0 h-10 w-10 rounded-full ring-2 ring-emerald-500 ring-offset-2" />
               )}
 
               <div
                 className={`flex h-10 w-10 items-center justify-center rounded-full border-4 transition-all duration-300 ${
                   isSelected
-                    ? 'scale-110 border-amber-400 bg-white text-amber-500 shadow-lg shadow-amber-100'
+                    ? 'scale-110 border-emerald-500 bg-emerald-50 text-emerald-600 shadow-lg shadow-emerald-100'
                     : 'border-blue-200 bg-white text-blue-500 shadow-sm shadow-blue-50'
                 }`}
               >
-                {isSelected ? <Loader2 size={20} className="animate-spin" /> : <Circle size={16} />}
+                {isSelected ? <CheckCircle2 size={20} /> : <Circle size={16} />}
               </div>
 
               <div
                 className={`mt-3 whitespace-nowrap rounded px-2 py-1 text-xs font-semibold transition-colors ${
-                  isSelected ? 'bg-slate-900 text-white' : 'bg-blue-50 text-blue-700'
+                  isSelected ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700'
                 }`}
               >
                 {stage.id}. {stage.title.split(' ')[0]}
