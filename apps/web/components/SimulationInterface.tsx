@@ -849,55 +849,57 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                 </div>
               )}
               <div className="flex items-end gap-3">
-                <div className="flex min-h-[72px] flex-1 items-end gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingContext || loadingSession}
-                    aria-label="上传产品资料"
-                    title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
-                    className="mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                <div className="flex min-h-[72px] flex-1 flex-col gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                  <div className="flex items-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingContext || loadingSession}
+                      aria-label="上传产品资料"
+                      title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
+                      className="mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {uploadingContext ? (
+                        <Loader2 className="animate-spin" size={16} />
+                      ) : (
+                        <Paperclip size={16} />
+                      )}
+                    </button>
+                    <textarea
+                      value={inputValue}
+                      onChange={(event) => setInputValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void handleSend();
+                        }
+                      }}
+                      placeholder="输入消息，与客户进行业务沟通..."
+                      className="min-h-12 max-h-36 flex-1 resize-none border-none bg-transparent py-2 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                      rows={1}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSend()}
+                      disabled={!inputValue.trim() || sending || loadingSession}
+                      aria-label="发送消息"
+                      className="mb-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                  <div
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                      uploadingContext
+                        ? 'border-blue-100 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-500'
+                    }`}
                   >
-                    {uploadingContext ? (
-                      <Loader2 className="animate-spin" size={16} />
-                    ) : (
-                      <Paperclip size={16} />
-                    )}
-                  </button>
-                  <textarea
-                    value={inputValue}
-                    onChange={(event) => setInputValue(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void handleSend();
-                      }
-                    }}
-                    placeholder="输入消息，与客户进行业务沟通..."
-                    className="min-h-12 max-h-36 flex-1 resize-none border-none bg-transparent py-2 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
-                    rows={1}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleSend()}
-                    disabled={!inputValue.trim() || sending || loadingSession}
-                    aria-label="发送消息"
-                    className="mb-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-                <div
-                  className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
-                    uploadingContext
-                      ? 'border-blue-100 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 bg-white text-slate-500'
-                  }`}
-                >
-                  {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
-                  <span className="truncate">
-                    {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
-                  </span>
+                    {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
+                    <span className="truncate">
+                      {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex w-36 shrink-0 flex-col gap-2">
                   <button
