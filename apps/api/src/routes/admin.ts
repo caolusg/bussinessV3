@@ -9,6 +9,7 @@ import {
   readRuntimeState,
   updateRuntimeConfig
 } from '../services/runtimeConfigService.js';
+import { cleanResourcesFromOcrText } from '../ai/compatibleAiClient.js';
 
 const router = Router();
 
@@ -125,6 +126,12 @@ const resourceBulkPayloadSchema = z.object({
       isActive: z.coerce.boolean().default(true)
     })
   ).min(1).max(500)
+});
+
+const resourceOcrTextPayloadSchema = z.object({
+  ocrText: z.string().trim().min(1).max(80_000),
+  stageTitle: z.string().trim().max(160).optional().nullable().default(null),
+  type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary')
 });
 
 const resourceParamsSchema = z.object({
@@ -849,6 +856,30 @@ router.post('/resources/bulk', async (req, res) => {
     return res.status(201).json(ok({ createdCount: result.count }));
   } catch (error) {
     console.error('Bulk create learning resources failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/resources/ocr-text-cleanup', async (req, res) => {
+  try {
+    const parsed = resourceOcrTextPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid OCR text payload'));
+    }
+
+    const result = await cleanResourcesFromOcrText({
+      ocrText: parsed.data.ocrText,
+      stageTitle: parsed.data.stageTitle,
+      resourceType: parsed.data.type
+    });
+
+    if (result.degraded || !result.resources.length) {
+      return res.status(502).json(fail('AI_OCR_CLEANUP_FAILED', 'AI OCR cleanup failed'));
+    }
+
+    return res.status(200).json(ok(result));
+  } catch (error) {
+    console.error('AI OCR resource cleanup failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

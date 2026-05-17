@@ -51,6 +51,18 @@ export type CoachingReplyResult = {
   degraded: boolean;
 };
 
+export type ResourceOcrItem = {
+  term: string;
+  explanation: string;
+  example?: string;
+};
+
+export type ResourceOcrResult = {
+  resources: ResourceOcrItem[];
+  rawText: string;
+  degraded: boolean;
+};
+
 type ResolvedAiConfig = {
   provider: string;
   apiKey: string;
@@ -223,6 +235,111 @@ export async function generateCoachingReply(args: {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export async function cleanResourcesFromOcrText(args: {
+  ocrText: string;
+  stageTitle?: string | null;
+  resourceType?: 'vocabulary' | 'phrases' | 'knowledge';
+}): Promise<ResourceOcrResult> {
+  const runtimeConfig = await resolveAiConfig();
+  if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
+    return { resources: [], rawText: '', degraded: true };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
+  const resourceTypeLabel =
+    args.resourceType === 'phrases' ? '常用句式' : args.resourceType === 'knowledge' ? '外贸常识' : '商务词汇';
+
+  const systemPrompt = [
+    '你是商务中文教学资源 OCR 文本清洗助手。',
+    '用户会给你一段 OCR 识别出的混乱文本。请从中提取真正的学习资源条目，只返回 JSON，不要输出解释。',
+    'JSON 格式必须是：{"resources":[{"term":"中文词汇或句式","explanation":"拼音和英文释义","example":""}],"rawText":"清洗前的主要 OCR 文本"}。',
+    '严格过滤页眉、表头、序号、图片说明、文件名、英文噪声、残缺符号、无意义短片段。',
+    'term 必须是清晰的中文词汇、中文短语或中文句式；把中文字符之间误识别出的空格去掉，例如“家 居 用 品”改为“家居用品”。',
+    'explanation 中保留拼音和英文释义；不要把无关英文噪声当作解释。',
+    '如果某行不确定是否是有效学习资源，就不要放进 resources。'
+  ].join('\n');
+
+  try {
+    const completion = await createChatCompletion(
+      {
+        model: runtimeConfig.model,
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              `资源类型：${resourceTypeLabel}`,
+              `业务阶段：${args.stageTitle || '未指定'}`,
+              'OCR 文本如下：',
+              args.ocrText
+            ].join('\n')
+          }
+        ]
+      },
+      controller.signal,
+      runtimeConfig
+    );
+
+    const content = completion.choices?.[0]?.message?.content?.trim() ?? '';
+    const parsed = parseResourceOcrJson(content);
+    return {
+      resources: parsed.resources,
+      rawText: parsed.rawText || content,
+      degraded: false
+    };
+  } catch (error) {
+    const err = error as {
+      name?: string;
+      status?: number;
+      code?: string;
+      type?: string;
+      message?: string;
+    };
+    console.warn('Compatible AI resource OCR cleanup failed, using fallback:', {
+      provider: runtimeConfig.provider,
+      baseURL: runtimeConfig.baseURL,
+      model: runtimeConfig.model,
+      name: err.name,
+      status: err.status,
+      code: err.code,
+      type: err.type,
+      message: err.message
+    });
+    return { resources: [], rawText: '', degraded: true };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function parseResourceOcrJson(content: string): { resources: ResourceOcrItem[]; rawText: string } {
+  const jsonText = content
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+  const start = jsonText.indexOf('{');
+  const end = jsonText.lastIndexOf('}');
+  const sliced = start >= 0 && end > start ? jsonText.slice(start, end + 1) : jsonText;
+  const parsed = JSON.parse(sliced) as {
+    resources?: Array<Partial<ResourceOcrItem>>;
+    rawText?: unknown;
+  };
+
+  return {
+    rawText: typeof parsed.rawText === 'string' ? parsed.rawText : '',
+    resources: (parsed.resources ?? [])
+      .map((item) => ({
+        term: String(item.term ?? '').trim(),
+        explanation: String(item.explanation ?? '').trim(),
+        example: String(item.example ?? '').trim()
+      }))
+      .filter((item) => item.term && item.explanation)
+      .slice(0, 200)
+  };
 }
 
 function createChatCompletion(

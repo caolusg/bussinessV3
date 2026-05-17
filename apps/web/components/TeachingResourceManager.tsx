@@ -52,6 +52,16 @@ type ParsedResource = {
   isActive: boolean;
 };
 
+type ResourceOcrResponse = {
+  resources: Array<{
+    term: string;
+    explanation: string;
+    example?: string;
+  }>;
+  rawText: string;
+  degraded: boolean;
+};
+
 const RESOURCE_TYPES: Array<{ value: ManagedResource['type']; label: string }> = [
   { value: 'vocabulary', label: '商务词汇' },
   { value: 'phrases', label: '常用句式' },
@@ -163,6 +173,21 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       sortOrder: startOrder + index
     }));
 
+const resourcesFromAiOcr = (
+  resources: ResourceOcrResponse['resources'],
+  startOrder: number
+): ParsedResource[] =>
+  resources
+    .map((resource, index) => ({
+      localId: `ai-${startOrder + index}-${resource.term}-${index}`,
+      term: cleanOcrTerm(resource.term),
+      explanation: cleanOcrField(resource.explanation),
+      example: cleanOcrField(resource.example ?? ''),
+      sortOrder: startOrder + index,
+      isActive: true
+    }))
+    .filter((item) => !isLikelyOcrNoise(item));
+
 const TeachingResourceManager: React.FC = () => {
   const [data, setData] = useState<ResourceManagerData | null>(null);
   const [selectedStageId, setSelectedStageId] = useState('');
@@ -218,10 +243,6 @@ const TeachingResourceManager: React.FC = () => {
     () => Math.max(0, ...(selectedStage?.resources ?? []).map((resource) => resource.sortOrder)) + 1,
     [selectedStage]
   );
-  useEffect(() => {
-    setBulkResources(parseResourceRows(bulkText, nextSortOrder));
-  }, [bulkText, nextSortOrder]);
-
   const resetForm = (stageId = selectedStageId) => {
     setEditingId('');
     setForm(emptyForm(stageId));
@@ -314,33 +335,79 @@ const TeachingResourceManager: React.FC = () => {
     ]);
   };
 
+  const updateBulkText = (text: string) => {
+    setBulkText(text);
+    setBulkResources(parseResourceRows(text, nextSortOrder));
+  };
+
+  const runLocalOcr = async (file: File) => {
+    const result = await Tesseract.recognize(file, 'chi_sim+eng', {
+      logger: (message) => {
+        if (typeof message.progress === 'number') {
+          setOcrProgress(Math.max(0, Math.min(100, Math.round(message.progress * 100))));
+        }
+        if (message.status) {
+          setOcrStatus(`本地 OCR：${message.status}`);
+        }
+      }
+    });
+    const text = result.data.text.trim();
+    setBulkText(text);
+    if (!text) {
+      updateBulkText(text);
+      setOcrStatus('未识别到有效文本');
+      return;
+    }
+    setOcrProgress(82);
+    setOcrStatus('本地 OCR 完成，正在用 DeepSeek 清洗词条');
+    try {
+      await runAiCleanup(text);
+    } catch {
+      updateBulkText(text);
+      setOcrStatus('DeepSeek 清洗失败，已使用本地 OCR 结果');
+    }
+  };
+
+  const runAiCleanup = async (ocrText: string) => {
+    const result = await apiRequest<ResourceOcrResponse>('/api/admin/resources/ocr-text-cleanup', {
+      method: 'POST',
+      body: JSON.stringify({
+        ocrText,
+        stageTitle: selectedStage?.titleZh ?? '',
+        type: form.type
+      })
+    });
+    const resources = resourcesFromAiOcr(result.resources, nextSortOrder);
+    if (!resources.length) {
+      throw new Error('DeepSeek 未提取到有效资源');
+    }
+    setBulkResources(resources);
+    setBulkText(result.rawText || resources.map((resource) =>
+      `${resource.sortOrder}\t${resource.term}\t${resource.explanation}`
+    ).join('\n'));
+    setOcrStatus(`DeepSeek 清洗完成：${resources.length} 条`);
+  };
+
   const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setBulkImagePreview(String(reader.result || ''));
-    reader.readAsDataURL(file);
-
     setOcrRunning(true);
     setOcrProgress(0);
-    setOcrStatus('正在识别图片');
+    setOcrStatus('正在读取图片并进行本地 OCR');
     setError('');
 
     try {
-      const result = await Tesseract.recognize(file, 'chi_sim+eng', {
-        logger: (message) => {
-          if (typeof message.progress === 'number') {
-            setOcrProgress(Math.max(0, Math.min(100, Math.round(message.progress * 100))));
-          }
-          if (message.status) {
-            setOcrStatus(message.status);
-          }
-        }
+      const imageDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('图片读取失败'));
+        reader.readAsDataURL(file);
       });
-      const text = result.data.text.trim();
-      setBulkText(text);
-      setOcrStatus(text ? '识别完成' : '未识别到有效文本');
+      setBulkImagePreview(imageDataUrl);
+      setOcrProgress(10);
+      await runLocalOcr(file);
+      setOcrProgress(100);
     } catch (err) {
       setError(err instanceof Error ? err.message : '图片识别失败');
       setOcrStatus('识别失败');
@@ -606,7 +673,10 @@ const TeachingResourceManager: React.FC = () => {
                     <p className="text-xs font-black text-slate-500">原始 OCR 文本校正</p>
                     <button
                       type="button"
-                      onClick={() => setBulkText('')}
+                      onClick={() => {
+                        setBulkText('');
+                        setBulkResources([]);
+                      }}
                       className="text-xs font-black text-slate-400 hover:text-rose-500"
                     >
                       清空文本
@@ -614,7 +684,7 @@ const TeachingResourceManager: React.FC = () => {
                   </div>
                   <textarea
                     value={bulkText}
-                    onChange={(event) => setBulkText(event.target.value)}
+                    onChange={(event) => updateBulkText(event.target.value)}
                     placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
                     className="h-44 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
                   />

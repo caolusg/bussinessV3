@@ -50,6 +50,9 @@ const normalizeApiError = (raw: string, status?: number) => {
     case 'SYSTEM_CONFIG_SAVE_FAILED':
     case 'TEACHER_PASSWORD_RESET_FAILED':
       return '服务暂时不可用，请确认 API 服务启动后再试';
+    case 'AI_OCR_CLEANUP_FAILED':
+    case 'AI OCR cleanup failed':
+      return 'AI 清洗 OCR 文本失败，请确认系统管理中的 DeepSeek 配置可用';
     default:
       break;
   }
