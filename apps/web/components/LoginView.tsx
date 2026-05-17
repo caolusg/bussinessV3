@@ -223,7 +223,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
         setEmailSetupRequired(false);
         setPendingIdentifier(result.identifier);
         setFormData((current) => ({ ...current, username: '' }));
-        setMessage('当前用户名含有非法字符，请修改为只包含英文或数字的新用户名。');
+        setMessage(null);
         return;
       }
 
@@ -286,6 +286,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {usernameChangeRequired && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold leading-5 text-red-700">
+                <div>当前用户名：{pendingIdentifier}</div>
+                <div>当前用户名含有非法字符，请修改为以英文字母开头、且只包含英文或数字的新用户名。</div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-2">
                 <UserPlus size={14} className="text-slate-400" />
@@ -314,7 +321,11 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 }
               />
               {(isStudentRegister || usernameChangeRequired) && (
-                <p className="text-[11px] leading-5 text-slate-400">
+                <p
+                  className={`text-[11px] leading-5 ${
+                    usernameChangeRequired ? 'font-semibold text-red-600' : 'text-slate-400'
+                  }`}
+                >
                   必须以英文字母开头，且只能使用英文或数字。
                 </p>
               )}
