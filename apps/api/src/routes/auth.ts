@@ -18,6 +18,12 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/authMailService.js';
 
 const router = Router();
+const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
+const studentUsernameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(usernamePattern, 'Username must start with an English letter and can only contain English letters and numbers');
 
 const studentLoginSchema = z.object({
   mode: z.literal('login').optional(),
@@ -25,10 +31,17 @@ const studentLoginSchema = z.object({
   password: z.string().min(6)
 });
 
+const studentRenameUsernameSchema = z.object({
+  mode: z.literal('rename_username').optional(),
+  username: z.string().min(1),
+  password: z.string().min(6),
+  newUsername: studentUsernameSchema
+});
+
 const studentRegisterSchema = z
   .object({
     mode: z.literal('register').optional(),
-    username: z.string().min(1),
+    username: studentUsernameSchema,
     email: z.string().email(),
     password: z.string().min(6),
     confirmPassword: z.string().min(6)
@@ -140,6 +153,7 @@ const ensureActiveUser = (status: string) =>
 
 const normalizeUsername = (username: string) => username.trim();
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const isValidUsername = (username: string) => usernamePattern.test(username);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 const makeToken = () => randomBytes(32).toString('hex');
 const buildUrl = (path: string, token: string) =>
@@ -365,6 +379,14 @@ router.post('/student/register_or_login', async (req, res) => {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
+    if (!isValidUsername(existing.username)) {
+      return res.status(409).json(
+        failWithData('USERNAME_CHANGE_REQUIRED', 'Username change required', {
+          identifier: existing.username
+        })
+      );
+    }
+
     if (shouldBlockUnverifiedLogin(existing)) {
       if (!existing.email) {
         return res.status(403).json(
@@ -470,6 +492,14 @@ router.post('/student/login', async (req, res) => {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
+    if (!isValidUsername(user.username)) {
+      return res.status(409).json(
+        failWithData('USERNAME_CHANGE_REQUIRED', 'Username change required', {
+          identifier: user.username
+        })
+      );
+    }
+
     if (shouldBlockUnverifiedLogin(user)) {
       if (!user.email) {
         return res.status(403).json(
@@ -495,6 +525,73 @@ router.post('/student/login', async (req, res) => {
     return res.status(200).json(ok({ user: { id: user.id, username: user.username }, token }));
   } catch (error) {
     console.error('Student login failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/student/rename-username', async (req, res) => {
+  try {
+    const parsed = studentRenameUsernameSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const identifier = normalizeUsername(parsed.data.username);
+    const newUsername = normalizeUsername(parsed.data.newUsername);
+    const user = await findUserByIdentifier(identifier);
+    if (!user) {
+      return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
+    }
+
+    const match = await bcrypt.compare(parsed.data.password, user.passwordHash);
+    if (!match) {
+      return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
+    }
+
+    const roles = await getUserRoles(user.id);
+    if (!roles.includes('student')) {
+      return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
+    }
+
+    if (isValidUsername(user.username)) {
+      return res.status(400).json(fail('USERNAME_CHANGE_NOT_REQUIRED', 'Username change not required'));
+    }
+
+    const existingUsername = await prisma.user.findUnique({ where: { username: newUsername } });
+    if (existingUsername && existingUsername.id !== user.id) {
+      return res.status(409).json(fail('USERNAME_TAKEN', 'Username already exists'));
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { username: newUsername }
+    });
+
+    if (shouldBlockUnverifiedLogin(updated)) {
+      if (!updated.email) {
+        return res.status(403).json(
+          failWithData('EMAIL_REQUIRED', 'Email required', {
+            identifier: updated.username
+          })
+        );
+      }
+
+      return res.status(403).json(
+        failWithData('EMAIL_NOT_VERIFIED', 'Email verification required', {
+          identifier: updated.username,
+          email: updated.email
+        })
+      );
+    }
+
+    if (!ensureActiveUser(updated.status)) {
+      return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
+    }
+
+    const token = issueAuthToken(updated.id);
+    return res.status(200).json(ok({ user: { id: updated.id, username: updated.username }, token }));
+  } catch (error) {
+    console.error('Student username rename failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

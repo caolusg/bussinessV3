@@ -347,12 +347,14 @@ const AppRoutes: React.FC = () => {
     if (selectedRole === UserRole.TEACHER) {
       endpoint = '/api/auth/teacher/login';
     } else {
-      const mode = (payload as { mode?: 'login' | 'register' | 'complete_email' }).mode;
+      const mode = (payload as { mode?: 'login' | 'register' | 'complete_email' | 'rename_username' }).mode;
       endpoint =
         mode === 'register'
           ? '/api/auth/student/register'
           : mode === 'complete_email'
             ? '/api/auth/student/complete-email'
+            : mode === 'rename_username'
+              ? '/api/auth/student/rename-username'
           : '/api/auth/student/login';
     }
 
@@ -428,7 +430,11 @@ const AppRoutes: React.FC = () => {
       };
     }
 
-    if (selectedRole === UserRole.STUDENT && 'mode' in payload && payload.mode === 'login') {
+    if (
+      selectedRole === UserRole.STUDENT &&
+      'mode' in payload &&
+      (payload.mode === 'login' || payload.mode === 'rename_username')
+    ) {
       const login = await apiFetch<{
         ok?: boolean;
         code?: string;
@@ -443,7 +449,16 @@ const AppRoutes: React.FC = () => {
         endpoint,
         {
           method: 'POST',
-          body: JSON.stringify(payload)
+          body: JSON.stringify(
+            payload.mode === 'rename_username'
+              ? {
+                  username: payload.username,
+                  password: payload.password,
+                  newUsername: payload.newUsername,
+                  mode: payload.mode
+                }
+              : payload
+          )
         }
       );
 
@@ -461,6 +476,13 @@ const AppRoutes: React.FC = () => {
             kind: 'verification_required',
             identifier: envelope.data?.identifier ?? payload.username,
             email: envelope.data?.email ?? ''
+          };
+        }
+
+        if (envelope?.code === 'USERNAME_CHANGE_REQUIRED') {
+          return {
+            kind: 'username_change_required',
+            identifier: envelope.data?.identifier ?? payload.username
           };
         }
 
