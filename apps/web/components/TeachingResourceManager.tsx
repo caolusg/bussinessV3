@@ -74,6 +74,27 @@ const stripLeadingIndex = (line: string) => line.replace(/^\d+[\s.、-]*/, '').t
 
 const looksLikePinyin = (value: string) => /[a-zà-ž]/i.test(value) && !/^[\u4e00-\u9fff]+$/.test(value);
 
+const hasChinese = (value: string) => /[\u4e00-\u9fff]/.test(value);
+const hasLatinText = (value: string) => /[a-zà-ž]{2,}/i.test(value);
+const mergeChineseSpaces = (value: string) =>
+  value.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1').replace(/\s+/g, ' ').trim();
+const cleanOcrField = (value: string) =>
+  mergeChineseSpaces(value)
+    .replace(/[|｜]/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+const cleanOcrTerm = (value: string) => cleanOcrField(value).replace(/\s*([；;:：])\s*$/g, '').trim();
+const isLikelyOcrNoise = (item: ParsedResource) => {
+  const term = item.term.trim();
+  const explanation = item.explanation.trim();
+  if (!term || !explanation) return true;
+  if (!hasChinese(term)) return true;
+  if (/^[\W_]+$/.test(term)) return true;
+  if (term === explanation && !hasLatinText(explanation) && term.length > 8) return true;
+  return false;
+};
+
 const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =>
   text
     .split(/\r?\n/)
@@ -87,13 +108,16 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       const localId = `bulk-${startOrder + index}-${line}`;
 
       if (parts.length >= 3) {
-        const [term, maybePinyin, ...rest] = parts;
+        const [rawTerm, rawPinyin, ...rawRest] = parts;
+        const term = cleanOcrTerm(rawTerm);
+        const maybePinyin = cleanOcrField(rawPinyin);
+        const rest = rawRest.map(cleanOcrField).filter(Boolean);
         return {
           localId,
           term,
           explanation: looksLikePinyin(maybePinyin)
             ? `拼音：${maybePinyin}；英文：${rest.join(' ')}`
-            : parts.slice(1).join(' '),
+            : [maybePinyin, ...rest].join(' '),
           example: '',
           sortOrder: startOrder + index,
           isActive: true
@@ -101,10 +125,10 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       }
 
       if (parts.length === 2) {
-        const [first, second] = parts;
+        const [first, second] = parts.map(cleanOcrField);
         return {
           localId,
-          term: first,
+          term: cleanOcrTerm(first),
           explanation: looksLikePinyin(second) ? `拼音：${second}` : second,
           example: '',
           sortOrder: startOrder + index,
@@ -116,8 +140,8 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       if (match) {
         return {
           localId,
-          term: match[1],
-          explanation: match[2],
+          term: cleanOcrTerm(match[1]),
+          explanation: cleanOcrField(match[2]),
           example: '',
           sortOrder: startOrder + index,
           isActive: true
@@ -126,14 +150,18 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
 
       return {
         localId,
-        term: normalized,
-        explanation: normalized,
+        term: cleanOcrTerm(normalized),
+        explanation: cleanOcrField(normalized),
         example: '',
         sortOrder: startOrder + index,
         isActive: true
       };
     })
-    .filter((item) => item.term && item.explanation);
+    .filter((item) => !isLikelyOcrNoise(item))
+    .map((item, index) => ({
+      ...item,
+      sortOrder: startOrder + index
+    }));
 
 const TeachingResourceManager: React.FC = () => {
   const [data, setData] = useState<ResourceManagerData | null>(null);
@@ -433,7 +461,7 @@ const TeachingResourceManager: React.FC = () => {
           </div>
         </aside>
 
-        <section className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(560px,1.25fr)_minmax(360px,0.75fr)]">
+        <section className="grid grid-cols-1 gap-6">
           <div className="order-2 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
