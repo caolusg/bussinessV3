@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Edit3, ImagePlus, Loader2, Plus, RefreshCw, Save, Search, Upload, X } from 'lucide-react';
+import * as Tesseract from 'tesseract.js';
 import { apiRequest } from '../utils/apiFetch';
 
 type ManagedResource = {
@@ -68,22 +69,28 @@ const emptyForm = (stageId = ''): ResourceForm => ({
 
 const typeLabel = (type: ManagedResource['type']) =>
   RESOURCE_TYPES.find((item) => item.value === type)?.label ?? type;
+const stripLeadingIndex = (line: string) => line.replace(/^\d+[\s.、-]*/, '').trim();
+
+const looksLikePinyin = (value: string) => /[a-zà-ž]/i.test(value) && !/^[\u4e00-\u9fff]+$/.test(value);
 
 const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =>
   text
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line) => stripLeadingIndex(line))
     .filter(Boolean)
     .map((line, index) => {
-      const normalized = line.replace(/^\d+[\s.、-]*/, '').trim();
+      const normalized = line.replace(/\s+/g, ' ').trim();
       const tabParts = normalized.split(/\t+/).map((part) => part.trim()).filter(Boolean);
-      const wideParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
-      const parts = tabParts.length >= 2 ? tabParts : wideParts;
+      const spacedParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
+      const parts = tabParts.length >= 2 ? tabParts : spacedParts;
 
       if (parts.length >= 3) {
+        const [term, maybePinyin, ...rest] = parts;
         return {
-          term: parts[0],
-          explanation: `拼音：${parts[1]}；英文：${parts.slice(2).join(' ')}`,
+          term,
+          explanation: looksLikePinyin(maybePinyin)
+            ? `拼音：${maybePinyin}；英文：${rest.join(' ')}`
+            : parts.slice(1).join(' '),
           example: '',
           sortOrder: startOrder + index,
           isActive: true
@@ -91,16 +98,17 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       }
 
       if (parts.length === 2) {
+        const [first, second] = parts;
         return {
-          term: parts[0],
-          explanation: parts[1],
+          term: first,
+          explanation: looksLikePinyin(second) ? `拼音：${second}` : second,
           example: '',
           sortOrder: startOrder + index,
           isActive: true
         };
       }
 
-      const match = normalized.match(/^([\u4e00-\u9fff（）()、·]+)\s+(.+)$/u);
+      const match = normalized.match(/^(.+?)\s+([a-zà-ž].+)$/i);
       if (match) {
         return {
           term: match[1],
@@ -134,6 +142,9 @@ const TeachingResourceManager: React.FC = () => {
   const [bulkImagePreview, setBulkImagePreview] = useState('');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrStatus, setOcrStatus] = useState('');
 
   const loadData = () => {
     setLoading(true);
@@ -239,12 +250,40 @@ const TeachingResourceManager: React.FC = () => {
     }
   };
 
-  const handleBulkImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = () => setBulkImagePreview(String(reader.result || ''));
     reader.readAsDataURL(file);
+
+    setOcrRunning(true);
+    setOcrProgress(0);
+    setOcrStatus('正在识别图片');
+    setError('');
+
+    try {
+      const result = await Tesseract.recognize(file, 'chi_sim+eng', {
+        logger: (message) => {
+          if (typeof message.progress === 'number') {
+            setOcrProgress(Math.max(0, Math.min(100, Math.round(message.progress * 100))));
+          }
+          if (message.status) {
+            setOcrStatus(message.status);
+          }
+        }
+      });
+      const text = result.data.text.trim();
+      setBulkText(text);
+      setOcrStatus(text ? '识别完成' : '未识别到有效文本');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '图片识别失败');
+      setOcrStatus('识别失败');
+    } finally {
+      setOcrRunning(false);
+      setOcrProgress(100);
+    }
   };
 
   const importBulkResources = async () => {
@@ -465,59 +504,101 @@ const TeachingResourceManager: React.FC = () => {
                 </label>
 
                 {bulkImagePreview && (
-                  <img
-                    src={bulkImagePreview}
-                    alt="商务词汇截图预览"
-                    className="max-h-52 w-full rounded-2xl border border-slate-100 object-contain"
-                  />
+                  <div className="space-y-4">
+                    <img
+                      src={bulkImagePreview}
+                      alt="商务词汇截图预览"
+                      className="max-h-52 w-full rounded-2xl border border-slate-100 object-contain"
+                    />
+                    {(ocrRunning || ocrStatus) && (
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>{ocrStatus || '正在识别图片'}</span>
+                          <span>{ocrProgress}%</span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
+                          <div
+                            className="h-full rounded-full bg-indigo-500 transition-all"
+                            style={{ width: `${ocrProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                <label className="block">
-                  <span className="text-xs font-black text-slate-400">OCR 文本 / 表格文本</span>
+                <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black text-slate-400">自动提取结果</p>
+                      <p className="mt-1 text-sm font-black text-slate-700">
+                        已识别 {parsedBulkResources.length} 条词汇
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-black text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={replaceExisting}
+                        onChange={(event) => setReplaceExisting(event.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      覆盖本阶段旧词汇
+                    </label>
+                  </div>
+
+                  {parsedBulkResources.length > 0 ? (
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {parsedBulkResources.map((resource) => (
+                        <article
+                          key={`${resource.sortOrder}-${resource.term}`}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-black text-slate-900">{resource.term}</p>
+                              <p className="mt-1 text-xs leading-5 text-slate-600">{resource.explanation}</p>
+                              {resource.example && (
+                                <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                                  例句：{resource.example}
+                                </p>
+                              )}
+                            </div>
+                            <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-600">
+                              {resource.sortOrder}
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-400">
+                      上传截图后会在这里自动展示提取出的词汇
+                    </div>
+                  )}
+                </section>
+
+                <details className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
+                  <summary className="cursor-pointer list-none text-xs font-black text-slate-500">
+                    原始 OCR 文本校正
+                  </summary>
                   <textarea
                     value={bulkText}
                     onChange={(event) => setBulkText(event.target.value)}
                     placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
-                    className="mt-2 h-36 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                    className="mt-3 h-36 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
                   />
-                </label>
-
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-black text-slate-700">将导入 {parsedBulkResources.length} 条</p>
-                    <p className="mt-1 text-xs text-slate-400">导入类型使用当前右侧表单的类型选择。</p>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs font-black text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={replaceExisting}
-                      onChange={(event) => setReplaceExisting(event.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    覆盖本阶段同类型旧资源
-                  </label>
-                </div>
-
-                {parsedBulkResources.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto rounded-2xl border border-slate-100">
-                    {parsedBulkResources.slice(0, 8).map((resource) => (
-                      <div key={`${resource.sortOrder}-${resource.term}`} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                        <p className="text-sm font-black text-slate-800">{resource.term}</p>
-                        <p className="mt-1 line-clamp-1 text-xs text-slate-500">{resource.explanation}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                </details>
 
                 <button
                   type="button"
                   onClick={importBulkResources}
-                  disabled={bulkSaving || !selectedStageId || !parsedBulkResources.length}
+                  disabled={bulkSaving || ocrRunning || !selectedStageId || !parsedBulkResources.length}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
                   批量导入资源
                 </button>
+
               </div>
             </section>
 

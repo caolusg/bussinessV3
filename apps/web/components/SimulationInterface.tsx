@@ -15,7 +15,7 @@ import type {
   TaskDetail
 } from '../types';
 import { INITIAL_CHAT_MESSAGES, OPPONENT_PROFILE, STAGES } from '../constants';
-import { apiFetch } from '../utils/apiFetch';
+import { apiFetch, apiRequest } from '../utils/apiFetch';
 
 interface SimulationInterfaceProps {
   task: TaskDetail;
@@ -67,6 +67,33 @@ const stageKeyMap: Record<number, SimulationStage> = {
   6: 'customs',
   7: 'settlement',
   8: 'after_sales'
+};
+
+const stageIdMap: Record<SimulationStage, number> = {
+  acquisition: 1,
+  quotation: 2,
+  negotiation: 3,
+  contract: 4,
+  preparation: 5,
+  customs: 6,
+  settlement: 7,
+  after_sales: 8
+};
+
+type StageTaskResponse = {
+  stage: {
+    key: SimulationStage;
+    titleZh: string;
+    titleEn?: string | null;
+  };
+  task: {
+    title?: string | null;
+    taskCode?: string | null;
+    goal: string;
+    subGoal?: string | null;
+    tipTitle?: string | null;
+    tipContent?: string | null;
+  } | null;
 };
 
 const difficultyMap = {
@@ -143,6 +170,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   onTriggerCoaching,
   onTriggerGroupDiscussion
 }) => {
+  const [activeTask, setActiveTask] = useState<TaskDetail>(task);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -171,7 +199,38 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
   useEffect(() => {
     setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
+    setActiveTask(task);
   }, [task.stageId]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    apiRequest<StageTaskResponse>(`/api/content/stages/${currentStage}/task`)
+      .then((response) => {
+        if (ignore) return;
+        if (response.task) {
+          setActiveTask({
+            stageId: stageIdMap[response.stage.key],
+            mode: task.mode,
+            title: `${response.stage.titleZh}${response.stage.titleEn ? ` (${response.stage.titleEn})` : ''}`,
+            taskId: response.task.taskCode ?? task.taskId,
+            description: response.task.goal,
+            subDescription: response.task.subGoal ?? undefined,
+            feedbackOrTipTitle: response.task.tipTitle ?? undefined,
+            feedbackOrTipContent: response.task.tipContent ?? ''
+          });
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setActiveTask(task);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentStage, task]);
 
   useEffect(() => {
     const cached = readSessionCache(currentStage);
@@ -760,9 +819,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               练习目标
             </h3>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
-              <div>{task.description}</div>
-              {task.subDescription && (
-                <div className="mt-2 text-xs font-normal text-blue-700">{task.subDescription}</div>
+              <div>{activeTask.description}</div>
+              {activeTask.subDescription && (
+                <div className="mt-2 text-xs font-normal text-blue-700">{activeTask.subDescription}</div>
               )}
             </div>
 
