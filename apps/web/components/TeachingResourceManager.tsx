@@ -52,16 +52,6 @@ type ParsedResource = {
   isActive: boolean;
 };
 
-type ResourceOcrResponse = {
-  resources: Array<{
-    term: string;
-    explanation: string;
-    example?: string;
-  }>;
-  rawText: string;
-  degraded: boolean;
-};
-
 const RESOURCE_TYPES: Array<{ value: ManagedResource['type']; label: string }> = [
   { value: 'vocabulary', label: '商务词汇' },
   { value: 'phrases', label: '常用句式' },
@@ -80,14 +70,21 @@ const emptyForm = (stageId = ''): ResourceForm => ({
 
 const typeLabel = (type: ManagedResource['type']) =>
   RESOURCE_TYPES.find((item) => item.value === type)?.label ?? type;
-const stripLeadingIndex = (line: string) => line.replace(/^\d+[\s.、-]*/, '').trim();
+const LATIN_CHAR_PATTERN = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]/;
+const LATIN_TEXT_PATTERN = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]{2,}/;
+const normalizeOcrSpacing = (value: string) => value.replace(/[\u00a0\u3000]/g, ' ');
+const stripLeadingIndex = (line: string) =>
+  normalizeOcrSpacing(line).trim().replace(/^\d+[\s.、:：)-]*/, '').trim();
 
-const looksLikePinyin = (value: string) => /[a-zà-ž]/i.test(value) && !/^[\u4e00-\u9fff]+$/.test(value);
+const looksLikePinyin = (value: string) => LATIN_CHAR_PATTERN.test(value) && !/^[\u4e00-\u9fff]+$/.test(value);
 
 const hasChinese = (value: string) => /[\u4e00-\u9fff]/.test(value);
-const hasLatinText = (value: string) => /[a-zà-ž]{2,}/i.test(value);
+const hasLatinText = (value: string) => LATIN_TEXT_PATTERN.test(value);
 const mergeChineseSpaces = (value: string) =>
-  value.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1').replace(/\s+/g, ' ').trim();
+  normalizeOcrSpacing(value)
+    .replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 const cleanOcrField = (value: string) =>
   mergeChineseSpaces(value)
     .replace(/[|｜]/g, '')
@@ -109,6 +106,32 @@ const isLikelyOcrNoise = (item: ParsedResource) => {
   return false;
 };
 
+const parseLooseOcrLine = (line: string, localId: string, sortOrder: number): ParsedResource => {
+  const normalized = normalizeOcrSpacing(line).replace(/\s+/g, ' ').trim();
+  const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
+  const firstLatinIndex = contentFirst.search(LATIN_CHAR_PATTERN);
+
+  if (firstLatinIndex > 0) {
+    return {
+      localId,
+      term: cleanOcrTerm(contentFirst.slice(0, firstLatinIndex)),
+      explanation: cleanOcrField(contentFirst.slice(firstLatinIndex)),
+      example: '',
+      sortOrder,
+      isActive: true
+    };
+  }
+
+  return {
+    localId,
+    term: cleanOcrTerm(contentFirst || normalized),
+    explanation: cleanOcrField(contentFirst || normalized),
+    example: '',
+    sortOrder,
+    isActive: true
+  };
+};
+
 const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =>
   text
     .split(/\r?\n/)
@@ -116,12 +139,16 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
     .filter(Boolean)
     .map((line, index) => {
       const tabParts = line.split(/\t+/).map((part) => part.trim()).filter(Boolean);
-      const normalized = line.replace(/\s+/g, ' ').trim();
+      const normalized = normalizeOcrSpacing(line).replace(/\s+/g, ' ').trim();
       const contentFirst = normalized.replace(/^[^\u4e00-\u9fff]*?(?=[\u4e00-\u9fff])/, '');
-      const firstLatinIndex = contentFirst.search(/[a-zà-ž]/i);
+      const firstLatinIndex = contentFirst.search(LATIN_CHAR_PATTERN);
       const spacedParts = normalized.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
       const parts = tabParts.length >= 2 ? tabParts : spacedParts;
       const localId = `bulk-${startOrder + index}-${line}`;
+
+      if (hasChinese(normalized) && hasLatinText(normalized) && parts.length < 3) {
+        return parseLooseOcrLine(line, localId, startOrder + index);
+      }
 
       if (tabParts.length < 2 && firstLatinIndex > 0) {
         return {
@@ -163,7 +190,7 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
         };
       }
 
-      const match = normalized.match(/^(.+?)\s+([a-zà-ž].+)$/i);
+      const match = normalized.match(/^(.+?)\s+([A-Za-zÀ-ÖØ-öø-ÿĀ-ž].+)$/);
       if (match) {
         return {
           localId,
@@ -189,21 +216,6 @@ const parseResourceRows = (text: string, startOrder: number): ParsedResource[] =
       ...item,
       sortOrder: startOrder + index
     }));
-
-const resourcesFromAiOcr = (
-  resources: ResourceOcrResponse['resources'],
-  startOrder: number
-): ParsedResource[] =>
-  resources
-    .map((resource, index) => ({
-      localId: `ai-${startOrder + index}-${resource.term}-${index}`,
-      term: cleanOcrTerm(resource.term),
-      explanation: cleanOcrField(resource.explanation),
-      example: cleanOcrField(resource.example ?? ''),
-      sortOrder: startOrder + index,
-      isActive: true
-    }))
-    .filter((item) => !isLikelyOcrNoise(item));
 
 const TeachingResourceManager: React.FC = () => {
   const [data, setData] = useState<ResourceManagerData | null>(null);
@@ -380,36 +392,8 @@ const TeachingResourceManager: React.FC = () => {
     }
     const localResources = parseResourceRows(text, nextSortOrder);
     setBulkResources(localResources);
-    setOcrProgress(82);
-    setOcrStatus('本地 OCR 完成，正在用 DeepSeek 清洗词条');
-    try {
-      await runAiCleanup(text, localResources);
-    } catch {
-      setOcrStatus('DeepSeek 清洗失败，已使用本地 OCR 结果');
-    }
-  };
-
-  const runAiCleanup = async (ocrText: string, localResources: ParsedResource[]) => {
-    const result = await apiRequest<ResourceOcrResponse>('/api/admin/resources/ocr-text-cleanup', {
-      method: 'POST',
-      body: JSON.stringify({
-        ocrText,
-        stageTitle: selectedStage?.titleZh ?? '',
-        type: form.type
-      })
-    });
-    const resources = resourcesFromAiOcr(result.resources, nextSortOrder);
-    if (resources.length < Math.max(3, Math.floor(localResources.length * 0.6))) {
-      setBulkResources(localResources);
-      setBulkText(ocrText);
-      setOcrStatus(`DeepSeek 清洗结果偏少，已保留本地 OCR 解析：${localResources.length} 条`);
-      return;
-    }
-    setBulkResources(resources);
-    setBulkText(result.rawText || resources.map((resource) =>
-      `${resource.sortOrder}\t${resource.term}\t${resource.explanation}`
-    ).join('\n'));
-    setOcrStatus(`DeepSeek 清洗完成：${resources.length} 条`);
+    setOcrProgress(100);
+    setOcrStatus(`本地 OCR 解析完成：${localResources.length} 条`);
   };
 
   const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -483,13 +467,13 @@ const TeachingResourceManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+      <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Resource Manager</p>
-            <h3 className="mt-1 text-2xl font-black text-slate-900">教学资源管理</h3>
+            <h3 className="mt-1 text-2xl font-black text-slate-900">批量增加教学词条</h3>
             <p className="mt-2 text-sm text-slate-400">
-              管理学生端阶段学习资源。保存后会进入数据库，学生重新打开资源面板即可看到更新。
+              先选择业务阶段，再上传截图或粘贴 OCR 文本；确认导入草稿后批量入库。
             </p>
           </div>
           <button
@@ -508,8 +492,8 @@ const TeachingResourceManager: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
           <div className="grid grid-cols-3 gap-3">
             {[
               ['阶段', data?.totals.stageCount ?? 0],
@@ -553,16 +537,17 @@ const TeachingResourceManager: React.FC = () => {
         </aside>
 
         <section className="grid grid-cols-1 gap-6">
-          <div className="order-2 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          <div className="order-3 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
-                    {selectedStage?.key ?? 'stage'}
+                    Existing Resources
                   </p>
                   <h4 className="mt-1 text-xl font-black text-slate-900">
-                    {selectedStage?.titleZh ?? '请选择阶段'}
+                    {selectedStage?.titleZh ?? '请选择阶段'} 已有词条
                   </h4>
+                  <p className="mt-1 text-xs text-slate-400">用于导入前后检查，不是本页主要编辑区。</p>
                 </div>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -654,65 +639,73 @@ const TeachingResourceManager: React.FC = () => {
                     Batch Import
                   </p>
                   <h4 className="mt-1 text-lg font-black text-slate-900">截图批量导入</h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    当前阶段：{selectedStage ? `${selectedStage.sortOrder}. ${selectedStage.titleZh}` : '未选择'}
+                  </p>
                 </div>
                 <Upload className="text-indigo-500" size={20} />
               </div>
 
-              <div className="space-y-4">
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-4 py-5 text-center transition hover:bg-indigo-50">
-                  <ImagePlus className="text-indigo-500" size={24} />
-                  <span className="mt-2 text-sm font-black text-slate-700">上传商务词汇截图</span>
-                  <span className="mt-1 text-xs leading-5 text-slate-400">
-                    截图用于对照；把 OCR 识别出的表格文本粘贴到下方即可批量入库。
-                  </span>
-                  <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
-                </label>
+              <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[360px_minmax(0,1fr)]">
+                <div className="space-y-4">
+                  <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-4 py-5 text-center transition hover:bg-indigo-50">
+                    <ImagePlus className="text-indigo-500" size={24} />
+                    <span className="mt-2 text-sm font-black text-slate-700">上传商务词汇截图</span>
+                    <span className="mt-1 text-xs leading-5 text-slate-400">
+                      截图保留在这里对照，右侧生成可编辑导入草稿。
+                    </span>
+                    <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
+                  </label>
 
-                {bulkImagePreview && (
-                  <div className="space-y-4">
-                    <img
-                      src={bulkImagePreview}
-                      alt="商务词汇截图预览"
-                      className="max-h-52 w-full rounded-2xl border border-slate-100 object-contain"
-                    />
-                    {(ocrRunning || ocrStatus) && (
-                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
-                        <div className="flex items-center justify-between gap-3">
-                          <span>{ocrStatus || '正在识别图片'}</span>
-                          <span>{ocrProgress}%</span>
+                  {bulkImagePreview && (
+                    <div className="space-y-4">
+                      <img
+                        src={bulkImagePreview}
+                        alt="商务词汇截图预览"
+                        className="max-h-[420px] w-full rounded-2xl border border-slate-100 bg-white object-contain"
+                      />
+                      {(ocrRunning || ocrStatus) && (
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{ocrStatus || '正在识别图片'}</span>
+                            <span>{ocrProgress}%</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
+                            <div
+                              className="h-full rounded-full bg-indigo-500 transition-all"
+                              style={{ width: `${ocrProgress}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
-                          <div
-                            className="h-full rounded-full bg-indigo-500 transition-all"
-                            style={{ width: `${ocrProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-xs font-black text-slate-500">原始 OCR 文本校正</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkText('');
-                        setBulkResources([]);
-                      }}
-                      className="text-xs font-black text-slate-400 hover:text-rose-500"
-                    >
-                      清空文本
-                    </button>
-                  </div>
-                  <textarea
-                    value={bulkText}
-                    onChange={(event) => updateBulkText(event.target.value)}
-                    placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
-                    className="h-44 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  />
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-xs font-black text-slate-500">原始 OCR 文本校正</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkText('');
+                          setBulkResources([]);
+                          setOcrStatus('');
+                          setOcrProgress(0);
+                        }}
+                        className="text-xs font-black text-slate-400 hover:text-rose-500"
+                      >
+                        清空文本
+                      </button>
+                    </div>
+                    <textarea
+                      value={bulkText}
+                      onChange={(event) => updateBulkText(event.target.value)}
+                      placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
+                      className="h-44 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                    />
+                  </div>
 
                 <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -744,7 +737,7 @@ const TeachingResourceManager: React.FC = () => {
                   </div>
 
                   {bulkResources.length > 0 ? (
-                    <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                    <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
                       {bulkResources.map((resource) => (
                         <article
                           key={resource.localId}
@@ -839,7 +832,7 @@ const TeachingResourceManager: React.FC = () => {
                   {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
                   批量导入资源
                 </button>
-
+                </div>
               </div>
             </section>
 

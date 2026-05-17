@@ -803,7 +803,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             <div ref={chatEndRef} />
           </div>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white p-6">
+          <div className="shrink-0 border-t border-gray-200 bg-white px-6 py-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -811,90 +811,99 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               onChange={handleContextFileUpload}
               className="hidden"
             />
-            <div className="mx-auto flex w-full max-w-6xl items-end gap-4">
-              <div className="flex-1 rounded-xl border border-gray-300 bg-gray-50 p-5 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-                {documentContexts.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {documentContexts.map((context) => (
-                      <div
-                        key={context.id}
-                        className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800"
-                        title={context.fileName}
+            <div className="mx-auto w-full max-w-6xl space-y-3">
+              {documentContexts.length > 0 && (
+                <div className="flex max-h-16 flex-wrap gap-2 overflow-y-auto pr-1">
+                  {documentContexts.map((context) => (
+                    <div
+                      key={context.id}
+                      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800"
+                      title={context.fileName}
+                    >
+                      <FileText size={14} />
+                      <span className="max-w-56 truncate">{context.fileName}</span>
+                      <span className="text-[10px] font-bold uppercase text-blue-400">
+                        {context.kind}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDocumentContexts((current) =>
+                            current.filter((item) => item.id !== context.id)
+                          )
+                        }
+                        className="rounded-full p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
+                        aria-label={`移除 ${context.fileName}`}
                       >
-                        <FileText size={14} />
-                        <span className="max-w-56 truncate">{context.fileName}</span>
-                        <span className="text-[10px] font-bold uppercase text-blue-400">
-                          {context.kind}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDocumentContexts((current) =>
-                              current.filter((item) => item.id !== context.id)
-                            )
-                          }
-                          className="rounded-full p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
-                          aria-label={`移除 ${context.fileName}`}
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <textarea
-                  value={inputValue}
-                  onChange={(event) => setInputValue(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                  placeholder="输入消息，与客户进行业务沟通..."
-                  className="min-h-24 max-h-48 w-full resize-none border-none bg-transparent text-base leading-7 text-slate-700 placeholder:text-slate-400 focus:ring-0"
-                  rows={1}
-                />
-              </div>
-              <div className="flex shrink-0 flex-col gap-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingContext || loadingSession}
-                  aria-label="上传产品资料"
-                  title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
-                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
-                  {uploadingContext ? '读取中...' : '上传资料'}
-                </button>
-                <button
-                  onClick={() => void handleSend()}
-                  disabled={!inputValue.trim() || sending || loadingSession}
-                  aria-label="发送消息"
-                  className="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-blue-700"
-                >
-                  <Send size={18} />
-                </button>
-                <button
-                  onClick={() => void handleRestart()}
-                  disabled={restarting || endingSession || sending || loadingSession}
-                  aria-label="开始新的练习"
-                  title="开始新的练习"
-                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RotateCcw size={14} />
-                  {restarting ? '创建中...' : '开始新的练习'}
-                </button>
-                <button
-                  onClick={() => void handleEndAndExit()}
-                  disabled={endingSession || restarting || sending || loadingSession}
-                  aria-label="结束本轮对话"
-                  title="结束本轮对话"
-                  className="inline-flex h-10 w-32 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <ArrowLeft size={14} />
-                  {endingSession ? '结束中...' : '结束本轮对话'}
-                </button>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-end gap-3">
+                <div className="flex min-h-[72px] flex-1 items-end gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingContext || loadingSession}
+                    aria-label="上传产品资料"
+                    title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
+                    className="mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {uploadingContext ? (
+                      <Loader2 className="animate-spin" size={16} />
+                    ) : (
+                      <Paperclip size={16} />
+                    )}
+                  </button>
+                  <textarea
+                    value={inputValue}
+                    onChange={(event) => setInputValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                    placeholder="输入消息，与客户进行业务沟通..."
+                    className="min-h-12 max-h-36 flex-1 resize-none border-none bg-transparent py-2 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                    rows={1}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSend()}
+                    disabled={!inputValue.trim() || sending || loadingSession}
+                    aria-label="发送消息"
+                    className="mb-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+                <div className="flex w-36 shrink-0 flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleRestart()}
+                    disabled={restarting || endingSession || sending || loadingSession}
+                    aria-label="开始新的练习"
+                    title="开始新的练习"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RotateCcw size={14} />
+                    {restarting ? '创建中...' : '新的练习'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleEndAndExit()}
+                    disabled={endingSession || restarting || sending || loadingSession}
+                    aria-label="结束本轮对话"
+                    title="结束本轮对话"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ArrowLeft size={14} />
+                    {endingSession ? '结束中...' : '结束对话'}
+                  </button>
+                </div>
               </div>
             </div>
             {sessionLoadError && (
