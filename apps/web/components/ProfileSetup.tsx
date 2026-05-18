@@ -99,11 +99,11 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
 
   const Content = (
     <div className={`w-full bg-white ${isModal ? 'rounded-2xl' : 'max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden'} animate-in ${isModal ? 'fade-in' : 'slide-in-from-bottom-8 duration-700'}`}>
-      <div className={`bg-gradient-to-r from-blue-600 to-blue-800 p-8 text-white flex items-center justify-between ${isModal ? 'rounded-t-2xl' : ''}`}>
-        <div className="flex items-center gap-6">
-          <img src={profile.avatarUrl} className="w-16 h-16 rounded-full border-2 border-white/20 shadow-lg" alt="Avatar" />
-          <div>
-            <h2 className="text-2xl font-bold">{isModal ? '个人信息维护' : '完善您的学习档案'}</h2>
+      <div className={`flex flex-col gap-4 bg-gradient-to-r from-blue-600 to-blue-800 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-8 ${isModal ? 'rounded-t-2xl' : ''}`}>
+        <div className="flex items-center gap-4 sm:gap-6">
+          <img src={profile.avatarUrl} className="h-14 w-14 rounded-full border-2 border-white/20 shadow-lg sm:h-16 sm:w-16" alt="Avatar" />
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold sm:text-2xl">{isModal ? '个人信息维护' : '完善您的学习档案'}</h2>
             <p className="text-blue-100 text-xs opacity-80 mt-1">
               {isModal ? '更新您的资料以便获得更精准的反馈' : '我们需要这些信息来为您匹配最合适的 AI 模拟场景'}
             </p>
@@ -125,7 +125,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2 sm:gap-6 sm:p-8">
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <UserIcon size={12} /> 登录名
@@ -248,7 +248,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
         </div>
 
         {onPasswordChange && (
-          <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
             <button
               type="button"
               onClick={() => {
@@ -265,7 +265,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
             </button>
 
             {showPassword && (
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <input
                   type="password"
                   value={passwordForm.currentPassword}
@@ -287,7 +287,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
                   className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                   placeholder="确认新密码"
                 />
-                <div className="col-span-3 flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:col-span-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-xs">
                     {passwordError && <span className="font-semibold text-red-600">{passwordError}</span>}
                     {passwordMessage && <span className="font-semibold text-emerald-700">{passwordMessage}</span>}
@@ -307,14 +307,14 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
         )}
 
         {submitError && (
-          <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 sm:col-span-2">
             {submitError}
           </div>
         )}
 
         <button
           type="submit"
-          className="col-span-2 mt-2 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 transform active:scale-[0.99]"
+          className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 font-bold text-white shadow-xl transition-all hover:bg-blue-700 active:scale-[0.99] sm:col-span-2"
         >
           {isModal ? '保存修改' : '开启商务模拟之旅'}
           {!isModal && <ChevronRight size={20} />}

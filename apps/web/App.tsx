@@ -723,10 +723,53 @@ const AppRoutes: React.FC = () => {
                 onLogout={handleLogout}
                 onManageProfile={() => navigate('/profile')}
               />
-              <div className="flex pt-16">
+              <div className="pt-16 lg:flex">
                 <Sidebar stages={contentStages} onResourceSelect={handleResourceClick} />
-                <main className="ml-[20%] w-[80%] p-8 min-h-[calc(100vh-64px)]">
+                <main className="min-h-[calc(100dvh-64px)] w-full px-4 py-5 sm:px-6 lg:ml-72 lg:w-[calc(100%-18rem)] lg:p-8">
                   <div className="max-w-6xl mx-auto space-y-6">
+                    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:hidden">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-800">学习资源库</h2>
+                          <p className="mt-1 text-xs text-slate-400">选择阶段后查看词汇、句式和外贸常识。</p>
+                        </div>
+                      </div>
+                      <div className="flex snap-x gap-3 overflow-x-auto pb-1">
+                        {contentStages.map((stage) => (
+                          <div
+                            key={stage.id}
+                            className={`min-w-44 snap-start rounded-xl border p-3 ${
+                              selectedStageId === stage.id
+                                ? 'border-blue-200 bg-blue-50'
+                                : 'border-slate-200 bg-slate-50'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedStageId(stage.id);
+                                setSelectedResource(null);
+                              }}
+                              className="block w-full truncate text-left text-xs font-bold text-slate-800"
+                            >
+                              {stage.id}. {stage.title.split(' ')[0]}
+                            </button>
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              {stage.subResources.map((resource) => (
+                                <button
+                                  key={resource.id}
+                                  type="button"
+                                  onClick={() => handleResourceClick(stage.id, resource)}
+                                  className="rounded-lg border border-white bg-white px-2 py-2 text-[11px] font-semibold text-slate-600 shadow-sm"
+                                >
+                                  {resource.title.replace('商务', '').replace('外贸', '')}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                     <WorkflowMap
                       stages={contentStages}
                       currentStageId={selectedStageId}

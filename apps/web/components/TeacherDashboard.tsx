@@ -2295,8 +2295,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       )}
 
-      <div className="grid grid-cols-[280px_minmax(0,1fr)] gap-6">
-      <aside className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 self-start sticky top-28 max-h-[calc(100vh-8rem)] overflow-y-auto">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="max-h-96 overflow-y-auto rounded-3xl border border-slate-100 bg-white p-5 shadow-sm xl:sticky xl:top-28 xl:max-h-[calc(100vh-8rem)] xl:self-start">
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data Tables</p>
@@ -2339,7 +2339,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <p className="text-xs text-slate-400 mt-1">只读查看，用于开发排查和管理员总览。</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -2349,7 +2349,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     if (event.key === 'Enter') submitSearch();
                   }}
                   placeholder="搜索当前表"
-                  className="w-56 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-xs outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-56"
                 />
               </div>
               <select
@@ -2359,7 +2359,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   setStatusValue('');
                   setTablePage(1);
                 }}
-                className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="w-[calc(50%-0.25rem)] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-32"
               >
                 <option value="">状态字段</option>
                 {(selectedTableMeta?.statusFields ?? []).map((field) => (
@@ -2373,7 +2373,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   setStatusValue(event.target.value);
                   setTablePage(1);
                 }}
-                className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none disabled:opacity-40 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="w-[calc(50%-0.25rem)] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none disabled:opacity-40 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-32"
               >
                 <option value="">全部状态</option>
                 {currentStatusValues.map((value) => (
@@ -2388,7 +2388,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   setDateField(event.target.value);
                   setTablePage(1);
                 }}
-                className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="w-[calc(50%-0.25rem)] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-32"
               >
                 <option value="">时间字段</option>
                 {(selectedTableMeta?.dateFields ?? []).map((field) => (
@@ -2402,7 +2402,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   setDateRange(event.target.value as (typeof DATE_RANGES)[number]['value']);
                   setTablePage(1);
                 }}
-                className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none disabled:opacity-40 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="w-[calc(50%-0.25rem)] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-600 outline-none disabled:opacity-40 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-32"
               >
                 {DATE_RANGES.map((range) => (
                   <option key={range.value} value={range.value}>{range.label}</option>
@@ -2480,7 +2480,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </table>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <span>共 {tableData?.total ?? 0} 条，当前第 {tablePage} / {totalPages} 页</span>
             <div className="flex items-center gap-2">
               <button
@@ -2527,8 +2527,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed inset-y-0 shadow-2xl z-50">
+    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
+      <aside className="fixed inset-y-0 z-50 hidden w-64 flex-col bg-slate-900 text-white shadow-2xl lg:flex">
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
           <div className="bg-indigo-600 p-2 rounded-xl shadow-lg">
             <Settings2 size={24} />
@@ -2567,8 +2567,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       </aside>
 
-      <main className="ml-64 flex-1 flex flex-col">
-        <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-40">
+      <main className="flex flex-1 flex-col lg:ml-64">
+        <header className="sticky top-0 z-40 flex min-h-20 flex-col gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
           <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-800">{pageTitle}</h2>
             <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
@@ -2577,7 +2577,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               to="/admin/system"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
@@ -2596,7 +2596,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto w-full">
+        <nav className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+          {[
+            ['RESOURCES', '2.1 资源'],
+            ['GROUPS', '2.2 分组'],
+            ['RECORDS', '2.3 研究'],
+            ['CLICK_FLOW', '点击流'],
+            ['PROMPT', '2.4 Prompt'],
+            ['SYSTEM_DATA', '2.5 数据'],
+            ['ACCOUNT', '账户']
+          ].map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab as TeacherTab)}
+              className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${
+                activeTab === tab
+                  ? 'border-indigo-600 bg-indigo-600 text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-10">
           {activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {(isLoadingScenarios || scenarioError) && (
@@ -2658,7 +2683,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   </button>
                 </div>
 
-                <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh]">
+                <div className="max-h-[70vh] space-y-8 overflow-y-auto p-5 sm:p-10">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">场景名称</label>
                     <input
@@ -2670,7 +2695,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">所属阶段</label>
                       <select
@@ -2697,7 +2722,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">采购经理姓名</label>
                       <input

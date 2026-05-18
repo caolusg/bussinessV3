@@ -630,23 +630,50 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
   return (
     <div
-      className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900"
+      className="flex h-[100dvh] flex-col overflow-hidden bg-slate-50 font-sans text-slate-900"
       data-analytics-page="simulation"
       data-analytics-stage={currentStage}
       data-analytics-session-id={currentSessionId ?? ''}
     >
-      <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-slate-800">
+      <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 shadow-sm sm:px-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-bold text-slate-800">
               当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
             </span>
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+            <span className="hidden rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 sm:inline-flex">
               无限练习
             </span>
           </div>
         </div>
       </header>
+
+      <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2 md:hidden">
+        {STAGES.map((stage) => {
+          const key = stageKeyMap[stage.id];
+          const isActive = key === currentStage;
+
+          return (
+            <button
+              key={stage.id}
+              type="button"
+              onClick={() => {
+                if (key && key !== currentStage) {
+                  setCurrentStage(key);
+                  resetStructuredFeedback();
+                }
+              }}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                isActive
+                  ? 'border-blue-500 bg-blue-600 text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              {stage.id}. {stage.title.split(' ')[0]}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
@@ -720,7 +747,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`flex max-w-[72%] gap-3 md:max-w-[62%] ${
+                    className={`flex max-w-[88%] gap-3 sm:max-w-[78%] md:max-w-[62%] ${
                       isMe ? 'flex-row-reverse' : 'flex-row'
                     }`}
                   >
@@ -769,7 +796,47 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             <div ref={chatEndRef} />
           </div>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white px-6 py-4">
+          <details className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 xl:hidden">
+            <summary className="cursor-pointer text-sm font-bold text-slate-700">
+              练习目标、AI 教练与支持工具
+            </summary>
+            <div className="mt-3 space-y-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                <div>{activeTask.description}</div>
+                {activeTask.subDescription && (
+                  <div className="mt-2 text-xs text-blue-700">{activeTask.subDescription}</div>
+                )}
+              </div>
+
+              {(coachNote || assessmentSummary) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-slate-700">
+                  <div className="mb-2 font-bold text-amber-700">AI 教练复盘</div>
+                  {coachNote && <div>{coachNote}</div>}
+                  {assessmentSummary && <div className="mt-2">{assessmentSummary}</div>}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onTriggerGroupDiscussion}
+                  className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700"
+                >
+                  小组复盘讨论
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTriggerCoaching({ sessionId: currentSessionId ?? undefined, stage: currentStage })}
+                  disabled={loadingSession || !currentSessionId}
+                  className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50"
+                >
+                  请求 AI 指导
+                </button>
+              </div>
+            </div>
+          </details>
+
+          <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 sm:px-6 sm:py-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -807,7 +874,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   ))}
                 </div>
               )}
-              <div className="flex items-end gap-3">
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
                 <div className="flex min-h-[72px] flex-1 flex-col gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
                   <div className="flex items-end gap-3">
                     <button
@@ -860,7 +927,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     </span>
                   </div>
                 </div>
-                <div className="flex w-36 shrink-0 flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:w-36 sm:shrink-0 sm:flex-col">
                   <button
                     type="button"
                     onClick={() => void handleRestart()}
@@ -900,7 +967,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </main>
 
-        <aside className="flex w-[30rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white lg:w-[36rem] xl:w-[40rem]">
+        <aside className="hidden w-[30rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white xl:flex 2xl:w-[36rem]">
           {(coachNote || assessmentSummary) && (
             <div className="border-b border-gray-100 bg-amber-50/40 p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">
