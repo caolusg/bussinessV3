@@ -170,12 +170,12 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
   if (!sessionId) {
     return (
       <div
-        className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans"
+        className="flex h-[100dvh] flex-col overflow-hidden bg-slate-50 font-sans"
         data-analytics-page="coach"
         data-analytics-session-id={sessionId ?? ''}
       >
         <header className="z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
             <button
               onClick={onRetry}
               className="flex items-center gap-2 text-slate-500 transition-colors hover:text-slate-800"
@@ -227,40 +227,40 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
   if (sessionId) {
     return (
       <div
-        className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans"
+        className="flex h-[100dvh] flex-col overflow-hidden bg-slate-50 font-sans"
         data-analytics-page="coach"
         data-analytics-session-id={sessionId ?? ''}
       >
         <header className="z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
             <button
               onClick={onRetry}
-              className="flex items-center gap-2 text-slate-500 transition-colors hover:text-slate-800"
+              className="flex min-w-0 items-center gap-2 text-slate-500 transition-colors hover:text-slate-800"
             >
               <ArrowLeft size={20} />
-              <span className="text-sm font-medium">返回练习</span>
+              <span className="whitespace-nowrap text-sm font-medium">返回练习</span>
             </button>
 
-            <div className="flex items-center gap-2 font-bold text-slate-800">
+            <div className="flex min-w-0 items-center gap-2 font-bold text-slate-800">
               <div className="rounded-md bg-blue-600 p-1 text-white">
                 <Bot size={16} />
               </div>
-              <span>上下文 AI 教练</span>
+              <span className="truncate">上下文 AI 教练</span>
             </div>
 
             <button
               onClick={onClose}
               aria-label="关闭 AI 教练"
-              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+              className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 sm:px-3"
             >
               <X size={18} />
-              <span className="text-sm font-medium">退出指导</span>
+              <span className="whitespace-nowrap text-sm font-medium">退出指导</span>
             </button>
           </div>
         </header>
 
-        <main className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,34vw)] overflow-hidden max-xl:grid-cols-1 max-xl:overflow-y-auto">
-          <section className="overflow-y-auto px-8 py-8 max-xl:overflow-visible max-lg:px-5">
+        <main className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,34vw)] overflow-hidden max-xl:grid-cols-1 max-xl:overflow-y-auto max-xl:pb-[calc(6rem+env(safe-area-inset-bottom))]">
+          <section className="overflow-y-auto px-8 py-8 max-xl:overflow-visible max-lg:px-4">
             {loadingContext && (
               <div className="flex items-center gap-3 rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-sm">
                 <Loader2 className="animate-spin text-blue-600" size={18} />
@@ -277,24 +277,24 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
             {context && (
               <div className="space-y-6">
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
                     {context.session.businessStage?.titleZh ?? context.session.stage}
                   </p>
-                  <h2 className="mt-2 text-2xl font-black text-slate-900">当前会话指导</h2>
+                  <h2 className="mt-2 text-xl font-black text-slate-900 sm:text-2xl">当前会话指导</h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">
                     {context.summary}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                   <h3 className="text-sm font-black text-slate-800">当前对话</h3>
                   <div className="mt-5 space-y-4">
                     {context.messages.map((message) => {
                       const isStudent = message.role === 'student';
                       return (
                         <div key={message.id} className={`flex ${isStudent ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[78%] rounded-2xl px-5 py-4 text-sm leading-7 ${
+                          <div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-7 sm:max-w-[78%] sm:px-5 sm:py-4 ${
                             isStudent
                               ? 'bg-blue-600 text-white'
                               : 'border border-slate-200 bg-slate-50 text-slate-700'
@@ -321,7 +321,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
 
                 <div className="space-y-4">
                   {turns.map((turn) => (
-                    <div key={turn.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div key={turn.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                       <p className="text-xs font-black text-slate-400">你的问题</p>
                       <p className="mt-2 text-sm font-semibold text-slate-800">{turn.question}</p>
                       <div className="mt-4 rounded-2xl bg-blue-50 p-5">
@@ -348,7 +348,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
             )}
           </section>
 
-          <aside className="overflow-y-auto border-l border-slate-200 bg-white p-6 max-xl:border-l-0 max-xl:border-t max-xl:p-5">
+          <aside className="overflow-y-auto border-l border-slate-200 bg-white p-6 max-xl:overflow-visible max-xl:border-l-0 max-xl:border-t max-xl:p-4 max-xl:pb-[calc(7rem+env(safe-area-inset-bottom))] sm:max-xl:p-5">
             <div className="rounded-2xl bg-slate-900 p-5 text-white">
               <div className="flex items-center gap-2">
                 <HelpCircle size={18} className="text-blue-300" />
@@ -402,7 +402,7 @@ const CoachingReview: React.FC<CoachingReviewProps> = ({
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-white font-sans">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-white font-sans">
       <header className="z-50 shrink-0 border-b border-gray-100 bg-white shadow-sm">
         <div className="flex items-center justify-between px-6 py-4">
           <button
