@@ -144,6 +144,7 @@ On Windows PowerShell in this environment, use `npm.cmd` instead of `npm` if scr
 - Decide whether API startup should run migrations automatically in Docker or keep migrations manual.
 - Add smoke tests for API health, auth, profile, and one simulation message round trip.
 - Consider adding a richer learner profile model for personalization beyond the current static student profile fields.
+- Multi-device adaptation M1 was started on 2026-05-18. Current changes remove Tailwind CDN/runtime styling, add `apps/web/index.css`, wire Tailwind through Vite, and make the student dashboard, simulation page, profile form, and teacher shell responsive enough for phone/tablet validation. Details are documented in `docs/多端适配实施记录.md`.
 
 ## 2026-04-12 Email Auth Progress
 

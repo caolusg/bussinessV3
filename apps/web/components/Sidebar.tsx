@@ -17,7 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ stages = STAGES, onResourceSelect }) 
   };
 
   return (
-    <aside className="w-1/5 h-[calc(100vh-64px)] fixed top-16 left-0 bg-slate-900 text-slate-300 overflow-y-auto border-r border-slate-800 flex flex-col">
+    <aside className="fixed left-0 top-16 hidden h-[calc(100vh-64px)] w-72 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900 text-slate-300 lg:flex">
       {/* Main Nav */}
       <div className="p-4 border-b border-slate-800">
         <Link
