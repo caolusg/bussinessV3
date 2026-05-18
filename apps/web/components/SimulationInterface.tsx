@@ -675,6 +675,26 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         })}
       </div>
 
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-gray-200 bg-white px-3 py-2 xl:hidden">
+        <button
+          type="button"
+          onClick={() => onTriggerCoaching({ sessionId: currentSessionId ?? undefined, stage: currentStage })}
+          disabled={loadingSession || !currentSessionId}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <HelpCircle size={15} />
+          AI 教练指导
+        </button>
+        <button
+          type="button"
+          onClick={onTriggerGroupDiscussion}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700"
+        >
+          <Users size={15} />
+          小组复盘
+        </button>
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
           <div className="border-b border-gray-100 p-4">
@@ -733,7 +753,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         </aside>
 
         <main className="relative flex min-w-0 flex-1 flex-col bg-slate-100/50">
-          <div className="flex-1 space-y-6 overflow-y-auto p-4">
+          <div className="flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:space-y-6 sm:p-4">
             {loadingSession && messages.length === 0 && (
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
                 正在加载当前环节会话...
@@ -747,12 +767,12 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`flex max-w-[88%] gap-3 sm:max-w-[78%] md:max-w-[62%] ${
+                    className={`flex max-w-[94%] gap-2 sm:max-w-[78%] sm:gap-3 md:max-w-[62%] ${
                       isMe ? 'flex-row-reverse' : 'flex-row'
                     }`}
                   >
                     <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm ${
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm sm:h-9 sm:w-9 ${
                         isMe
                           ? 'bg-blue-600 text-white'
                           : isSystem
@@ -777,7 +797,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                         <span className="text-[10px] text-gray-300">{msg.timestamp}</span>
                       </div>
                       <div
-                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                        className={`rounded-2xl px-3 py-2.5 text-sm leading-relaxed shadow-sm sm:px-4 sm:py-3 ${
                           isMe
                             ? 'rounded-tr-sm bg-blue-600 text-white'
                             : isSystem
@@ -796,9 +816,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             <div ref={chatEndRef} />
           </div>
 
-          <details className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 xl:hidden">
+          <details className="shrink-0 border-t border-gray-200 bg-white px-4 py-2 xl:hidden">
             <summary className="cursor-pointer text-sm font-bold text-slate-700">
-              练习目标、AI 教练与支持工具
+              练习目标与本轮反馈
             </summary>
             <div className="mt-3 space-y-3">
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
@@ -816,27 +836,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={onTriggerGroupDiscussion}
-                  className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700"
-                >
-                  小组复盘讨论
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onTriggerCoaching({ sessionId: currentSessionId ?? undefined, stage: currentStage })}
-                  disabled={loadingSession || !currentSessionId}
-                  className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50"
-                >
-                  请求 AI 指导
-                </button>
-              </div>
             </div>
           </details>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 sm:px-6 sm:py-4">
+          <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -874,8 +877,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   ))}
                 </div>
               )}
-              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
-                <div className="flex min-h-[72px] flex-1 flex-col gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-4 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end sm:gap-3">
+                <div className="flex min-h-[60px] flex-1 flex-col gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-2 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[72px] sm:px-4 sm:py-3">
                   <div className="flex items-end gap-3">
                     <button
                       type="button"
@@ -901,7 +904,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                         }
                       }}
                       placeholder="输入消息，与客户进行业务沟通..."
-                      className="min-h-12 max-h-36 flex-1 resize-none border-none bg-transparent py-2 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0"
+                      className="min-h-10 max-h-24 flex-1 resize-none border-none bg-transparent py-1.5 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0 sm:min-h-12 sm:max-h-36 sm:py-2"
                       rows={1}
                     />
                     <button
@@ -915,7 +918,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     </button>
                   </div>
                   <div
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:py-2 ${
                       uploadingContext
                         ? 'border-blue-100 bg-blue-50 text-blue-700'
                         : 'border-slate-200 bg-white text-slate-500'
