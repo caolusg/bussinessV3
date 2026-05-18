@@ -93,7 +93,10 @@ Important variables:
 
 - `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/bussinessv3?schema=public`
 - `JWT_SECRET=change_me`
-- `JWT_EXPIRES_IN=7d`
+- `JWT_EXPIRES_IN=8h`
+- `VITE_AUTH_TOKEN_STORAGE=session` stores login tokens in browser session storage by default; use `local` only when persistent login is explicitly required.
+- `VITE_AUTH_IDLE_TIMEOUT_MINUTES=120`
+- `VITE_AUTH_ABSOLUTE_TIMEOUT_HOURS=8`
 - `BCRYPT_ROUNDS=10`
 - `APP_BASE_URL=http://127.0.0.1:3000`
 - `MAIL_MODE=preview` for local preview, or `smtp` for real email sending

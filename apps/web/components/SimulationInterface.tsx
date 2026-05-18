@@ -22,6 +22,7 @@ import type {
 } from '../types';
 import { INITIAL_CHAT_MESSAGES, OPPONENT_PROFILE, STAGES } from '../constants';
 import { apiFetch, apiRequest } from '../utils/apiFetch';
+import { getAuthToken } from '../utils/authStorage';
 
 interface SimulationInterfaceProps {
   task: TaskDetail;
@@ -437,7 +438,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const handleSend = async () => {
     if (!inputValue.trim() || sending || loadingSession) return;
 
-    const token = localStorage.getItem('access_token');
+    const token = getAuthToken();
     if (!token) {
       alert('未登录，请先登录');
       return;

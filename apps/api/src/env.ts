@@ -10,7 +10,7 @@ if (!Number.isFinite(bcryptRounds) || bcryptRounds < 4) {
 }
 
 export const JWT_SECRET = jwtSecret;
-export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
+export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '8h';
 export const BCRYPT_ROUNDS = bcryptRounds;
 export const APP_BASE_URL = process.env.APP_BASE_URL ?? 'http://127.0.0.1:3000';
 export const EMAIL_VERIFICATION_REQUIRED = process.env.EMAIL_VERIFICATION_REQUIRED !== 'false';

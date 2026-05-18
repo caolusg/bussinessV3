@@ -65,6 +65,9 @@ services:
       dockerfile: Dockerfile.prod
       args:
         CONTAINER_REGISTRY_MIRROR: ${CONTAINER_REGISTRY_MIRROR}
+        VITE_AUTH_TOKEN_STORAGE: ${VITE_AUTH_TOKEN_STORAGE:-session}
+        VITE_AUTH_IDLE_TIMEOUT_MINUTES: ${VITE_AUTH_IDLE_TIMEOUT_MINUTES:-120}
+        VITE_AUTH_ABSOLUTE_TIMEOUT_HOURS: ${VITE_AUTH_ABSOLUTE_TIMEOUT_HOURS:-8}
     restart: unless-stopped
     depends_on:
       - api

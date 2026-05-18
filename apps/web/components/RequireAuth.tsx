@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { apiRequest } from '../utils/apiFetch';
+import { clearAuthToken, getAuthToken } from '../utils/authStorage';
 
 type AuthMe = {
   roles: Array<'student' | 'teacher'>;
@@ -9,7 +10,7 @@ type AuthMe = {
 
 const RequireAuth: React.FC = () => {
   const location = useLocation();
-  const token = localStorage.getItem('access_token');
+  const token = getAuthToken({ touch: false });
   const [status, setStatus] = useState<'checking' | 'valid' | 'invalid'>(
     token ? 'checking' : 'invalid'
   );
@@ -33,7 +34,7 @@ const RequireAuth: React.FC = () => {
         }
       })
       .catch(() => {
-        localStorage.removeItem('access_token');
+        clearAuthToken();
         if (!cancelled) setStatus('invalid');
       });
 

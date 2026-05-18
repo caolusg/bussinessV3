@@ -1,3 +1,5 @@
+import { getAuthToken, hasAuthToken } from './authStorage';
+
 type ClickFlowEvent = {
   eventType: string;
   page: string;
@@ -18,10 +20,6 @@ let queue: ClickFlowEvent[] = [];
 let flushTimer: number | null = null;
 let flushing = false;
 
-function hasAuthToken() {
-  return typeof window !== 'undefined' && Boolean(localStorage.getItem('access_token'));
-}
-
 function normalizeText(text: string | null | undefined) {
   return text?.replace(/\s+/g, ' ').trim() ?? '';
 }
@@ -41,13 +39,18 @@ async function flushClickFlowQueue() {
 
   flushing = true;
   const batch = queue.splice(0, CLICK_BATCH_SIZE);
+  const token = getAuthToken();
+  if (!token) {
+    flushing = false;
+    return;
+  }
 
   try {
     await fetch('/api/analytics/clicks', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('access_token') ?? ''}`
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ events: batch }),
       keepalive: true

@@ -1,3 +1,5 @@
+import { clearAuthToken, getAuthToken } from './authStorage';
+
 export type ApiFetchResult<T> = {
   data: T | null;
   res: Response;
@@ -68,7 +70,7 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiFetchResult<T>> {
-  const token = localStorage.getItem('access_token');
+  const token = getAuthToken();
   const headers = new Headers(options.headers || {});
 
   if (!headers.has('Content-Type')) {
@@ -109,7 +111,7 @@ export async function apiRequest<T>(
   const redirectOnUnauthorized = config.redirectOnUnauthorized ?? true;
 
   if (res.status === 401 && redirectOnUnauthorized) {
-    localStorage.removeItem('access_token');
+    clearAuthToken();
     if (typeof window !== 'undefined') {
       window.location.replace('/login');
     }

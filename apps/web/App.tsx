@@ -31,6 +31,7 @@ import {
   SetupStatus
 } from './types';
 import { apiFetch, apiRequest } from './utils/apiFetch';
+import { clearAuthToken, getAuthToken, hasAuthToken, setAuthToken } from './utils/authStorage';
 import { installGlobalClickTracking, trackPageView } from './utils/clickFlowTracker';
 
 const buildDefaultUser = (role: UserRole): UserProfile => ({
@@ -263,13 +264,13 @@ const AppRoutes: React.FC = () => {
   }, []);
 
   const clearAuth = () => {
-    localStorage.removeItem('access_token');
+    clearAuthToken();
   };
 
   useEffect(() => {
     if (setupLoading || !setupStatus?.setupComplete) return;
 
-    const token = localStorage.getItem('access_token');
+    const token = getAuthToken({ touch: false });
     if (!token) {
       setCurrentUser(null);
       setRole(null);
@@ -286,7 +287,7 @@ const AppRoutes: React.FC = () => {
         setCurrentUser(authenticated.user);
       })
       .catch(() => {
-        localStorage.removeItem('access_token');
+        clearAuthToken();
         if (cancelled) return;
         setCurrentUser(null);
         setRole(null);
@@ -301,8 +302,7 @@ const AppRoutes: React.FC = () => {
   }, [setupLoading, setupStatus?.setupComplete]);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) return;
+    if (!hasAuthToken()) return;
 
     let cancelled = false;
     apiRequest<ContentStage[]>('/api/content/stages')
@@ -383,7 +383,7 @@ const AppRoutes: React.FC = () => {
       }
 
       if (!registerResult.verificationRequired && registerResult.token) {
-        localStorage.setItem('access_token', registerResult.token);
+        setAuthToken(registerResult.token);
 
         const authenticated = await loadAuthenticatedUser(registerResult.token);
 
@@ -494,7 +494,7 @@ const AppRoutes: React.FC = () => {
         throw new Error('INTERNAL_ERROR');
       }
 
-      localStorage.setItem('access_token', token);
+      setAuthToken(token);
 
       const authenticated = await loadAuthenticatedUser(token);
 
@@ -514,7 +514,7 @@ const AppRoutes: React.FC = () => {
     );
 
     const token = tokenResult.token;
-    localStorage.setItem('access_token', token);
+    setAuthToken(token);
 
     const authenticated = await loadAuthenticatedUser(token);
 
@@ -530,7 +530,7 @@ const AppRoutes: React.FC = () => {
     setCurrentUser(updatedProfile);
     setIsProfileModalOpen(false);
 
-    const token = localStorage.getItem('access_token');
+    const token = getAuthToken();
     if (!token) {
       clearAuth();
       navigate('/login', { replace: true });
@@ -558,7 +558,7 @@ const AppRoutes: React.FC = () => {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const token = localStorage.getItem('access_token');
+    const token = getAuthToken();
     if (!token) {
       clearAuth();
       navigate('/login', { replace: true });
@@ -620,7 +620,7 @@ const AppRoutes: React.FC = () => {
     );
   }
 
-  if (authLoading && localStorage.getItem('access_token') && !currentUser) {
+  if (authLoading && hasAuthToken() && !currentUser) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
         正在读取账号资料...
