@@ -8,6 +8,8 @@ const prisma = new PrismaClient({
 
 const DEFAULT_TEACHER_USERNAME = process.env.DEFAULT_TEACHER_USERNAME ?? 'teacher';
 const DEFAULT_TEACHER_PASSWORD = process.env.DEFAULT_TEACHER_PASSWORD ?? 'password123';
+const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME ?? 'admin';
+const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD ?? 'password123';
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS ?? '10');
 
 if (!Number.isFinite(BCRYPT_ROUNDS) || BCRYPT_ROUNDS < 4) {
@@ -24,6 +26,7 @@ const ensureRole = async (key, name) =>
 const main = async () => {
   const studentRole = await ensureRole('student', 'Student');
   const teacherRole = await ensureRole('teacher', 'Teacher');
+  const adminRole = await ensureRole('admin', 'System Administrator');
 
   const passwordHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, BCRYPT_ROUNDS);
   const teacher = await prisma.user.upsert({
@@ -53,9 +56,40 @@ const main = async () => {
     }
   });
 
+  const adminPasswordHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, BCRYPT_ROUNDS);
+  const admin = await prisma.user.upsert({
+    where: { username: DEFAULT_ADMIN_USERNAME },
+    update: {
+      passwordHash: adminPasswordHash,
+      status: 'ACTIVE'
+    },
+    create: {
+      username: DEFAULT_ADMIN_USERNAME,
+      passwordHash: adminPasswordHash,
+      status: 'ACTIVE'
+    }
+  });
+
+  for (const role of [adminRole, teacherRole]) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: admin.id,
+          roleId: role.id
+        }
+      },
+      update: {},
+      create: {
+        userId: admin.id,
+        roleId: role.id
+      }
+    });
+  }
+
   console.log('Database seed completed');
-  console.log(`Roles ensured: ${studentRole.key}, ${teacherRole.key}`);
+  console.log(`Roles ensured: ${studentRole.key}, ${teacherRole.key}, ${adminRole.key}`);
   console.log(`Default teacher ensured: ${teacher.username}`);
+  console.log(`Default admin ensured: ${admin.username}`);
 };
 
 main()

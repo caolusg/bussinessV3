@@ -1,5 +1,6 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import * as mammoth from 'mammoth';
 import { prisma } from '../lib/prisma.js';
@@ -181,6 +182,26 @@ const groupMembersPayloadSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(200)
 });
 
+const managedRoleSchema = z.enum(['student', 'teacher', 'admin']);
+
+const userManagerPayloadSchema = z.object({
+  username: z.string().trim().min(1).max(80),
+  email: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+    z.string().trim().email().optional().nullable().default(null)
+  ),
+  status: z.enum(['ACTIVE', 'PENDING_VERIFICATION', 'DISABLED']).default('ACTIVE'),
+  roleKeys: z.array(managedRoleSchema).min(1).max(3)
+});
+
+const userCreatePayloadSchema = userManagerPayloadSchema.extend({
+  password: z.string().min(6)
+});
+
+const userPasswordPayloadSchema = z.object({
+  password: z.string().min(6)
+});
+
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
 
@@ -194,6 +215,50 @@ async function requireTeacher(userId: string | undefined) {
     select: { userId: true }
   });
   return Boolean(teacherRole);
+}
+
+async function requireAdmin(userId: string | undefined) {
+  if (!userId) return false;
+  const adminRole = await prisma.userRole.findFirst({
+    where: {
+      userId,
+      role: { key: 'admin' }
+    },
+    select: { userId: true }
+  });
+  return Boolean(adminRole);
+}
+
+async function ensureAdminAccess(req: Request, res: Response) {
+  if (await requireAdmin(req.user?.id)) return true;
+  res.status(403).json(fail('ADMIN_REQUIRED', 'System administrator role required'));
+  return false;
+}
+
+function normalizeRoleKeys(roleKeys: Array<'student' | 'teacher' | 'admin'>) {
+  const normalized = new Set(roleKeys);
+  if (normalized.has('admin')) {
+    normalized.add('teacher');
+  }
+  return Array.from(normalized);
+}
+
+async function replaceUserRoles(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  roleKeys: Array<'student' | 'teacher' | 'admin'>
+) {
+  const normalizedRoleKeys = normalizeRoleKeys(roleKeys);
+  const roles = await tx.role.findMany({ where: { key: { in: normalizedRoleKeys } } });
+  if (roles.length !== normalizedRoleKeys.length) {
+    throw new Error('ROLE_MISSING');
+  }
+
+  await tx.userRole.deleteMany({ where: { userId } });
+  await tx.userRole.createMany({
+    data: roles.map((role) => ({ userId, roleId: role.id })),
+    skipDuplicates: true
+  });
 }
 
 function getDelegate(config: TableConfig) {
@@ -469,6 +534,170 @@ router.post('/teacher-password', async (req, res) => {
     return res.status(200).json(ok({ username: teacher.username, reset: true }));
   } catch (error) {
     console.error('Reset teacher password failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/users/manager', async (req, res) => {
+  try {
+    if (!(await ensureAdminAccess(req, res))) return;
+
+    const [users, roles] = await Promise.all([
+      prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          status: true,
+          emailVerifiedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          roles: {
+            include: {
+              role: true
+            }
+          },
+          studentAuth: true,
+          studentProfile: true
+        }
+      }),
+      prisma.role.findMany({ orderBy: { key: 'asc' } })
+    ]);
+
+    const rows = users.map((item) => ({
+      id: item.id,
+      username: item.username,
+      email: item.email,
+      status: item.status,
+      emailVerifiedAt: item.emailVerifiedAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      roles: item.roles.map((userRole: UserRoleRow) => userRole.role.key),
+      studentAuth: item.studentAuth,
+      studentProfile: item.studentProfile
+    }));
+
+    return res.status(200).json(ok({
+      users: rows,
+      roles: roles.map((role) => ({ key: role.key, name: role.name })),
+      currentUserId: req.user?.id ?? null,
+      totals: {
+        userCount: rows.length,
+        adminCount: rows.filter((item) => item.roles.includes('admin')).length,
+        teacherCount: rows.filter((item) => item.roles.includes('teacher')).length,
+        studentCount: rows.filter((item) => item.roles.includes('student')).length
+      }
+    }));
+  } catch (error) {
+    console.error('Get user manager failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/users', async (req, res) => {
+  try {
+    if (!(await ensureAdminAccess(req, res))) return;
+
+    const parsed = userCreatePayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid user payload'));
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, Number(process.env.BCRYPT_ROUNDS ?? '10'));
+    const roleKeys = normalizeRoleKeys(parsed.data.roleKeys);
+
+    const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.create({
+        data: {
+          username: parsed.data.username,
+          email: parsed.data.email,
+          passwordHash,
+          status: parsed.data.status,
+          emailVerifiedAt: parsed.data.status === 'ACTIVE' ? new Date() : null
+        }
+      });
+
+      await replaceUserRoles(tx, user.id, roleKeys);
+      return user;
+    });
+
+    return res.status(201).json(ok({ user: { id: created.id, username: created.username } }));
+  } catch (error) {
+    console.error('Create managed user failed:', error);
+    if (error instanceof Error && error.message === 'ROLE_MISSING') {
+      return res.status(500).json(fail('ROLE_MISSING', 'Required role not initialized'));
+    }
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json(fail('USER_CONFLICT', 'Username or email already exists'));
+    }
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/users/:userId', async (req, res) => {
+  try {
+    if (!(await ensureAdminAccess(req, res))) return;
+
+    const params = userParamsSchema.safeParse(req.params);
+    const parsed = userManagerPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid user payload'));
+    }
+
+    const nextRoleKeys = normalizeRoleKeys(parsed.data.roleKeys);
+    const isSelf = req.user?.id === params.data.userId;
+    if (isSelf && (!nextRoleKeys.includes('admin') || parsed.data.status !== 'ACTIVE')) {
+      return res.status(400).json(fail('SELF_LOCKOUT_BLOCKED', 'Cannot remove your own admin access or disable your own account'));
+    }
+
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.update({
+        where: { id: params.data.userId },
+        data: {
+          username: parsed.data.username,
+          email: parsed.data.email,
+          status: parsed.data.status,
+          emailVerifiedAt: parsed.data.status === 'ACTIVE' ? new Date() : null
+        }
+      });
+
+      await replaceUserRoles(tx, user.id, nextRoleKeys);
+      return user;
+    });
+
+    return res.status(200).json(ok({ user: { id: updated.id, username: updated.username } }));
+  } catch (error) {
+    console.error('Update managed user failed:', error);
+    if (error instanceof Error && error.message === 'ROLE_MISSING') {
+      return res.status(500).json(fail('ROLE_MISSING', 'Required role not initialized'));
+    }
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json(fail('USER_CONFLICT', 'Username or email already exists'));
+    }
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/users/:userId/password', async (req, res) => {
+  try {
+    if (!(await ensureAdminAccess(req, res))) return;
+
+    const params = userParamsSchema.safeParse(req.params);
+    const parsed = userPasswordPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid password payload'));
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, Number(process.env.BCRYPT_ROUNDS ?? '10'));
+    const user = await prisma.user.update({
+      where: { id: params.data.userId },
+      data: { passwordHash }
+    });
+
+    return res.status(200).json(ok({ user: { id: user.id, username: user.username }, reset: true }));
+  } catch (error) {
+    console.error('Reset managed user password failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

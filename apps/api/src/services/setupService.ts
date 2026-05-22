@@ -42,7 +42,8 @@ async function runPackageScript(script: string, env: NodeJS.ProcessEnv = {}) {
 async function ensureBaseData(prisma: PrismaClient, teacherUsername: string, teacherPassword: string) {
   const roles = [
     { key: 'student', name: 'Student' },
-    { key: 'teacher', name: 'Teacher' }
+    { key: 'teacher', name: 'Teacher' },
+    { key: 'admin', name: 'System Administrator' }
   ];
 
   for (const role of roles) {
@@ -54,8 +55,9 @@ async function ensureBaseData(prisma: PrismaClient, teacherUsername: string, tea
   }
 
   const teacherRole = await prisma.role.findUnique({ where: { key: 'teacher' } });
-  if (!teacherRole) {
-    throw new Error('Teacher role not available after seed');
+  const adminRole = await prisma.role.findUnique({ where: { key: 'admin' } });
+  if (!teacherRole || !adminRole) {
+    throw new Error('Required roles not available after seed');
   }
 
   const { default: bcrypt } = await import('bcryptjs');
@@ -87,6 +89,38 @@ async function ensureBaseData(prisma: PrismaClient, teacherUsername: string, tea
       roleId: teacherRole.id
     }
   });
+
+  const adminUsername = process.env.DEFAULT_ADMIN_USERNAME ?? 'admin';
+  const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD ?? 'password123';
+  const adminPasswordHash = await bcrypt.hash(adminPassword, Number(process.env.BCRYPT_ROUNDS ?? '10'));
+  const admin = await prisma.user.upsert({
+    where: { username: adminUsername },
+    update: {
+      passwordHash: adminPasswordHash,
+      status: 'ACTIVE'
+    },
+    create: {
+      username: adminUsername,
+      passwordHash: adminPasswordHash,
+      status: 'ACTIVE'
+    }
+  });
+
+  for (const role of [adminRole, teacherRole]) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: admin.id,
+          roleId: role.id
+        }
+      },
+      update: {},
+      create: {
+        userId: admin.id,
+        roleId: role.id
+      }
+    });
+  }
 }
 
 export async function saveRuntimeConfig(config: SetupRuntimeConfigInput) {
@@ -108,6 +142,7 @@ export async function buildSetupStatus(prisma: PrismaClient) {
   let databaseReachable = false;
   let migrationsReady = false;
   let teacherReady = false;
+  let adminReady = false;
   let contentReady = false;
   let setupReady = state.setupComplete;
 
@@ -135,6 +170,16 @@ export async function buildSetupStatus(prisma: PrismaClient) {
         WHERE u.username = ${state.config.teacherUsername} AND r.key = 'teacher'
       `;
       teacherReady = Number(teacherCount[0]?.count ?? 0) > 0;
+
+      const adminUsername = process.env.DEFAULT_ADMIN_USERNAME ?? 'admin';
+      const adminCount = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE u.username = ${adminUsername} AND r.key = 'admin'
+      `;
+      adminReady = Number(adminCount[0]?.count ?? 0) > 0;
     }
 
     if (stagesTableExists) {
@@ -144,7 +189,7 @@ export async function buildSetupStatus(prisma: PrismaClient) {
       contentReady = Number(contentCount[0]?.count ?? 0) > 0;
     }
 
-    if (!setupReady && migrationsReady && teacherReady && contentReady) {
+    if (!setupReady && migrationsReady && teacherReady && adminReady && contentReady) {
       setupReady = true;
     }
   } catch {
@@ -156,6 +201,7 @@ export async function buildSetupStatus(prisma: PrismaClient) {
     databaseReachable,
     migrationsReady,
     teacherReady,
+    adminReady,
     contentReady,
     bootstrapRunning: state.bootstrapRunning,
     currentStep: state.currentStep,

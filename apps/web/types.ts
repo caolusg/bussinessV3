@@ -31,6 +31,7 @@ export interface UserProfile {
   realName: string;
   studentNo: string;
   role: string;
+  roles?: string[];
   company: string;
   avatarUrl: string;
   // Student specific
@@ -125,6 +126,7 @@ export interface SetupStatus {
   databaseReachable: boolean;
   migrationsReady: boolean;
   teacherReady: boolean;
+  adminReady: boolean;
   contentReady: boolean;
   bootstrapRunning: boolean;
   currentStep: string;

@@ -18,8 +18,11 @@ import {
   Search,
   Settings2,
   MousePointerClick,
+  ShieldCheck,
   Sparkles,
-  Users
+  UserPlus,
+  Users,
+  X
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { apiRequest } from '../utils/apiFetch';
@@ -38,7 +41,7 @@ type PasswordChangePayload = {
   confirmPassword: string;
 };
 
-type TeacherTab = 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
+type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
 
 type AdminTableMeta = {
   key: string;
@@ -334,6 +337,41 @@ type ScenarioFormState = {
   isActive: boolean;
 };
 
+type ManagedRoleKey = 'student' | 'teacher' | 'admin';
+
+type ManagedUser = {
+  id: string;
+  username: string;
+  email?: string | null;
+  status: 'ACTIVE' | 'PENDING_VERIFICATION' | 'DISABLED';
+  roles: ManagedRoleKey[];
+  emailVerifiedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  studentAuth?: Record<string, unknown> | null;
+  studentProfile?: Record<string, unknown> | null;
+};
+
+type UserManagerResponse = {
+  users: ManagedUser[];
+  roles: Array<{ key: ManagedRoleKey; name: string }>;
+  currentUserId: string | null;
+  totals: {
+    userCount: number;
+    adminCount: number;
+    teacherCount: number;
+    studentCount: number;
+  };
+};
+
+type ManagedUserForm = {
+  username: string;
+  email: string;
+  password: string;
+  status: ManagedUser['status'];
+  roleKeys: ManagedRoleKey[];
+};
+
 const PAGE_SIZE = 25;
 
 const formatValue = (value: unknown) => {
@@ -389,6 +427,18 @@ const DATE_RANGES = [
   { value: '30d', label: '近 30 天' }
 ] as const;
 
+const USER_STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: '启用' },
+  { value: 'PENDING_VERIFICATION', label: '待验证' },
+  { value: 'DISABLED', label: '停用' }
+] as const;
+
+const ROLE_LABELS: Record<ManagedRoleKey, string> = {
+  admin: '系统管理员',
+  teacher: '教师',
+  student: '学生'
+};
+
 const defaultScenarioForm: ScenarioFormState = {
   stageId: '',
   name: '',
@@ -414,6 +464,19 @@ const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptS
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
   const [activeTab, setActiveTab] = useState<TeacherTab>('PROMPT');
+  const isAdmin = Boolean(user.roles?.includes('admin'));
+  const [userManager, setUserManager] = useState<UserManagerResponse | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [userManagerError, setUserManagerError] = useState('');
+  const [userManagerMessage, setUserManagerMessage] = useState('');
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [newUserForm, setNewUserForm] = useState<ManagedUserForm>({
+    username: '',
+    email: '',
+    password: '',
+    status: 'ACTIVE',
+    roleKeys: ['teacher']
+  });
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -507,6 +570,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const totalPages = tableData ? Math.max(1, Math.ceil(tableData.total / tableData.pageSize)) : 1;
   const currentScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId);
 
+  const loadUserManager = async () => {
+    if (!isAdmin) return;
+    setIsLoadingUsers(true);
+    setUserManagerError('');
+    try {
+      const data = await apiRequest<UserManagerResponse>('/api/admin/users/manager');
+      setUserManager(data);
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '用户管理数据加载失败');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
   const loadScenarios = async () => {
     setIsLoadingScenarios(true);
     setScenarioError('');
@@ -529,6 +606,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       setIsLoadingScenarios(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab !== 'USERS') return;
+    void loadUserManager();
+  }, [activeTab, isAdmin]);
 
   useEffect(() => {
     if (activeTab !== 'PROMPT') return;
@@ -930,6 +1012,128 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const setNewUserRole = (role: ManagedRoleKey, checked: boolean) => {
+    setNewUserForm((current) => {
+      const nextRoles = new Set(current.roleKeys);
+      if (checked) {
+        nextRoles.add(role);
+      } else {
+        nextRoles.delete(role);
+      }
+      if (role === 'admin' && checked) nextRoles.add('teacher');
+      return { ...current, roleKeys: Array.from(nextRoles) as ManagedRoleKey[] };
+    });
+  };
+
+  const createManagedUser = async () => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    if (!newUserForm.username.trim() || !newUserForm.password) {
+      setUserManagerError('请填写用户名和初始密码');
+      return;
+    }
+    if (newUserForm.roleKeys.length === 0) {
+      setUserManagerError('请至少选择一个角色');
+      return;
+    }
+
+    try {
+      setSavingUserId('new');
+      await apiRequest('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: newUserForm.username.trim(),
+          email: newUserForm.email.trim() || null,
+          password: newUserForm.password,
+          status: newUserForm.status,
+          roleKeys: newUserForm.roleKeys
+        })
+      });
+      setNewUserForm({ username: '', email: '', password: '', status: 'ACTIVE', roleKeys: ['teacher'] });
+      setUserManagerMessage('用户已创建');
+      await loadUserManager();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '创建用户失败');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  const updateManagedUserDraft = (userId: string, patch: Partial<ManagedUser>) => {
+    setUserManager((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        users: current.users.map((item) => (item.id === userId ? { ...item, ...patch } : item))
+      };
+    });
+  };
+
+  const toggleManagedUserRole = (targetUser: ManagedUser, role: ManagedRoleKey, checked: boolean) => {
+    const nextRoles = new Set(targetUser.roles);
+    if (checked) {
+      nextRoles.add(role);
+    } else {
+      nextRoles.delete(role);
+    }
+    if (role === 'admin' && checked) nextRoles.add('teacher');
+    updateManagedUserDraft(targetUser.id, { roles: Array.from(nextRoles) as ManagedRoleKey[] });
+  };
+
+  const saveManagedUser = async (targetUser: ManagedUser) => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    if (!targetUser.username.trim()) {
+      setUserManagerError('用户名不能为空');
+      return;
+    }
+    if (targetUser.roles.length === 0) {
+      setUserManagerError('请至少保留一个角色');
+      return;
+    }
+
+    try {
+      setSavingUserId(targetUser.id);
+      await apiRequest(`/api/admin/users/${targetUser.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          username: targetUser.username.trim(),
+          email: targetUser.email?.trim() || null,
+          status: targetUser.status,
+          roleKeys: targetUser.roles
+        })
+      });
+      setUserManagerMessage('用户已保存');
+      await loadUserManager();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '保存用户失败');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  const resetManagedUserPassword = async (targetUser: ManagedUser) => {
+    const password = window.prompt(`请输入 ${targetUser.username} 的新密码（至少 6 位）`);
+    if (password === null) return;
+    if (password.length < 6) {
+      setUserManagerError('新密码至少 6 位');
+      return;
+    }
+
+    try {
+      setSavingUserId(targetUser.id);
+      await apiRequest(`/api/admin/users/${targetUser.id}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ password })
+      });
+      setUserManagerMessage('用户密码已重置');
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '重置密码失败');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   const selectedTableMeta = adminTables.find((table) => table.key === selectedTable);
   const currentStatusValues = statusField
     ? (tableData?.table.statusValues?.[statusField] ?? [])
@@ -938,6 +1142,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const pageTitle =
     activeTab === 'ACCOUNT'
       ? '账户设置'
+      : activeTab === 'USERS'
+      ? '用户管理'
       : activeTab === 'PROMPT'
       ? '提示词 (Prompt) 模板管理'
       : activeTab === 'RESOURCES'
@@ -959,6 +1165,218 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       </div>
     </div>
   );
+
+  const renderUserManagement = () => {
+    if (!isAdmin) {
+      return (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm font-semibold text-amber-800">
+          当前账号没有系统管理员权限，无法管理用户。
+        </div>
+      );
+    }
+
+    const users = userManager?.users ?? [];
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          {[
+            ['全部用户', userManager?.totals.userCount ?? 0],
+            ['管理员', userManager?.totals.adminCount ?? 0],
+            ['教师', userManager?.totals.teacherCount ?? 0],
+            ['学生', userManager?.totals.studentCount ?? 0]
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <p className="text-xs font-bold text-slate-400">{label}</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {(userManagerError || userManagerMessage) && (
+          <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${
+            userManagerError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}>
+            {userManagerError || userManagerMessage}
+          </div>
+        )}
+
+        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">新增用户</h3>
+              <p className="text-sm text-slate-500">管理员账号会自动同时拥有教师角色，以便登录现有后台。</p>
+            </div>
+            <UserPlus className="text-indigo-500" size={22} />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            <input
+              value={newUserForm.username}
+              onChange={(e) => setNewUserForm((current) => ({ ...current, username: e.target.value }))}
+              placeholder="用户名"
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400"
+            />
+            <input
+              value={newUserForm.email}
+              onChange={(e) => setNewUserForm((current) => ({ ...current, email: e.target.value }))}
+              placeholder="邮箱（可选）"
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400"
+            />
+            <input
+              type="password"
+              value={newUserForm.password}
+              onChange={(e) => setNewUserForm((current) => ({ ...current, password: e.target.value }))}
+              placeholder="初始密码"
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400"
+            />
+            <select
+              value={newUserForm.status}
+              onChange={(e) => setNewUserForm((current) => ({ ...current, status: e.target.value as ManagedUser['status'] }))}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400"
+            >
+              {USER_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-3">
+              {(Object.keys(ROLE_LABELS) as ManagedRoleKey[]).map((role) => (
+                <label key={role} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={newUserForm.roleKeys.includes(role)}
+                    onChange={(e) => setNewUserRole(role, e.target.checked)}
+                  />
+                  {ROLE_LABELS[role]}
+                </label>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={createManagedUser}
+              disabled={savingUserId === 'new'}
+              className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-100 disabled:opacity-60"
+            >
+              {savingUserId === 'new' ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+              创建用户
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 p-6">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">用户列表</h3>
+              <p className="text-sm text-slate-500">可修改状态、角色和重置密码。密码哈希不会在前端展示。</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadUserManager}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            >
+              <RefreshCw size={14} /> 刷新
+            </button>
+          </div>
+
+          {isLoadingUsers && !userManager ? (
+            <div className="flex items-center gap-3 p-6 text-sm font-semibold text-slate-500">
+              <Loader2 className="animate-spin text-indigo-500" size={18} />
+              正在加载用户...
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
+                  <tr>
+                    <th className="px-5 py-4">用户</th>
+                    <th className="px-5 py-4">邮箱</th>
+                    <th className="px-5 py-4">状态</th>
+                    <th className="px-5 py-4">角色</th>
+                    <th className="px-5 py-4">创建时间</th>
+                    <th className="px-5 py-4 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {users.map((item) => {
+                    const isSelf = item.id === userManager?.currentUserId;
+                    return (
+                      <tr key={item.id} className="align-top">
+                        <td className="px-5 py-4">
+                          <input
+                            value={item.username}
+                            onChange={(e) => updateManagedUserDraft(item.id, { username: e.target.value })}
+                            className="w-40 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
+                          />
+                          {isSelf && <p className="mt-1 text-xs font-bold text-indigo-600">当前账号</p>}
+                        </td>
+                        <td className="px-5 py-4">
+                          <input
+                            value={item.email ?? ''}
+                            onChange={(e) => updateManagedUserDraft(item.id, { email: e.target.value })}
+                            className="w-52 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                          />
+                        </td>
+                        <td className="px-5 py-4">
+                          <select
+                            value={item.status}
+                            onChange={(e) => updateManagedUserDraft(item.id, { status: e.target.value as ManagedUser['status'] })}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                          >
+                            {USER_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {(Object.keys(ROLE_LABELS) as ManagedRoleKey[]).map((role) => (
+                              <label key={role} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={item.roles.includes(role)}
+                                  onChange={(e) => toggleManagedUserRole(item, role, e.target.checked)}
+                                />
+                                {ROLE_LABELS[role]}
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => resetManagedUserPassword(item)}
+                              disabled={savingUserId === item.id}
+                              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                              重置密码
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => saveManagedUser(item)}
+                              disabled={savingUserId === item.id}
+                              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                            >
+                              {savingUserId === item.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                              保存
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  };
 
   const renderClickFlow = () => {
     if (isLoadingClickFlow && !clickFlowSummary) {
@@ -2537,6 +2955,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
 
         <nav className="flex-1 p-4 space-y-2 mt-4">
+          {isAdmin && (
+            <button onClick={() => setActiveTab('USERS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'USERS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+              <ShieldCheck size={18} /> 2.0 用户管理
+            </button>
+          )}
           <button onClick={() => setActiveTab('RESOURCES')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'RESOURCES' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <BookOpen size={18} /> 2.1 教学资源管理
           </button>
@@ -2598,6 +3021,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
         <nav className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
           {[
+            ...(isAdmin ? [['USERS', '2.0 用户']] : []),
             ['RESOURCES', '2.1 资源'],
             ['GROUPS', '2.2 分组'],
             ['RECORDS', '2.3 研究'],
@@ -2622,6 +3046,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </nav>
 
         <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-10">
+          {activeTab === 'USERS' && renderUserManagement()}
           {activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {(isLoadingScenarios || scenarioError) && (

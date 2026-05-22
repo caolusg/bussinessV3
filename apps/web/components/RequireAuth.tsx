@@ -4,7 +4,7 @@ import { apiRequest } from '../utils/apiFetch';
 import { clearAuthToken, getAuthToken } from '../utils/authStorage';
 
 type AuthMe = {
-  roles: Array<'student' | 'teacher'>;
+  roles: Array<'student' | 'teacher' | 'admin'>;
   profileCompleted: boolean;
 };
 
@@ -14,7 +14,7 @@ const RequireAuth: React.FC = () => {
   const [status, setStatus] = useState<'checking' | 'valid' | 'invalid'>(
     token ? 'checking' : 'invalid'
   );
-  const [roles, setRoles] = useState<Array<'student' | 'teacher'>>([]);
+  const [roles, setRoles] = useState<Array<'student' | 'teacher' | 'admin'>>([]);
   const [profileCompleted, setProfileCompleted] = useState(true);
 
   useEffect(() => {

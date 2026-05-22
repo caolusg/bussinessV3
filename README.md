@@ -103,6 +103,8 @@ Important variables:
 - `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
 - `DEFAULT_TEACHER_USERNAME=teacher`
 - `DEFAULT_TEACHER_PASSWORD=password123`
+- `DEFAULT_ADMIN_USERNAME=admin`
+- `DEFAULT_ADMIN_PASSWORD=password123`
 - `AI_ENABLED=true`
 - `AI_PROVIDER=deepseek`
 - `AI_BASE_URL=https://api.deepseek.com`

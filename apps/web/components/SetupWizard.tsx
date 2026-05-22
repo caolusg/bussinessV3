@@ -183,6 +183,12 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ status, onStatusChange }) => 
       tone: status?.teacherReady ? 'done' : status?.bootstrapRunning ? 'running' : 'pending'
     },
     {
+      icon: ShieldCheck,
+      title: '系统管理员',
+      detail: status?.adminReady ? '管理员账号已写入数据库' : '等待环境变量初始化',
+      tone: status?.adminReady ? 'done' : status?.bootstrapRunning ? 'running' : 'pending'
+    },
+    {
       icon: Rocket,
       title: '业务内容',
       detail: status?.contentReady ? '阶段、任务和资源已初始化' : '尚未写入业务内容',
@@ -425,6 +431,10 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ status, onStatusChange }) => 
                   {
                     label: '教师账号已创建',
                     ok: status?.teacherReady
+                  },
+                  {
+                    label: '管理员账号已创建',
+                    ok: status?.adminReady
                   },
                   {
                     label: '业务内容已导入',

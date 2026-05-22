@@ -77,7 +77,7 @@ type AuthMe = {
     username: string;
     email: string | null;
   };
-  roles: Array<'student' | 'teacher'>;
+  roles: Array<'student' | 'teacher' | 'admin'>;
   profileCompleted: boolean;
 };
 
@@ -98,6 +98,7 @@ const buildUserFromAuth = (me: AuthMe, studentProfile?: StudentProfileData | nul
     ...defaultUser,
     username: me.user.username,
     email: me.user.email ?? '',
+    roles: me.roles,
     realName: studentProfile?.realName ?? defaultUser.realName,
     studentNo: studentProfile?.studentNo ?? defaultUser.studentNo,
     nationality: studentProfile?.nationality ?? '',
