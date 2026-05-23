@@ -879,15 +879,15 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                 </div>
               )}
               <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end sm:gap-3">
-                <div className="flex min-h-[60px] flex-1 flex-col gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-2 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[72px] sm:px-4 sm:py-3">
-                  <div className="flex items-end gap-3">
+                <div className="flex min-h-[150px] flex-1 flex-col gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[168px] sm:px-4 sm:py-4">
+                  <div className="flex flex-1 items-stretch gap-3">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingContext || loadingSession}
                       aria-label="上传产品资料"
                       title="上传 PDF、Word 或截图，让 AI 阅读后参与对话"
-                      className="mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {uploadingContext ? (
                         <Loader2 className="animate-spin" size={16} />
@@ -905,15 +905,15 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                         }
                       }}
                       placeholder="输入消息，与客户进行业务沟通..."
-                      className="min-h-10 max-h-24 flex-1 resize-none border-none bg-transparent py-1.5 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0 sm:min-h-12 sm:max-h-36 sm:py-2"
-                      rows={1}
+                      className="min-h-[96px] max-h-48 flex-1 resize-none border-none bg-transparent py-1 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0 sm:min-h-[112px] sm:max-h-56"
+                      rows={4}
                     />
                     <button
                       type="button"
                       onClick={() => void handleSend()}
                       disabled={!inputValue.trim() || sending || loadingSession}
                       aria-label="发送消息"
-                      className="mb-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Send size={18} />
                     </button>
