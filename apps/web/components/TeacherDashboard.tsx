@@ -489,6 +489,18 @@ const PAGE_TITLES: Record<TeacherTab, string> = {
   ACCOUNT: '账户设置'
 };
 
+const getRoleLabelFallback = (role: string) => {
+  if (role === 'admin') return '系统管理员';
+  if (role === 'teacher') return '教师';
+  if (role === 'student') return '学生';
+  return role;
+};
+
+const formatCurrentUserRoles = (roles?: string[]) => {
+  if (!roles?.length) return '未分配角色';
+  return roles.map(getRoleLabelFallback).join(' / ');
+};
+
 const getInitialTeacherTab = (user: UserProfile): TeacherTab => {
   if (user.roles?.includes('admin')) return 'USERS';
   const panelPermissions = user.panelPermissions ?? [];
@@ -521,6 +533,7 @@ const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptS
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
   const isAdmin = Boolean(user.roles?.includes('admin'));
+  const currentRoleText = formatCurrentUserRoles(user.roles);
   const [activeTab, setActiveTab] = useState<TeacherTab>(() => getInitialTeacherTab(user));
   const [userManager, setUserManager] = useState<UserManagerResponse | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -1801,7 +1814,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           {[
             ['登录名', user.username],
             ['邮箱', user.email || '未记录'],
-            ['身份', user.role || '教师']
+            ['身份', user.role || '教师'],
+            ['当前角色', currentRoleText]
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
@@ -3263,9 +3277,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         <header className="sticky top-0 z-40 flex min-h-20 flex-col gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
           <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-800">{pageTitle}</h2>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {user.username} · 系统就绪
+              <span>{user.username}</span>
+              <span>·</span>
+              <span>当前角色：{currentRoleText}</span>
+              <span>·</span>
+              <span>系统就绪</span>
             </div>
           </div>
 
