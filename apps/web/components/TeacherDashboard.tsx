@@ -500,15 +500,21 @@ const PAGE_TITLES: Record<TeacherTab, string> = {
 };
 
 const getRoleLabelFallback = (role: string) => {
-  if (role === 'admin') return '系统管理员';
-  if (role === 'teacher') return '教师';
-  if (role === 'student') return '学生';
+  const normalizedRole = role.trim().toLowerCase();
+  if (normalizedRole === 'admin') return '系统管理员';
+  if (normalizedRole === 'teacher') return '教师';
+  if (normalizedRole === 'student') return '学生';
   return role;
 };
 
 const formatCurrentUserRoles = (roles?: string[]) => {
   if (!roles?.length) return '未分配角色';
   return roles.map(getRoleLabelFallback).join(' / ');
+};
+
+const formatHeaderUserLabel = (user: UserProfile) => {
+  const displayName = user.realName?.trim() || user.username?.trim() || '';
+  return getRoleLabelFallback(displayName || user.role || '用户');
 };
 
 const getInitialTeacherTab = (user: UserProfile): TeacherTab => {
@@ -544,6 +550,7 @@ const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptS
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
   const isAdmin = Boolean(user.roles?.includes('admin'));
   const currentRoleText = formatCurrentUserRoles(user.roles);
+  const headerUserLabel = formatHeaderUserLabel(user);
   const [activeTab, setActiveTab] = useState<TeacherTab>(() => getInitialTeacherTab(user));
   const [userManager, setUserManager] = useState<UserManagerResponse | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -3310,7 +3317,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             <h2 className="text-xl font-bold text-slate-800">{pageTitle}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>{user.username}</span>
+              <span>{headerUserLabel}</span>
               <span>·</span>
               <span>当前角色：{currentRoleText}</span>
               <span>·</span>
