@@ -693,7 +693,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchStudentSearchDraft, setResearchStudentSearchDraft] = useState('');
   const [researchStudentSearch, setResearchStudentSearch] = useState('');
 
-  const [researchAiQuestion, setResearchAiQuestion] = useState('最近30天各教学分组活跃人数趋势');
+  const [researchAiQuestion, setResearchAiQuestion] = useState('');
   const [researchAiLoading, setResearchAiLoading] = useState(false);
   const [researchAiError, setResearchAiError] = useState('');
   const [researchAiResult, setResearchAiResult] = useState<ResearchAiResult | null>(null);
@@ -2864,7 +2864,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   void runResearchAiQuery(tpl);
                 }}
                 disabled={researchAiLoading}
-                className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold leading-4 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
               >
                 {tpl}
               </button>
