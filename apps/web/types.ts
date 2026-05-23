@@ -32,6 +32,7 @@ export interface UserProfile {
   studentNo: string;
   role: string;
   roles?: string[];
+  panelPermissions?: string[];
   company: string;
   avatarUrl: string;
   // Student specific

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { generateCoachingReply } from '../ai/compatibleAiClient.js';
+import { userHasPanelPermission } from '../services/panelPermissionService.js';
 import {
   buildResearchAnswerRulesPrompt,
   buildResearchDataDictionaryPrompt,
@@ -227,15 +228,6 @@ function evaluateSqlRisk(sql: string) {
   } as const;
 }
 
-async function requireResearcher(userId?: string) {
-  if (!userId) return false;
-  const row = await prisma.userRole.findFirst({
-    where: { userId, role: { key: { in: ['admin', 'teacher'] } } },
-    select: { userId: true }
-  });
-  return Boolean(row);
-}
-
 router.post('/query', requireAuth, async (req, res) => {
   try {
     const parsed = schema.safeParse(req.body);
@@ -246,7 +238,7 @@ router.post('/query', requireAuth, async (req, res) => {
       });
     }
 
-    const allow = await requireResearcher(req.user?.id);
+    const allow = await userHasPanelPermission(req.user?.id, 'research');
     if (!allow) {
       return res.status(403).json({ ok: false, error: 'No permission to use research analysis' });
     }

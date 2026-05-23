@@ -167,6 +167,7 @@ model Role {
   name String
 
   users UserRole[]
+  panelPermissions RolePanelPermission[]
 
   @@map("roles")
 }
@@ -180,6 +181,18 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+model RolePanelPermission {
+  roleId    String   @map("role_id") @db.Uuid
+  panelKey  String   @map("panel_key")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, panelKey])
+  @@index([panelKey], map: "role_panel_permissions_panel_key_idx")
+  @@map("role_panel_permissions")
 }
 
 model StudentAuth {

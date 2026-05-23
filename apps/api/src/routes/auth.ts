@@ -16,6 +16,7 @@ import {
 } from '../env.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/authMailService.js';
+import { getUserPanelPermissions, userHasAnyPanelPermission } from '../services/panelPermissionService.js';
 
 const router = Router();
 const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
@@ -850,8 +851,9 @@ router.post('/teacher/login', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('teacher')) {
-      return res.status(403).json(fail('ROLE_FORBIDDEN', 'Teacher role required'));
+    const canUseTeacherPortal = roles.includes('teacher') || roles.includes('admin') || await userHasAnyPanelPermission(user.id);
+    if (!canUseTeacherPortal) {
+      return res.status(403).json(fail('ROLE_FORBIDDEN', 'Teacher portal permission required'));
     }
 
     const token = issueAuthToken(user.id);
@@ -903,7 +905,9 @@ router.get('/me', requireAuth, async (req, res) => {
       profileCompleted = isStudentProfileComplete(profile);
     }
 
-    return res.status(200).json(ok({ user, roles, profileCompleted }));
+    const panelPermissions = await getUserPanelPermissions(userId);
+
+    return res.status(200).json(ok({ user, roles, panelPermissions, profileCompleted }));
   } catch (error) {
     console.error('Get me failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));

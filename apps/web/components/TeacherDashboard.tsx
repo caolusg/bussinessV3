@@ -42,6 +42,7 @@ type PasswordChangePayload = {
 };
 
 type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
+type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'research' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
 
 type AdminTableMeta = {
   key: string;
@@ -337,7 +338,21 @@ type ScenarioFormState = {
   isActive: boolean;
 };
 
-type ManagedRoleKey = 'student' | 'teacher' | 'admin';
+type ManagedRoleKey = string;
+
+type PanelPermission = {
+  key: PanelPermissionKey;
+  label: string;
+  description: string;
+};
+
+type ManagedRole = {
+  id: string;
+  key: ManagedRoleKey;
+  name: string;
+  isSystem: boolean;
+  permissions: PanelPermissionKey[];
+};
 
 type ManagedUser = {
   id: string;
@@ -354,7 +369,8 @@ type ManagedUser = {
 
 type UserManagerResponse = {
   users: ManagedUser[];
-  roles: Array<{ key: ManagedRoleKey; name: string }>;
+  roles: ManagedRole[];
+  panels: PanelPermission[];
   currentUserId: string | null;
   totals: {
     userCount: number;
@@ -370,6 +386,12 @@ type ManagedUserForm = {
   password: string;
   status: ManagedUser['status'];
   roleKeys: ManagedRoleKey[];
+};
+
+type ManagedRoleForm = {
+  key: string;
+  name: string;
+  permissions: PanelPermissionKey[];
 };
 
 const PAGE_SIZE = 25;
@@ -433,10 +455,45 @@ const USER_STATUS_OPTIONS = [
   { value: 'DISABLED', label: '停用' }
 ] as const;
 
-const ROLE_LABELS: Record<ManagedRoleKey, string> = {
-  admin: '系统管理员',
-  teacher: '教师',
-  student: '学生'
+const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'research', 'click_flow', 'prompt', 'system_data', 'system_admin'];
+
+const TAB_PERMISSIONS: Partial<Record<TeacherTab, PanelPermissionKey>> = {
+  USERS: 'users',
+  RESOURCES: 'resources',
+  GROUPS: 'groups',
+  RECORDS: 'research',
+  CLICK_FLOW: 'click_flow',
+  PROMPT: 'prompt',
+  SYSTEM_DATA: 'system_data'
+};
+
+const NAV_ITEMS: Array<{ tab: TeacherTab; label: string; mobileLabel: string; icon: React.ReactNode; permission?: PanelPermissionKey }> = [
+  { tab: 'USERS', label: '用户管理', mobileLabel: '用户', icon: <ShieldCheck size={18} />, permission: 'users' },
+  { tab: 'RESOURCES', label: '教学资源管理', mobileLabel: '资源', icon: <BookOpen size={18} />, permission: 'resources' },
+  { tab: 'GROUPS', label: '分组管理', mobileLabel: '分组', icon: <Group size={18} />, permission: 'groups' },
+  { tab: 'RECORDS', label: '研究分析工作台', mobileLabel: '研究', icon: <BarChart3 size={18} />, permission: 'research' },
+  { tab: 'CLICK_FLOW', label: '点击流分区', mobileLabel: '点击流', icon: <MousePointerClick size={18} />, permission: 'click_flow' },
+  { tab: 'PROMPT', label: '提示词工程管理', mobileLabel: 'Prompt', icon: <Code2 size={18} />, permission: 'prompt' },
+  { tab: 'SYSTEM_DATA', label: '系统数据', mobileLabel: '数据', icon: <Database size={18} />, permission: 'system_data' },
+  { tab: 'ACCOUNT', label: '账户设置', mobileLabel: '账户', icon: <Users size={18} /> }
+];
+
+const PAGE_TITLES: Record<TeacherTab, string> = {
+  USERS: '用户管理',
+  RESOURCES: '教学资源管理',
+  GROUPS: '分组管理',
+  RECORDS: '研究分析工作台',
+  CLICK_FLOW: '点击流分区',
+  PROMPT: '提示词工程管理',
+  SYSTEM_DATA: '系统数据查看',
+  ACCOUNT: '账户设置'
+};
+
+const getInitialTeacherTab = (user: UserProfile): TeacherTab => {
+  if (user.roles?.includes('admin')) return 'USERS';
+  const panelPermissions = user.panelPermissions ?? [];
+  const item = NAV_ITEMS.find((navItem) => !navItem.permission || panelPermissions.includes(navItem.permission));
+  return item?.tab ?? 'ACCOUNT';
 };
 
 const defaultScenarioForm: ScenarioFormState = {
@@ -464,18 +521,24 @@ const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptS
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
   const isAdmin = Boolean(user.roles?.includes('admin'));
-  const [activeTab, setActiveTab] = useState<TeacherTab>(isAdmin ? 'PROMPT' : 'RESOURCES');
+  const [activeTab, setActiveTab] = useState<TeacherTab>(() => getInitialTeacherTab(user));
   const [userManager, setUserManager] = useState<UserManagerResponse | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userManagerError, setUserManagerError] = useState('');
   const [userManagerMessage, setUserManagerMessage] = useState('');
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
   const [newUserForm, setNewUserForm] = useState<ManagedUserForm>({
     username: '',
     email: '',
     password: '',
     status: 'ACTIVE',
     roleKeys: ['teacher']
+  });
+  const [newRoleForm, setNewRoleForm] = useState<ManagedRoleForm>({
+    key: '',
+    name: '',
+    permissions: ['resources']
   });
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -549,6 +612,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   ]);
   const [scenarios, setScenarios] = useState<PromptScenario[]>([]);
 
+  const canAccessPanel = (panelKey: PanelPermissionKey) =>
+    isAdmin || Boolean(user.panelPermissions?.includes(panelKey));
+
+  const visibleNavItems = useMemo(
+    () => NAV_ITEMS.filter((item) => !item.permission || canAccessPanel(item.permission)),
+    [isAdmin, user.panelPermissions]
+  );
+
+  const availableRoles = userManager?.roles ?? [];
+  const availablePanels = userManager?.panels ?? [];
+
   const tableGroups = useMemo(() => {
     return adminTables.reduce<Record<string, AdminTableMeta[]>>((acc, table) => {
       acc[table.group] = acc[table.group] ?? [];
@@ -571,7 +645,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const currentScenario = scenarios.find((scenario) => scenario.id === selectedScenarioId);
 
   const loadUserManager = async () => {
-    if (!isAdmin) return;
+    if (!canAccessPanel('users')) return;
     setIsLoadingUsers(true);
     setUserManagerError('');
     try {
@@ -610,22 +684,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   useEffect(() => {
     if (activeTab !== 'USERS') return;
     void loadUserManager();
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, user.panelPermissions]);
 
   useEffect(() => {
-    if (activeTab !== 'PROMPT' || !isAdmin) return;
+    if (activeTab !== 'PROMPT' || !canAccessPanel('prompt')) return;
     void loadScenarios();
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, user.panelPermissions]);
 
   useEffect(() => {
-    if (isAdmin) return;
-    if (activeTab === 'USERS' || activeTab === 'PROMPT' || activeTab === 'SYSTEM_DATA') {
-      setActiveTab('RESOURCES');
+    if (visibleNavItems.some((item) => item.tab === activeTab)) return;
+    setActiveTab(visibleNavItems[0]?.tab ?? 'ACCOUNT');
+  }, [activeTab, visibleNavItems]);
+
+  useEffect(() => {
+    const permission = TAB_PERMISSIONS[activeTab];
+    if (!permission || canAccessPanel(permission)) return;
+    setActiveTab(visibleNavItems[0]?.tab ?? 'ACCOUNT');
+  }, [activeTab, isAdmin, user.panelPermissions, visibleNavItems]);
+
+  useEffect(() => {
+    if (newUserForm.roleKeys.length > 0 || availableRoles.length === 0) return;
+    const defaultRole = availableRoles.find((role) => role.key === 'teacher') ?? availableRoles[0];
+    if (defaultRole) {
+      setNewUserForm((current) => ({ ...current, roleKeys: [defaultRole.key] }));
     }
-  }, [activeTab, isAdmin]);
+  }, [availableRoles, newUserForm.roleKeys.length]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA' || !isAdmin || adminTables.length > 0) return;
+    if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data') || adminTables.length > 0) return;
 
     let ignore = false;
     setIsLoadingTables(true);
@@ -649,10 +735,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, isAdmin, adminTables.length, selectedTable]);
+  }, [activeTab, isAdmin, user.panelPermissions, adminTables.length, selectedTable]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA' || !isAdmin) return;
+    if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data')) return;
 
     let ignore = false;
     setIsLoadingOverview(true);
@@ -671,7 +757,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, isAdmin, overviewRefreshKey]);
+  }, [activeTab, isAdmin, user.panelPermissions, overviewRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'RECORDS') return;
@@ -748,7 +834,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, clickFlowDateRange, clickFlowEventType]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA' || !isAdmin || !selectedTable) return;
+    if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data') || !selectedTable) return;
 
     let ignore = false;
     const params = new URLSearchParams({
@@ -784,7 +870,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, isAdmin, selectedTable, tablePage, searchTerm, statusField, statusValue, dateField, dateRange, rowsRefreshKey]);
+  }, [activeTab, isAdmin, user.panelPermissions, selectedTable, tablePage, searchTerm, statusField, statusValue, dateField, dateRange, rowsRefreshKey]);
 
   useEffect(() => {
     const sessionId = selectedTable === 'simulation_sessions' && selectedRow
@@ -1027,8 +1113,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       } else {
         nextRoles.delete(role);
       }
-      if (role === 'admin' && checked) nextRoles.add('teacher');
-      return { ...current, roleKeys: Array.from(nextRoles) as ManagedRoleKey[] };
+      return { ...current, roleKeys: Array.from(nextRoles) };
+    });
+  };
+
+  const setNewRolePermission = (permission: PanelPermissionKey, checked: boolean) => {
+    setNewRoleForm((current) => {
+      const nextPermissions = new Set(current.permissions);
+      if (checked) {
+        nextPermissions.add(permission);
+      } else {
+        nextPermissions.delete(permission);
+      }
+      return { ...current, permissions: Array.from(nextPermissions) as PanelPermissionKey[] };
     });
   };
 
@@ -1056,7 +1153,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           roleKeys: newUserForm.roleKeys
         })
       });
-      setNewUserForm({ username: '', email: '', password: '', status: 'ACTIVE', roleKeys: ['teacher'] });
+      setNewUserForm({
+        username: '',
+        email: '',
+        password: '',
+        status: 'ACTIVE',
+        roleKeys: [availableRoles.find((role) => role.key === 'teacher')?.key ?? availableRoles[0]?.key ?? 'teacher']
+      });
       setUserManagerMessage('用户已创建');
       await loadUserManager();
     } catch (error) {
@@ -1083,8 +1186,97 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     } else {
       nextRoles.delete(role);
     }
-    if (role === 'admin' && checked) nextRoles.add('teacher');
-    updateManagedUserDraft(targetUser.id, { roles: Array.from(nextRoles) as ManagedRoleKey[] });
+    updateManagedUserDraft(targetUser.id, { roles: Array.from(nextRoles) });
+  };
+
+  const updateManagedRoleDraft = (roleId: string, patch: Partial<ManagedRole>) => {
+    setUserManager((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        roles: current.roles.map((role) => (role.id === roleId ? { ...role, ...patch } : role))
+      };
+    });
+  };
+
+  const toggleManagedRolePermission = (role: ManagedRole, permission: PanelPermissionKey, checked: boolean) => {
+    const nextPermissions = new Set(role.permissions);
+    if (checked) {
+      nextPermissions.add(permission);
+    } else {
+      nextPermissions.delete(permission);
+    }
+    updateManagedRoleDraft(role.id, { permissions: Array.from(nextPermissions) as PanelPermissionKey[] });
+  };
+
+  const createManagedRole = async () => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    if (!newRoleForm.key.trim() || !newRoleForm.name.trim()) {
+      setUserManagerError('请填写角色标识和角色名称');
+      return;
+    }
+
+    try {
+      setSavingRoleId('new');
+      await apiRequest('/api/admin/roles', {
+        method: 'POST',
+        body: JSON.stringify({
+          key: newRoleForm.key.trim(),
+          name: newRoleForm.name.trim(),
+          permissions: newRoleForm.permissions
+        })
+      });
+      setNewRoleForm({ key: '', name: '', permissions: ['resources'] });
+      setUserManagerMessage('角色已创建');
+      await loadUserManager();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '创建角色失败');
+    } finally {
+      setSavingRoleId(null);
+    }
+  };
+
+  const saveManagedRole = async (role: ManagedRole) => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    if (!role.name.trim()) {
+      setUserManagerError('角色名称不能为空');
+      return;
+    }
+
+    try {
+      setSavingRoleId(role.id);
+      await apiRequest(`/api/admin/roles/${role.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: role.name.trim(),
+          permissions: role.permissions
+        })
+      });
+      setUserManagerMessage('角色权限已保存');
+      await loadUserManager();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '保存角色失败');
+    } finally {
+      setSavingRoleId(null);
+    }
+  };
+
+  const deleteManagedRole = async (role: ManagedRole) => {
+    if (role.isSystem) return;
+    if (!window.confirm(`确定删除角色 ${role.name}？`)) return;
+
+    try {
+      setSavingRoleId(role.id);
+      await apiRequest(`/api/admin/roles/${role.id}`, { method: 'DELETE' });
+      setUserManagerMessage('角色已删除');
+      await loadUserManager();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '删除角色失败');
+    } finally {
+      setSavingRoleId(null);
+    }
   };
 
   const saveManagedUser = async (targetUser: ManagedUser) => {
@@ -1146,20 +1338,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     ? (tableData?.table.statusValues?.[statusField] ?? [])
     : [];
 
-  const pageTitle =
-    activeTab === 'ACCOUNT'
-      ? '账户设置'
-      : activeTab === 'USERS'
-      ? '用户管理'
-      : activeTab === 'PROMPT'
-      ? '提示词 (Prompt) 模板管理'
-      : activeTab === 'RESOURCES'
-        ? '教学资源管理'
-        : activeTab === 'GROUPS'
-          ? '分组管理'
-          : activeTab === 'SYSTEM_DATA'
-            ? '系统数据查看'
-            : '研究分析工作台';
+  const pageTitle = PAGE_TITLES[activeTab];
 
   const renderPlaceholder = (title: string, icon: React.ReactNode) => (
     <div className="bg-white rounded-[40px] border border-slate-100 p-20 flex flex-col items-center justify-center text-center space-y-6 shadow-sm">
@@ -1174,10 +1353,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   );
 
   const renderUserManagement = () => {
-    if (!isAdmin) {
+    if (!canAccessPanel('users')) {
       return (
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm font-semibold text-amber-800">
-          当前账号没有系统管理员权限，无法管理用户。
+          当前账号没有用户管理权限。
         </div>
       );
     }
@@ -1212,7 +1391,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-black text-slate-900">新增用户</h3>
-              <p className="text-sm text-slate-500">管理员账号会自动同时拥有教师角色，以便登录现有后台。</p>
+              <p className="text-sm text-slate-500">为用户分配一个或多个角色，后台板块访问由角色权限决定。</p>
             </div>
             <UserPlus className="text-indigo-500" size={22} />
           </div>
@@ -1250,14 +1429,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap gap-3">
-              {(Object.keys(ROLE_LABELS) as ManagedRoleKey[]).map((role) => (
-                <label key={role} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
+              {availableRoles.map((role) => (
+                <label key={role.key} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
                   <input
                     type="checkbox"
-                    checked={newUserForm.roleKeys.includes(role)}
-                    onChange={(e) => setNewUserRole(role, e.target.checked)}
+                    checked={newUserForm.roleKeys.includes(role.key)}
+                    onChange={(e) => setNewUserRole(role.key, e.target.checked)}
                   />
-                  {ROLE_LABELS[role]}
+                  {role.name}
                 </label>
               ))}
             </div>
@@ -1270,6 +1449,109 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               {savingUserId === 'new' ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
               创建用户
             </button>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">角色与板块权限</h3>
+              <p className="text-sm text-slate-500">系统管理员固定拥有所有权限；其他角色可以配置可访问板块。</p>
+            </div>
+            <ShieldCheck className="text-indigo-500" size={22} />
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="grid gap-3 md:grid-cols-[180px_220px_minmax(0,1fr)_auto]">
+              <input
+                value={newRoleForm.key}
+                onChange={(e) => setNewRoleForm((current) => ({ ...current, key: e.target.value }))}
+                placeholder="role_key"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              />
+              <input
+                value={newRoleForm.name}
+                onChange={(e) => setNewRoleForm((current) => ({ ...current, name: e.target.value }))}
+                placeholder="角色名称"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              />
+              <div className="flex flex-wrap gap-2">
+                {(availablePanels.length ? availablePanels : ALL_PANEL_KEYS.map((key) => ({ key, label: key, description: '' }))).map((panel) => (
+                  <label key={panel.key} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={newRoleForm.permissions.includes(panel.key)}
+                      onChange={(e) => setNewRolePermission(panel.key, e.target.checked)}
+                    />
+                    {panel.label}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={createManagedRole}
+                disabled={savingRoleId === 'new'}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+              >
+                {savingRoleId === 'new' ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
+                新增角色
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {availableRoles.map((role) => (
+              <div key={role.id} className="rounded-2xl border border-slate-100 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-[240px] items-center gap-3">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">{role.key}</span>
+                    <input
+                      value={role.name}
+                      onChange={(e) => updateManagedRoleDraft(role.id, { name: e.target.value })}
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveManagedRole(role)}
+                      disabled={savingRoleId === role.id}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                    >
+                      {savingRoleId === role.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                      保存
+                    </button>
+                    {!role.isSystem && (
+                      <button
+                        type="button"
+                        onClick={() => deleteManagedRole(role)}
+                        disabled={savingRoleId === role.id}
+                        className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        删除
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(availablePanels.length ? availablePanels : ALL_PANEL_KEYS.map((key) => ({ key, label: key, description: '' }))).map((panel) => (
+                    <label key={panel.key} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                      role.key === 'admin'
+                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 text-slate-600'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        disabled={role.key === 'admin'}
+                        checked={role.key === 'admin' || role.permissions.includes(panel.key)}
+                        onChange={(e) => toggleManagedRolePermission(role, panel.key, e.target.checked)}
+                      />
+                      {panel.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -1339,14 +1621,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap gap-2">
-                            {(Object.keys(ROLE_LABELS) as ManagedRoleKey[]).map((role) => (
-                              <label key={role} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">
+                            {availableRoles.map((role) => (
+                              <label key={role.key} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">
                                 <input
                                   type="checkbox"
-                                  checked={item.roles.includes(role)}
-                                  onChange={(e) => toggleManagedUserRole(item, role, e.target.checked)}
+                                  checked={item.roles.includes(role.key)}
+                                  onChange={(e) => toggleManagedUserRole(item, role.key, e.target.checked)}
                                 />
-                                {ROLE_LABELS[role]}
+                                {role.name}
                               </label>
                             ))}
                           </div>
@@ -2058,22 +2340,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const renderResearchLab = () => (
-    <div className="flex h-[calc(100vh-6rem)] min-h-[760px] flex-col gap-4 overflow-hidden">
-      <div className="flex-none bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
+    <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col gap-3 overflow-hidden">
+      <div className="flex-none rounded-2xl border border-slate-100 bg-white px-5 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Lab</p>
-            <h3 className="text-2xl font-black text-slate-900 mt-1">研究分析工作台</h3>
-            <p className="text-sm text-slate-400 mt-2">
-              基于学生与 AI 实训数据生成研究指标、选题线索和匿名化样本预览。
-            </p>
+            <h3 className="mt-0.5 text-xl font-black text-slate-900">研究分析工作台</h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {DATE_RANGES.map((range) => (
               <button
                 key={range.value}
                 onClick={() => setResearchDateRange(range.value)}
-                className={`px-3 py-2 rounded-xl text-xs font-black transition ${
+                className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
                   researchDateRange === range.value
                     ? 'bg-indigo-600 text-white'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -2084,7 +2363,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             ))}
             <button
               onClick={() => setResearchRefreshKey((key) => key + 1)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-500 hover:bg-slate-50"
             >
               <RefreshCw size={14} className={isLoadingResearch ? 'animate-spin' : ''} />
               刷新
@@ -2093,14 +2372,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white rounded-3xl border border-slate-100 shadow-sm">
-        <div className="flex-none border-b border-slate-100 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <div className="flex-none border-b border-slate-100 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Data Chat</p>
-              <h4 className="mt-1 text-xl font-black text-slate-900">自然语言数据分析</h4>
-              <p className="mt-2 text-sm text-slate-500">
-                以多轮对话方式分析学生实训数据，系统会生成只读 SQL 并返回结论、表格和后续研究问题。
+              <h4 className="mt-0.5 text-lg font-black text-slate-900">自然语言数据分析</h4>
+              <p className="mt-1 text-xs text-slate-500">
+                生成只读 SQL，并返回结论、表格和后续研究问题。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -2137,7 +2416,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {AI_QUERY_TEMPLATES.map((tpl) => (
               <button
                 key={tpl}
@@ -2146,7 +2425,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   void runResearchAiQuery(tpl);
                 }}
                 disabled={researchAiLoading}
-                className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
               >
                 {tpl}
               </button>
@@ -2154,7 +2433,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </div>
 
-        <div ref={researchAiScrollRef} className="min-h-[420px] flex-1 overflow-y-auto bg-slate-50/60 p-6">
+        <div ref={researchAiScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6">
           {researchAiTurns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
               <Sparkles size={22} className="mx-auto text-indigo-500" />
@@ -2189,7 +2468,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           {turn.result.sql}
                         </pre>
                         {turn.result.rows.length > 0 ? (() => {
-                          const columns = Array.from(new Set(turn.result.rows.flatMap((row) => Object.keys(row)))).slice(0, 6);
+                          const columns = Array.from(new Set<string>(turn.result.rows.flatMap((row) => Object.keys(row)))).slice(0, 6);
                           const previewRows = turn.result.rows.slice(0, 5);
                           return (
                             <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white">
@@ -2470,7 +2749,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           {researchAiResult.rows.length > 0 && (() => {
-            const columns = Array.from(new Set(researchAiResult.rows.flatMap((row) => Object.keys(row))));
+            const columns = Array.from(new Set<string>(researchAiResult.rows.flatMap((row) => Object.keys(row))));
             const normalizedFilter = researchAiFilterText.trim().toLowerCase();
             const filteredRows = normalizedFilter
               ? researchAiResult.rows.filter((row) =>
@@ -2962,36 +3241,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
 
         <nav className="flex-1 p-4 space-y-2 mt-4">
-          {isAdmin && (
-            <button onClick={() => setActiveTab('USERS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'USERS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-              <ShieldCheck size={18} /> 2.0 用户管理
+          {visibleNavItems.map((item) => (
+            <button
+              key={item.tab}
+              onClick={() => setActiveTab(item.tab)}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === item.tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+            >
+              {item.icon} {item.label}
             </button>
-          )}
-          <button onClick={() => setActiveTab('RESOURCES')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'RESOURCES' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <BookOpen size={18} /> 2.1 教学资源管理
-          </button>
-          <button onClick={() => setActiveTab('GROUPS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'GROUPS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <Group size={18} /> 2.2 分组管理
-          </button>
-          <button onClick={() => setActiveTab('RECORDS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'RECORDS' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <BarChart3 size={18} /> 2.3 研究分析工作台
-          </button>
-          <button onClick={() => setActiveTab('CLICK_FLOW')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'CLICK_FLOW' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <MousePointerClick size={18} /> 点击流分区
-          </button>
-          {isAdmin && (
-            <>
-              <button onClick={() => setActiveTab('PROMPT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'PROMPT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-                <Code2 size={18} /> 2.4 提示词工程管理
-              </button>
-              <button onClick={() => setActiveTab('SYSTEM_DATA')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'SYSTEM_DATA' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-                <Database size={18} /> 2.5 系统数据
-              </button>
-            </>
-          )}
-          <button onClick={() => setActiveTab('ACCOUNT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'ACCOUNT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <Users size={18} /> 账户设置
-          </button>
+          ))}
         </nav>
 
         <div className="p-6 border-t border-slate-800">
@@ -3012,7 +3270,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {isAdmin && (
+            {canAccessPanel('system_admin') && (
               <Link
                 to="/admin/system"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
@@ -3021,7 +3279,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 系统管理
               </Link>
             )}
-            {isAdmin && activeTab === 'PROMPT' && (
+            {canAccessPanel('prompt') && activeTab === 'PROMPT' && (
               <button
                 onClick={openNewScenario}
                 className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 text-xs"
@@ -3033,33 +3291,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </header>
 
         <nav className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
-          {[
-            ...(isAdmin ? [['USERS', '2.0 用户']] : []),
-            ['RESOURCES', '2.1 资源'],
-            ['GROUPS', '2.2 分组'],
-            ['RECORDS', '2.3 研究'],
-            ['CLICK_FLOW', '点击流'],
-            ...(isAdmin ? [['PROMPT', '2.4 Prompt'], ['SYSTEM_DATA', '2.5 数据']] : []),
-            ['ACCOUNT', '账户']
-          ].map(([tab, label]) => (
+          {visibleNavItems.map((item) => (
             <button
-              key={tab}
+              key={item.tab}
               type="button"
-              onClick={() => setActiveTab(tab as TeacherTab)}
+              onClick={() => setActiveTab(item.tab)}
               className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${
-                activeTab === tab
+                activeTab === item.tab
                   ? 'border-indigo-600 bg-indigo-600 text-white'
                   : 'border-slate-200 bg-slate-50 text-slate-600'
               }`}
             >
-              {label}
+              {item.mobileLabel}
             </button>
           ))}
         </nav>
 
         <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-10">
           {activeTab === 'USERS' && renderUserManagement()}
-          {isAdmin && activeTab === 'PROMPT' && (
+          {canAccessPanel('prompt') && activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {(isLoadingScenarios || scenarioError) && (
                 <div className={`md:col-span-2 lg:col-span-3 rounded-2xl border px-5 py-4 text-sm font-semibold ${
@@ -3100,11 +3350,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           )}
 
-          {activeTab === 'RESOURCES' && <TeachingResourceManager />}
-          {activeTab === 'GROUPS' && <TeachingGroupManager />}
-          {activeTab === 'RECORDS' && renderResearchLab()}
-          {activeTab === 'CLICK_FLOW' && renderClickFlow()}
-          {isAdmin && activeTab === 'SYSTEM_DATA' && renderSystemData()}
+          {canAccessPanel('resources') && activeTab === 'RESOURCES' && <TeachingResourceManager />}
+          {canAccessPanel('groups') && activeTab === 'GROUPS' && <TeachingGroupManager />}
+          {canAccessPanel('research') && activeTab === 'RECORDS' && renderResearchLab()}
+          {canAccessPanel('click_flow') && activeTab === 'CLICK_FLOW' && renderClickFlow()}
+          {canAccessPanel('system_data') && activeTab === 'SYSTEM_DATA' && renderSystemData()}
           {activeTab === 'ACCOUNT' && renderAccountSettings()}
 
           {(isAddingNew || selectedScenarioId) && (
@@ -3233,11 +3483,5 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     </div>
   );
 };
-
-const X = ({ size = 24, className = '' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 6 6 18M6 6l12 12" />
-  </svg>
-);
 
 export default TeacherDashboard;

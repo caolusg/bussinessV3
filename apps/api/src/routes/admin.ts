@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -12,12 +12,26 @@ import {
   updateRuntimeConfig
 } from '../services/runtimeConfigService.js';
 import { cleanResourcesFromOcrText } from '../ai/compatibleAiClient.js';
+import {
+  ALL_PANEL_PERMISSION_KEYS,
+  PANEL_PERMISSIONS,
+  type PanelPermissionKey,
+  getUserPanelPermissions,
+  isPanelPermissionKey,
+  userHasPanelPermission
+} from '../services/panelPermissionService.js';
 
 const router = Router();
 
 type RowWithRole = { role: string };
 type AiLogRow = { degraded: boolean };
 type UserRoleRow = { role: { key: string } };
+type RoleWithPermissions = {
+  id: string;
+  key: string;
+  name: string;
+  panelPermissions: Array<{ panelKey: string }>;
+};
 
 type TableDelegate = {
   count(args?: unknown): Promise<number>;
@@ -42,6 +56,7 @@ const tableConfigs: TableConfig[] = [
   { key: 'users', label: '用户', group: '用户与权限', delegate: 'user', idField: 'id', searchableFields: ['username', 'status'], summaryColumns: ['username', 'status', 'createdAt', 'updatedAt'], statusFields: ['status'], dateFields: ['createdAt', 'updatedAt'], hiddenFields: ['passwordHash'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'roles', label: '角色', group: '用户与权限', delegate: 'role', idField: 'id', searchableFields: ['key', 'name'], summaryColumns: ['key', 'name'] },
   { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', summaryColumns: ['userId', 'roleId'] },
+  { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', searchableFields: ['panelKey'], summaryColumns: ['roleId', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['userId', 'idOrName'] },
   { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
   { key: 'teaching_groups', label: '教学分组', group: '教学组织', delegate: 'teachingGroup', idField: 'id', searchableFields: ['name', 'description', 'color'], summaryColumns: ['name', 'description', 'color', 'isActive', 'updatedAt'], statusFields: ['isActive', 'color'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
@@ -182,7 +197,7 @@ const groupMembersPayloadSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(200)
 });
 
-const managedRoleSchema = z.enum(['student', 'teacher', 'admin']);
+const managedRoleSchema = z.string().trim().min(1).max(40).regex(/^[a-z][a-z0-9_]*$/);
 
 const userManagerPayloadSchema = z.object({
   username: z.string().trim().min(1).max(80),
@@ -191,7 +206,7 @@ const userManagerPayloadSchema = z.object({
     z.string().trim().email().optional().nullable().default(null)
   ),
   status: z.enum(['ACTIVE', 'PENDING_VERIFICATION', 'DISABLED']).default('ACTIVE'),
-  roleKeys: z.array(managedRoleSchema).min(1).max(3)
+  roleKeys: z.array(managedRoleSchema).min(1).max(12)
 });
 
 const userCreatePayloadSchema = userManagerPayloadSchema.extend({
@@ -202,51 +217,61 @@ const userPasswordPayloadSchema = z.object({
   password: z.string().min(6)
 });
 
+const roleParamsSchema = z.object({
+  roleId: z.string().uuid()
+});
+
+const rolePayloadSchema = z.object({
+  key: managedRoleSchema,
+  name: z.string().trim().min(1).max(80),
+  permissions: z.array(z.string().trim()).max(ALL_PANEL_PERMISSION_KEYS.length).default([])
+});
+
+const roleUpdatePayloadSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  permissions: z.array(z.string().trim()).max(ALL_PANEL_PERMISSION_KEYS.length).default([])
+});
+
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
 
-async function requireTeacher(userId: string | undefined) {
-  if (!userId) return false;
-  const teacherRole = await prisma.userRole.findFirst({
-    where: {
-      userId,
-      role: { key: { in: ['teacher', 'admin'] } }
-    },
-    select: { userId: true }
-  });
-  return Boolean(teacherRole);
-}
-
-async function requireAdmin(userId: string | undefined) {
-  if (!userId) return false;
-  const adminRole = await prisma.userRole.findFirst({
-    where: {
-      userId,
-      role: { key: 'admin' }
-    },
-    select: { userId: true }
-  });
-  return Boolean(adminRole);
-}
-
-async function ensureAdminAccess(req: Request, res: Response) {
-  if (await requireAdmin(req.user?.id)) return true;
-  res.status(403).json(fail('ADMIN_REQUIRED', 'System administrator role required'));
+async function ensurePanelAccess(req: Request, res: Response, panelKey: PanelPermissionKey) {
+  if (await userHasPanelPermission(req.user?.id, panelKey)) return true;
+  res.status(403).json(fail('PANEL_FORBIDDEN', 'No permission for this panel'));
   return false;
 }
 
-function normalizeRoleKeys(roleKeys: Array<'student' | 'teacher' | 'admin'>) {
-  const normalized = new Set(roleKeys);
-  if (normalized.has('admin')) {
-    normalized.add('teacher');
+function requirePanel(panelKey: PanelPermissionKey) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (await ensurePanelAccess(req, res, panelKey)) return next();
+    } catch (error) {
+      console.error('Check panel permission failed:', error);
+      return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+    }
+  };
+}
+
+async function ensureTableAccess(req: Request, res: Response, tableKey: string) {
+  if (tableKey === 'practice_events' && await userHasPanelPermission(req.user?.id, 'click_flow')) {
+    return true;
   }
-  return Array.from(normalized);
+  return ensurePanelAccess(req, res, 'system_data');
+}
+
+function normalizeRoleKeys(roleKeys: string[]) {
+  return Array.from(new Set(roleKeys.map((role) => role.trim()).filter(Boolean)));
+}
+
+function normalizePanelKeys(permissionKeys: string[], roleKey?: string) {
+  if (roleKey === 'admin') return [...ALL_PANEL_PERMISSION_KEYS];
+  return Array.from(new Set(permissionKeys.filter(isPanelPermissionKey)));
 }
 
 async function replaceUserRoles(
   tx: Prisma.TransactionClient,
   userId: string,
-  roleKeys: Array<'student' | 'teacher' | 'admin'>
+  roleKeys: string[]
 ) {
   const normalizedRoleKeys = normalizeRoleKeys(roleKeys);
   const roles = await tx.role.findMany({ where: { key: { in: normalizedRoleKeys } } });
@@ -259,6 +284,35 @@ async function replaceUserRoles(
     data: roles.map((role) => ({ userId, roleId: role.id })),
     skipDuplicates: true
   });
+}
+
+async function replaceRolePanelPermissions(
+  tx: Prisma.TransactionClient,
+  roleId: string,
+  roleKey: string,
+  permissionKeys: string[]
+) {
+  const normalizedPermissions = normalizePanelKeys(permissionKeys, roleKey);
+  await tx.rolePanelPermission.deleteMany({ where: { roleId } });
+  if (normalizedPermissions.length) {
+    await tx.rolePanelPermission.createMany({
+      data: normalizedPermissions.map((panelKey) => ({ roleId, panelKey })),
+      skipDuplicates: true
+    });
+  }
+}
+
+function formatRole(role: RoleWithPermissions) {
+  return {
+    id: role.id,
+    key: role.key,
+    name: role.name,
+    isSystem: ['admin', 'teacher', 'student'].includes(role.key),
+    permissions: normalizePanelKeys(
+      role.panelPermissions.map((permission) => permission.panelKey),
+      role.key
+    )
+  };
 }
 
 function getDelegate(config: TableConfig) {
@@ -445,17 +499,17 @@ router.use(requireAuth);
 
 router.use(async (req, res, next) => {
   try {
-    if (await requireTeacher(req.user?.id)) {
+    if ((await getUserPanelPermissions(req.user?.id)).length > 0) {
       return next();
     }
     return res.status(403).json(fail('FORBIDDEN', 'Forbidden'));
   } catch (error) {
-    console.error('Check teacher role failed:', error);
+    console.error('Check admin panel permission failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
 
-router.get('/runtime-config', async (_req, res) => {
+router.get('/runtime-config', requirePanel('system_admin'), async (_req, res) => {
   try {
     const payload = await formatRuntimeConfig();
     return res.status(200).json(ok(payload));
@@ -465,7 +519,7 @@ router.get('/runtime-config', async (_req, res) => {
   }
 });
 
-router.put('/runtime-config', async (req, res) => {
+router.put('/runtime-config', requirePanel('system_admin'), async (req, res) => {
   try {
     const parsed = runtimeConfigSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -491,7 +545,7 @@ router.put('/runtime-config', async (req, res) => {
   }
 });
 
-router.post('/teacher-password', async (req, res) => {
+router.post('/teacher-password', requirePanel('system_admin'), async (req, res) => {
   try {
     const parsed = teacherPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -538,10 +592,8 @@ router.post('/teacher-password', async (req, res) => {
   }
 });
 
-router.get('/users/manager', async (req, res) => {
+router.get('/users/manager', requirePanel('users'), async (req, res) => {
   try {
-    if (!(await ensureAdminAccess(req, res))) return;
-
     const [users, roles] = await Promise.all([
       prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
@@ -562,7 +614,10 @@ router.get('/users/manager', async (req, res) => {
           studentProfile: true
         }
       }),
-      prisma.role.findMany({ orderBy: { key: 'asc' } })
+      prisma.role.findMany({
+        orderBy: { key: 'asc' },
+        include: { panelPermissions: true }
+      })
     ]);
 
     const rows = users.map((item) => ({
@@ -580,7 +635,8 @@ router.get('/users/manager', async (req, res) => {
 
     return res.status(200).json(ok({
       users: rows,
-      roles: roles.map((role) => ({ key: role.key, name: role.name })),
+      roles: roles.map((role) => formatRole(role)),
+      panels: PANEL_PERMISSIONS,
       currentUserId: req.user?.id ?? null,
       totals: {
         userCount: rows.length,
@@ -595,9 +651,99 @@ router.get('/users/manager', async (req, res) => {
   }
 });
 
-router.post('/users', async (req, res) => {
+router.post('/roles', requirePanel('users'), async (req, res) => {
   try {
-    if (!(await ensureAdminAccess(req, res))) return;
+    const parsed = rolePayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid role payload'));
+    }
+
+    const role = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const created = await tx.role.create({
+        data: {
+          key: parsed.data.key,
+          name: parsed.data.name
+        }
+      });
+      await replaceRolePanelPermissions(tx, created.id, created.key, parsed.data.permissions);
+      return tx.role.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { panelPermissions: true }
+      });
+    });
+
+    return res.status(201).json(ok({ role: formatRole(role) }));
+  } catch (error) {
+    console.error('Create role failed:', error);
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json(fail('ROLE_CONFLICT', 'Role key already exists'));
+    }
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/roles/:roleId', requirePanel('users'), async (req, res) => {
+  try {
+    const params = roleParamsSchema.safeParse(req.params);
+    const parsed = roleUpdatePayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid role payload'));
+    }
+
+    const role = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.role.findUnique({ where: { id: params.data.roleId } });
+      if (!existing) throw new Error('ROLE_NOT_FOUND');
+
+      const updated = await tx.role.update({
+        where: { id: existing.id },
+        data: { name: parsed.data.name }
+      });
+      await replaceRolePanelPermissions(tx, updated.id, updated.key, parsed.data.permissions);
+      return tx.role.findUniqueOrThrow({
+        where: { id: updated.id },
+        include: { panelPermissions: true }
+      });
+    });
+
+    return res.status(200).json(ok({ role: formatRole(role) }));
+  } catch (error) {
+    console.error('Update role failed:', error);
+    if (error instanceof Error && error.message === 'ROLE_NOT_FOUND') {
+      return res.status(404).json(fail('NOT_FOUND', 'Role not found'));
+    }
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/roles/:roleId', requirePanel('users'), async (req, res) => {
+  try {
+    const params = roleParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid role id'));
+    }
+
+    const role = await prisma.role.findUnique({
+      where: { id: params.data.roleId },
+      include: { users: true }
+    });
+    if (!role) return res.status(404).json(fail('NOT_FOUND', 'Role not found'));
+    if (['admin', 'teacher', 'student'].includes(role.key)) {
+      return res.status(400).json(fail('SYSTEM_ROLE_LOCKED', 'System role cannot be deleted'));
+    }
+    if (role.users.length > 0) {
+      return res.status(400).json(fail('ROLE_IN_USE', 'Role is assigned to users'));
+    }
+
+    await prisma.role.delete({ where: { id: role.id } });
+    return res.status(200).json(ok({ deleted: true }));
+  } catch (error) {
+    console.error('Delete role failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/users', requirePanel('users'), async (req, res) => {
+  try {
 
     const parsed = userCreatePayloadSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -635,10 +781,8 @@ router.post('/users', async (req, res) => {
   }
 });
 
-router.put('/users/:userId', async (req, res) => {
+router.put('/users/:userId', requirePanel('users'), async (req, res) => {
   try {
-    if (!(await ensureAdminAccess(req, res))) return;
-
     const params = userParamsSchema.safeParse(req.params);
     const parsed = userManagerPayloadSchema.safeParse(req.body);
     if (!params.success || !parsed.success) {
@@ -647,8 +791,15 @@ router.put('/users/:userId', async (req, res) => {
 
     const nextRoleKeys = normalizeRoleKeys(parsed.data.roleKeys);
     const isSelf = req.user?.id === params.data.userId;
-    if (isSelf && (!nextRoleKeys.includes('admin') || parsed.data.status !== 'ACTIVE')) {
-      return res.status(400).json(fail('SELF_LOCKOUT_BLOCKED', 'Cannot remove your own admin access or disable your own account'));
+    if (isSelf) {
+      const currentRoles = await prisma.userRole.findMany({
+        where: { userId: params.data.userId },
+        select: { role: { select: { key: true } } }
+      });
+      const isCurrentAdmin = currentRoles.some((roleRow) => roleRow.role.key === 'admin');
+      if ((isCurrentAdmin && !nextRoleKeys.includes('admin')) || parsed.data.status !== 'ACTIVE') {
+        return res.status(400).json(fail('SELF_LOCKOUT_BLOCKED', 'Cannot remove your own admin access or disable your own account'));
+      }
     }
 
     const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -679,10 +830,8 @@ router.put('/users/:userId', async (req, res) => {
   }
 });
 
-router.post('/users/:userId/password', async (req, res) => {
+router.post('/users/:userId/password', requirePanel('users'), async (req, res) => {
   try {
-    if (!(await ensureAdminAccess(req, res))) return;
-
     const params = userParamsSchema.safeParse(req.params);
     const parsed = userPasswordPayloadSchema.safeParse(req.body);
     if (!params.success || !parsed.success) {
@@ -702,7 +851,7 @@ router.post('/users/:userId/password', async (req, res) => {
   }
 });
 
-router.get('/overview', async (_req, res) => {
+router.get('/overview', requirePanel('system_data'), async (_req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -764,7 +913,7 @@ router.get('/overview', async (_req, res) => {
   }
 });
 
-router.get('/research/overview', async (req, res) => {
+router.get('/research/overview', requirePanel('research'), async (req, res) => {
   try {
     const parsed = researchQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -994,6 +1143,8 @@ router.get('/research/overview', async (req, res) => {
   }
 });
 
+router.use('/resources', requirePanel('resources'));
+
 router.get('/resources/manager', async (_req, res) => {
   try {
     const stages = await prisma.businessStage.findMany({
@@ -1187,7 +1338,9 @@ router.delete('/resources/:resourceId', async (req, res) => {
   }
 });
 
-router.get('/scenarios/manager', requireAuth, async (_req, res) => {
+router.use('/scenarios', requirePanel('prompt'));
+
+router.get('/scenarios/manager', async (_req, res) => {
   try {
     const stages = await prisma.businessStage.findMany({
       where: { isActive: true },
@@ -1233,7 +1386,7 @@ router.get('/scenarios/manager', requireAuth, async (_req, res) => {
   }
 });
 
-router.post('/scenarios', requireAuth, async (req, res) => {
+router.post('/scenarios', async (req, res) => {
   try {
     const parsed = scenarioPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1261,7 +1414,7 @@ router.post('/scenarios', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/scenarios/:scenarioId', requireAuth, async (req, res) => {
+router.put('/scenarios/:scenarioId', async (req, res) => {
   try {
     const params = scenarioParamsSchema.safeParse(req.params);
     const parsed = scenarioPayloadSchema.safeParse(req.body);
@@ -1292,7 +1445,7 @@ router.put('/scenarios/:scenarioId', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/scenarios/:scenarioId', requireAuth, async (req, res) => {
+router.delete('/scenarios/:scenarioId', async (req, res) => {
   try {
     const params = scenarioParamsSchema.safeParse(req.params);
     if (!params.success) {
@@ -1310,6 +1463,8 @@ router.delete('/scenarios/:scenarioId', requireAuth, async (req, res) => {
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
+
+router.use('/groups', requirePanel('groups'));
 
 router.get('/groups/manager', async (_req, res) => {
   try {
@@ -1488,12 +1643,12 @@ router.delete('/groups/:groupId/members/:userId', async (req, res) => {
   }
 });
 
-router.get('/tables', (_req, res) => {
+router.get('/tables', requirePanel('system_data'), (_req, res) => {
   const tables = tableConfigs.map(selectMeta);
   return res.status(200).json(ok({ tables }));
 });
 
-router.get('/sessions/:sessionId/summary', async (req, res) => {
+router.get('/sessions/:sessionId/summary', requirePanel('system_data'), async (req, res) => {
   try {
     const parsed = uuidParamsSchema.safeParse(req.params);
     if (!parsed.success) {
@@ -1630,7 +1785,7 @@ router.get('/sessions/:sessionId/summary', async (req, res) => {
   }
 });
 
-router.get('/students/:userId/summary', async (req, res) => {
+router.get('/students/:userId/summary', requirePanel('system_data'), async (req, res) => {
   try {
     const parsed = userParamsSchema.safeParse(req.params);
     if (!parsed.success) {
@@ -1758,7 +1913,7 @@ router.get('/students/:userId/summary', async (req, res) => {
   }
 });
 
-router.get('/ai-logs/:logId/summary', async (req, res) => {
+router.get('/ai-logs/:logId/summary', requirePanel('system_data'), async (req, res) => {
   try {
     const parsed = aiLogParamsSchema.safeParse(req.params);
     if (!parsed.success) {
@@ -1846,6 +2001,8 @@ router.get('/ai-logs/:logId/summary', async (req, res) => {
 
 router.get('/tables/:tableKey/meta', async (req, res) => {
   try {
+    if (!(await ensureTableAccess(req, res, req.params.tableKey))) return;
+
     const config = tableByKey.get(req.params.tableKey);
     if (!config) {
       return res.status(404).json(fail('NOT_FOUND', 'Table not found'));
@@ -1864,6 +2021,8 @@ router.get('/tables/:tableKey/meta', async (req, res) => {
 
 router.get('/tables/:tableKey', async (req, res) => {
   try {
+    if (!(await ensureTableAccess(req, res, req.params.tableKey))) return;
+
     const config = tableByKey.get(req.params.tableKey);
     if (!config) {
       return res.status(404).json(fail('NOT_FOUND', 'Table not found'));

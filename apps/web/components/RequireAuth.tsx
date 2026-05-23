@@ -4,7 +4,8 @@ import { apiRequest } from '../utils/apiFetch';
 import { clearAuthToken, getAuthToken } from '../utils/authStorage';
 
 type AuthMe = {
-  roles: Array<'student' | 'teacher' | 'admin'>;
+  roles: string[];
+  panelPermissions: string[];
   profileCompleted: boolean;
 };
 
@@ -14,7 +15,8 @@ const RequireAuth: React.FC = () => {
   const [status, setStatus] = useState<'checking' | 'valid' | 'invalid'>(
     token ? 'checking' : 'invalid'
   );
-  const [roles, setRoles] = useState<Array<'student' | 'teacher' | 'admin'>>([]);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [panelPermissions, setPanelPermissions] = useState<string[]>([]);
   const [profileCompleted, setProfileCompleted] = useState(true);
 
   useEffect(() => {
@@ -29,6 +31,7 @@ const RequireAuth: React.FC = () => {
       .then((me) => {
         if (!cancelled) {
           setRoles(me.roles);
+          setPanelPermissions(me.panelPermissions ?? []);
           setProfileCompleted(me.profileCompleted);
           setStatus('valid');
         }
@@ -61,7 +64,9 @@ const RequireAuth: React.FC = () => {
 
   if (
     (location.pathname.startsWith('/teacher') || location.pathname.startsWith('/admin')) &&
-    !roles.includes('teacher')
+    !roles.includes('teacher') &&
+    !roles.includes('admin') &&
+    panelPermissions.length === 0
   ) {
     return <Navigate to="/login/teacher" replace state={{ from: location }} />;
   }

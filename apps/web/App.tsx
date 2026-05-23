@@ -77,7 +77,8 @@ type AuthMe = {
     username: string;
     email: string | null;
   };
-  roles: Array<'student' | 'teacher' | 'admin'>;
+  roles: string[];
+  panelPermissions: string[];
   profileCompleted: boolean;
 };
 
@@ -92,13 +93,16 @@ type StudentProfileData = {
 };
 
 const buildUserFromAuth = (me: AuthMe, studentProfile?: StudentProfileData | null): UserProfile => {
-  const role = me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT;
+  const panelPermissions = me.panelPermissions ?? [];
+  const hasTeacherPortal = me.roles.includes('teacher') || me.roles.includes('admin') || panelPermissions.length > 0;
+  const role = hasTeacherPortal ? UserRole.TEACHER : UserRole.STUDENT;
   const defaultUser = buildDefaultUser(role);
   return {
     ...defaultUser,
     username: me.user.username,
     email: me.user.email ?? '',
     roles: me.roles,
+    panelPermissions,
     realName: studentProfile?.realName ?? defaultUser.realName,
     studentNo: studentProfile?.studentNo ?? defaultUser.studentNo,
     nationality: studentProfile?.nationality ?? '',
@@ -125,7 +129,7 @@ const loadAuthenticatedUser = async (token?: string | null) => {
 };
 
 const getPostLoginPath = (me: AuthMe) => {
-  if (me.roles.includes('teacher')) return '/teacher';
+  if (me.roles.includes('teacher') || me.roles.includes('admin') || (me.panelPermissions ?? []).length > 0) return '/teacher';
   if (me.roles.includes('student') && !me.profileCompleted) return '/profile';
   return '/';
 };
@@ -284,7 +288,7 @@ const AppRoutes: React.FC = () => {
     loadAuthenticatedUser(token)
       .then((authenticated) => {
         if (cancelled) return;
-        setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+        setRole(authenticated.me.roles.includes('teacher') || authenticated.me.roles.includes('admin') || (authenticated.me.panelPermissions ?? []).length > 0 ? UserRole.TEACHER : UserRole.STUDENT);
         setCurrentUser(authenticated.user);
       })
       .catch(() => {
@@ -388,7 +392,7 @@ const AppRoutes: React.FC = () => {
 
         const authenticated = await loadAuthenticatedUser(registerResult.token);
 
-        setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+        setRole(authenticated.me.roles.includes('teacher') || authenticated.me.roles.includes('admin') || (authenticated.me.panelPermissions ?? []).length > 0 ? UserRole.TEACHER : UserRole.STUDENT);
         setCurrentUser(authenticated.user);
 
         navigate(getPostLoginPath(authenticated.me));
@@ -499,7 +503,7 @@ const AppRoutes: React.FC = () => {
 
       const authenticated = await loadAuthenticatedUser(token);
 
-      setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+      setRole(authenticated.me.roles.includes('teacher') || authenticated.me.roles.includes('admin') || (authenticated.me.panelPermissions ?? []).length > 0 ? UserRole.TEACHER : UserRole.STUDENT);
       setCurrentUser(authenticated.user);
       navigate(getPostLoginPath(authenticated.me));
       return { kind: 'logged_in' };
@@ -519,7 +523,7 @@ const AppRoutes: React.FC = () => {
 
     const authenticated = await loadAuthenticatedUser(token);
 
-    setRole(authenticated.me.roles.includes('teacher') ? UserRole.TEACHER : UserRole.STUDENT);
+    setRole(authenticated.me.roles.includes('teacher') || authenticated.me.roles.includes('admin') || (authenticated.me.panelPermissions ?? []).length > 0 ? UserRole.TEACHER : UserRole.STUDENT);
     setCurrentUser(authenticated.user);
 
     navigate(getPostLoginPath(authenticated.me));
@@ -653,12 +657,12 @@ const AppRoutes: React.FC = () => {
         />
         <Route
           path="/admin"
-          element={<Navigate to={currentUser?.roles?.includes('admin') ? '/admin/system' : '/teacher'} replace />}
+          element={<Navigate to={currentUser?.panelPermissions?.includes('system_admin') ? '/admin/system' : '/teacher'} replace />}
         />
         <Route
           path="/admin/system"
           element={
-            currentUser?.roles?.includes('admin') ? (
+            currentUser?.panelPermissions?.includes('system_admin') ? (
               <SystemAdminPage
                 user={currentUser}
                 onLogout={handleLogout}
