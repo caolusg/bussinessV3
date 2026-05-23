@@ -134,7 +134,6 @@ const TeachingResourceManager: React.FC = () => {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrStatus, setOcrStatus] = useState('');
   const [showManualForm, setShowManualForm] = useState(false);
-  const [showBulkImportDialog, setShowBulkImportDialog] = useState(false);
 
   const loadData = () => {
     setLoading(true);
@@ -456,11 +455,9 @@ const TeachingResourceManager: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!showBulkImportDialog) return undefined;
-
     const handleWindowPaste = (event: ClipboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest('textarea,input,[contenteditable="true"]')) return;
+      if (target?.closest('input,[contenteditable="true"]')) return;
 
       const clipboardData = event.clipboardData;
       if (!clipboardData) return;
@@ -481,7 +478,7 @@ const TeachingResourceManager: React.FC = () => {
 
     window.addEventListener('paste', handleWindowPaste);
     return () => window.removeEventListener('paste', handleWindowPaste);
-  }, [showBulkImportDialog, nextSortOrder]);
+  }, [nextSortOrder]);
 
   const importBulkResources = async () => {
     const resourcesToImport = bulkResources
@@ -516,7 +513,6 @@ const TeachingResourceManager: React.FC = () => {
         setData(payload);
         setSelectedStageId(selectedStageId);
       });
-      setShowBulkImportDialog(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : '批量导入失败');
     } finally {
@@ -692,7 +688,7 @@ const TeachingResourceManager: React.FC = () => {
 
           <div className="order-1 space-y-6">
             <section className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
                     Batch Import
@@ -704,278 +700,183 @@ const TeachingResourceManager: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowBulkImportDialog(true)}
-                  disabled={!selectedStageId}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
+                  onClick={importBulkResources}
+                  disabled={bulkSaving || ocrRunning || documentReading || !selectedStageId || !bulkResources.length}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  <Upload size={18} />
-                  打开导入对话框
+                  {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+                  导入 {bulkResources.length || 0} 条
                 </button>
               </div>
-              <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                {[
-                  ['Word / TXT', '上传文件后自动读取文本'],
-                  ['截图 OCR', '拖拽或粘贴图片后识别'],
-                  ['直接粘贴', '把整理好的文本贴进输入区']
-                ].map(([title, description]) => (
-                  <div key={title} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <p className="text-sm font-black text-slate-800">{title}</p>
-                    <p className="mt-1 text-xs text-slate-400">{description}</p>
-                  </div>
-                ))}
-              </div>
-              {bulkResources.length > 0 && !showBulkImportDialog && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
-                  <p className="text-sm font-black text-indigo-700">
-                    草稿中有 {bulkResources.length} 条待导入资源
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkImportDialog(true)}
-                    className="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100"
-                  >
-                    继续编辑
-                  </button>
-                </div>
-              )}
-            </section>
 
-            {showBulkImportDialog && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-                <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
-                        Import Dialog
-                      </p>
-                      <h4 className="mt-1 text-lg font-black text-slate-900">批量导入教学词条</h4>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {selectedStage ? `${selectedStage.sortOrder}. ${selectedStage.titleZh}` : '未选择阶段'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowBulkImportDialog(false)}
-                      className="rounded-xl bg-slate-50 p-2 text-slate-500 hover:bg-slate-100"
-                      title="关闭"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-y-auto lg:grid-cols-[420px_minmax(0,1fr)]">
-                    <div className="space-y-4 border-b border-slate-100 p-6 lg:border-b-0 lg:border-r">
-                      <label
-                        className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/50 px-5 py-6 text-center transition hover:bg-indigo-50"
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = 'copy';
-                        }}
-                        onDrop={handleImportDrop}
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+                <div
+                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'copy';
+                  }}
+                  onDrop={handleImportDrop}
+                >
+                  <div className="flex min-h-56 flex-col rounded-2xl bg-white p-3 shadow-sm">
+                    <textarea
+                      value={bulkText}
+                      onChange={(event) => updateBulkText(event.target.value)}
+                      onPaste={handleImportPaste}
+                      placeholder={'粘贴文本或截图，或上传 Word / TXT / PDF / 图片。\n每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
+                      className="min-h-44 flex-1 resize-none border-none bg-transparent px-3 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:ring-0"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100">
+                          {ocrRunning || documentReading ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+                          上传资料
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,.txt,text/plain,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            onChange={handleImportFileChange}
+                            className="hidden"
+                          />
+                        </label>
+                        <span className="text-xs text-slate-400">可拖拽文件到此区域，也可直接粘贴截图。</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearImportDraft}
+                        className="text-xs font-black text-slate-400 hover:text-rose-500"
                       >
-                        {ocrRunning || documentReading ? (
-                          <Loader2 className="animate-spin text-indigo-500" size={28} />
-                        ) : (
-                          <Upload className="text-indigo-500" size={28} />
-                        )}
-                        <span className="mt-3 text-sm font-black text-slate-800">
-                          上传 Word、TXT 或图片
-                        </span>
-                        <span className="mt-1 text-xs leading-5 text-slate-400">
-                          也可以把文件拖到这里，图片会自动 OCR。
-                        </span>
+                        清空
+                      </button>
+                    </div>
+                  </div>
+
+                  {(ocrRunning || documentReading || ocrStatus) && (
+                    <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{ocrStatus || '正在读取资料'}</span>
+                        {(ocrRunning || documentReading) && <Loader2 className="animate-spin" size={14} />}
+                      </div>
+                      {ocrRunning && (
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
+                          <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${ocrProgress}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {bulkImagePreview && (
+                    <img
+                      src={bulkImagePreview}
+                      alt="商务词汇截图预览"
+                      className="mt-4 max-h-72 w-full rounded-2xl border border-slate-100 bg-white object-contain"
+                    />
+                  )}
+                </div>
+
+                <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black text-slate-400">自动提取结果</p>
+                      <p className="mt-1 text-sm font-black text-slate-700">
+                        待导入 {bulkResources.length} 条资源，可直接修改或删除
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs font-black text-slate-500">
                         <input
-                          type="file"
-                          accept=".docx,.txt,text/plain,image/*,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={handleImportFileChange}
-                          className="hidden"
+                          type="checkbox"
+                          checked={replaceExisting}
+                          onChange={(event) => setReplaceExisting(event.target.checked)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                         />
+                        覆盖本阶段旧词汇
                       </label>
-
-                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <p className="text-xs font-black text-slate-500">粘贴文本或截图</p>
-                          <button
-                            type="button"
-                            onClick={clearImportDraft}
-                            className="text-xs font-black text-slate-400 hover:text-rose-500"
-                          >
-                            清空
-                          </button>
-                        </div>
-                        <textarea
-                          value={bulkText}
-                          onChange={(event) => updateBulkText(event.target.value)}
-                          onPaste={handleImportPaste}
-                          placeholder={'每行一条，例如：\n1\t家居用品\tjiājū yòngpǐn\thome comforts\n2\t设备\tshèbèi\tequipment; device'}
-                          className="h-44 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                        />
-                      </div>
-
-                      {(ocrRunning || documentReading || ocrStatus) && (
-                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
-                          <div className="flex items-center justify-between gap-3">
-                            <span>{ocrStatus || '正在读取资料'}</span>
-                            {(ocrRunning || documentReading) && <Loader2 className="animate-spin" size={14} />}
-                          </div>
-                          {ocrRunning && (
-                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
-                              <div
-                                className="h-full rounded-full bg-indigo-500 transition-all"
-                                style={{ width: `${ocrProgress}%` }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {bulkImagePreview && (
-                        <img
-                          src={bulkImagePreview}
-                          alt="商务词汇截图预览"
-                          className="max-h-64 w-full rounded-2xl border border-slate-100 bg-white object-contain"
-                        />
-                      )}
+                      <button
+                        type="button"
+                        onClick={addBulkResource}
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100"
+                      >
+                        <Plus size={14} />
+                        添加
+                      </button>
                     </div>
+                  </div>
 
-                    <div className="flex min-h-0 flex-col p-6">
-                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-black text-slate-400">自动提取结果</p>
-                          <p className="mt-1 text-sm font-black text-slate-700">
-                            待导入 {bulkResources.length} 条资源，可直接修改或删除
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="flex items-center gap-2 text-xs font-black text-slate-500">
-                            <input
-                              type="checkbox"
-                              checked={replaceExisting}
-                              onChange={(event) => setReplaceExisting(event.target.checked)}
-                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            覆盖本阶段旧词汇
-                          </label>
-                          <button
-                            type="button"
-                            onClick={addBulkResource}
-                            className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100"
-                          >
-                            <Plus size={14} />
-                            添加
-                          </button>
-                        </div>
-                      </div>
-
-                      {bulkResources.length > 0 ? (
-                        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                          {bulkResources.map((resource) => (
-                            <article
-                              key={resource.localId}
-                              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                            >
-                              <div className="mb-3 flex items-center justify-between gap-3">
-                                <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-600">
-                                  #{resource.sortOrder}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <label className="flex items-center gap-1 text-[11px] font-black text-slate-400">
-                                    <input
-                                      type="checkbox"
-                                      checked={resource.isActive}
-                                      onChange={(event) =>
-                                        updateBulkResource(resource.localId, 'isActive', event.target.checked)
-                                      }
-                                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    启用
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteBulkResource(resource.localId)}
-                                    className="rounded-lg bg-rose-50 p-2 text-rose-500 hover:bg-rose-100"
-                                    title="删除此条"
-                                  >
-                                    <X size={14} />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.8fr_84px]">
-                                <label className="block">
-                                  <span className="text-[10px] font-black text-slate-400">词汇 / 标题</span>
-                                  <input
-                                    value={resource.term}
-                                    onChange={(event) =>
-                                      updateBulkResource(resource.localId, 'term', event.target.value)
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] font-black text-slate-400">解释</span>
-                                  <input
-                                    value={resource.explanation}
-                                    onChange={(event) =>
-                                      updateBulkResource(resource.localId, 'explanation', event.target.value)
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] font-black text-slate-400">排序</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={resource.sortOrder}
-                                    onChange={(event) =>
-                                      updateBulkResource(resource.localId, 'sortOrder', Number(event.target.value))
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                                  />
-                                </label>
-                              </div>
-                              <label className="mt-3 block">
-                                <span className="text-[10px] font-black text-slate-400">示例，可选</span>
+                  {bulkResources.length > 0 ? (
+                    <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                      {bulkResources.map((resource) => (
+                        <article key={resource.localId} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-600">
+                              #{resource.sortOrder}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 text-[11px] font-black text-slate-400">
                                 <input
-                                  value={resource.example}
-                                  onChange={(event) =>
-                                    updateBulkResource(resource.localId, 'example', event.target.value)
-                                  }
-                                  className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                                  type="checkbox"
+                                  checked={resource.isActive}
+                                  onChange={(event) => updateBulkResource(resource.localId, 'isActive', event.target.checked)}
+                                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                 />
+                                启用
                               </label>
-                            </article>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex min-h-64 flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">
-                          上传文件、粘贴图片或输入文本后，会在这里生成可编辑的导入草稿
-                        </div>
-                      )}
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkResource(resource.localId)}
+                                className="rounded-lg bg-rose-50 p-2 text-rose-500 hover:bg-rose-100"
+                                title="删除此条"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.8fr_84px]">
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">词汇 / 标题</span>
+                              <input
+                                value={resource.term}
+                                onChange={(event) => updateBulkResource(resource.localId, 'term', event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">解释</span>
+                              <input
+                                value={resource.explanation}
+                                onChange={(event) => updateBulkResource(resource.localId, 'explanation', event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] font-black text-slate-400">排序</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={resource.sortOrder}
+                                onChange={(event) => updateBulkResource(resource.localId, 'sortOrder', Number(event.target.value))}
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                              />
+                            </label>
+                          </div>
+                          <label className="mt-3 block">
+                            <span className="text-[10px] font-black text-slate-400">示例，可选</span>
+                            <input
+                              value={resource.example}
+                              onChange={(event) => updateBulkResource(resource.localId, 'example', event.target.value)}
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                            />
+                          </label>
+                        </article>
+                      ))}
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowBulkImportDialog(false)}
-                      className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-500 hover:bg-slate-50"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={importBulkResources}
-                      disabled={bulkSaving || ocrRunning || documentReading || !selectedStageId || !bulkResources.length}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {bulkSaving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-                      批量导入资源
-                    </button>
-                  </div>
-                </section>
+                  ) : (
+                    <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-400">
+                      上传文件、粘贴图片或输入文本后，会在这里生成可编辑的导入草稿
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            </section>
 
           <section className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
             <button

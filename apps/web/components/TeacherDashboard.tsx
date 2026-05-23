@@ -42,7 +42,7 @@ type PasswordChangePayload = {
   confirmPassword: string;
 };
 
-type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
+type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
 type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'research' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
 
 type AdminTableMeta = {
@@ -537,6 +537,7 @@ const TAB_PERMISSIONS: Partial<Record<TeacherTab, PanelPermissionKey>> = {
   USERS: 'users',
   RESOURCES: 'resources',
   GROUPS: 'groups',
+  STUDENT_RESEARCH: 'research',
   RECORDS: 'research',
   CLICK_FLOW: 'click_flow',
   PROMPT: 'prompt',
@@ -547,7 +548,8 @@ const NAV_ITEMS: Array<{ tab: TeacherTab; label: string; mobileLabel: string; ic
   { tab: 'USERS', label: '用户管理', mobileLabel: '用户', icon: <ShieldCheck size={18} />, permission: 'users' },
   { tab: 'RESOURCES', label: '教学资源管理', mobileLabel: '资源', icon: <BookOpen size={18} />, permission: 'resources' },
   { tab: 'GROUPS', label: '分组管理', mobileLabel: '分组', icon: <Group size={18} />, permission: 'groups' },
-  { tab: 'RECORDS', label: '研究分析工作台', mobileLabel: '研究', icon: <BarChart3 size={18} />, permission: 'research' },
+  { tab: 'STUDENT_RESEARCH', label: '学生数据研究', mobileLabel: '学生数据', icon: <Users size={18} />, permission: 'research' },
+  { tab: 'RECORDS', label: '自然语言数据分析', mobileLabel: 'AI 分析', icon: <BarChart3 size={18} />, permission: 'research' },
   { tab: 'CLICK_FLOW', label: '点击流分区', mobileLabel: '点击流', icon: <MousePointerClick size={18} />, permission: 'click_flow' },
   { tab: 'PROMPT', label: '提示词工程管理', mobileLabel: 'Prompt', icon: <Code2 size={18} />, permission: 'prompt' },
   { tab: 'SYSTEM_DATA', label: '系统数据', mobileLabel: '数据', icon: <Database size={18} />, permission: 'system_data' },
@@ -558,7 +560,8 @@ const PAGE_TITLES: Record<TeacherTab, string> = {
   USERS: '用户管理',
   RESOURCES: '教学资源管理',
   GROUPS: '分组管理',
-  RECORDS: '研究分析工作台',
+  STUDENT_RESEARCH: '学生数据研究',
+  RECORDS: '自然语言数据分析',
   CLICK_FLOW: '点击流分区',
   PROMPT: '提示词工程管理',
   SYSTEM_DATA: '系统数据查看',
@@ -864,7 +867,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, isAdmin, user.panelPermissions, overviewRefreshKey]);
 
   useEffect(() => {
-    if (activeTab !== 'RECORDS') return;
+    if (activeTab !== 'STUDENT_RESEARCH') return;
 
     let ignore = false;
     setIsLoadingResearch(true);
@@ -918,7 +921,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch]);
 
   useEffect(() => {
-    if (activeTab !== 'RECORDS' || !selectedResearchStudentId) {
+    if (activeTab !== 'STUDENT_RESEARCH' || !selectedResearchStudentId) {
       setResearchStudentActivity(null);
       return;
     }
@@ -2609,7 +2612,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     URL.revokeObjectURL(url);
   };
 
-  const renderResearchLab = () => (
+  const renderStudentResearchData = () => (
     <div className="space-y-6">
       <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-6">
@@ -2794,7 +2797,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
       </section>
 
-      <div className="flex h-[calc(100vh-14rem)] min-h-[620px] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+    </div>
+  );
+
+  const renderResearchLab = () => (
+    <>
+      <div className="flex h-[calc(100vh-8rem)] min-h-[620px] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="flex-none border-b border-slate-100 px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -3392,7 +3400,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </>
       )}
       </div>
-    </div>
+    </>
   );
 
   const renderSystemData = () => (
@@ -3795,6 +3803,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
           {canAccessPanel('resources') && activeTab === 'RESOURCES' && <TeachingResourceManager />}
           {canAccessPanel('groups') && activeTab === 'GROUPS' && <TeachingGroupManager />}
+          {canAccessPanel('research') && activeTab === 'STUDENT_RESEARCH' && renderStudentResearchData()}
           {canAccessPanel('research') && activeTab === 'RECORDS' && renderResearchLab()}
           {canAccessPanel('click_flow') && activeTab === 'CLICK_FLOW' && renderClickFlow()}
           {canAccessPanel('system_data') && activeTab === 'SYSTEM_DATA' && renderSystemData()}

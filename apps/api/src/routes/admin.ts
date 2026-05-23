@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { PDFParse } from 'pdf-parse';
 import * as mammoth from 'mammoth';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -1572,7 +1573,15 @@ router.post('/resources/import-file-text', async (req, res) => {
     const buffer = Buffer.from(contentBase64, 'base64');
     let text = '';
 
-    if (normalizedName.endsWith('.docx') || mimeType.includes('wordprocessingml')) {
+    if (normalizedName.endsWith('.pdf') || mimeType.includes('pdf')) {
+      const parser = new PDFParse({ data: buffer });
+      try {
+        const result = await parser.getText();
+        text = result.text;
+      } finally {
+        await parser.destroy();
+      }
+    } else if (normalizedName.endsWith('.docx') || mimeType.includes('wordprocessingml')) {
       const result = await mammoth.extractRawText({ buffer });
       text = result.value;
     } else if (normalizedName.endsWith('.txt') || mimeType.startsWith('text/')) {
