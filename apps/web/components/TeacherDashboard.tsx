@@ -2354,49 +2354,35 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const renderResearchLab = () => (
-    <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col gap-3 overflow-hidden">
-      <div className="flex-none rounded-2xl border border-slate-100 bg-white px-5 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Lab</p>
-            <h3 className="mt-0.5 text-xl font-black text-slate-900">研究分析工作台</h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {DATE_RANGES.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => setResearchDateRange(range.value)}
-                className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
-                  researchDateRange === range.value
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
-            <button
-              onClick={() => setResearchRefreshKey((key) => key + 1)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-500 hover:bg-slate-50"
-            >
-              <RefreshCw size={14} className={isLoadingResearch ? 'animate-spin' : ''} />
-              刷新
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="flex-none border-b border-slate-100 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+        <div className="flex-none border-b border-slate-100 px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Research Data Chat</p>
-              <h4 className="mt-0.5 text-lg font-black text-slate-900">自然语言数据分析</h4>
-              <p className="mt-1 text-xs text-slate-500">
-                生成只读 SQL，并返回结论、表格和后续研究问题。
-              </p>
+              <h4 className="text-base font-black text-slate-900">自然语言数据分析</h4>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {DATE_RANGES.map((range) => (
+                <button
+                  key={range.value}
+                  onClick={() => setResearchDateRange(range.value)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
+                    researchDateRange === range.value
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {range.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setResearchRefreshKey((key) => key + 1)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-500 hover:bg-slate-50"
+              >
+                <RefreshCw size={13} className={isLoadingResearch ? 'animate-spin' : ''} />
+                刷新
+              </button>
               {researchAiTurns.length > 0 ? (
                 <button
                   onClick={() => {
@@ -2405,7 +2391,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     setResearchAiResult(null);
                     localStorage.removeItem('research_ai_context');
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-500 hover:bg-slate-50"
                 >
                   新对话
                 </button>
@@ -2422,7 +2408,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-600 hover:bg-slate-50"
                 >
                   导出 CSV
                 </button>
@@ -2430,7 +2416,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
             {AI_QUERY_TEMPLATES.map((tpl) => (
               <button
                 key={tpl}
@@ -2439,7 +2425,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   void runResearchAiQuery(tpl);
                 }}
                 disabled={researchAiLoading}
-                className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
               >
                 {tpl}
               </button>
