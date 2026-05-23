@@ -463,8 +463,8 @@ const flattenPromptStages = (stages: ScenarioManagerResponse['stages']): PromptS
   );
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onPasswordChange }) => {
-  const [activeTab, setActiveTab] = useState<TeacherTab>('PROMPT');
   const isAdmin = Boolean(user.roles?.includes('admin'));
+  const [activeTab, setActiveTab] = useState<TeacherTab>(isAdmin ? 'PROMPT' : 'RESOURCES');
   const [userManager, setUserManager] = useState<UserManagerResponse | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userManagerError, setUserManagerError] = useState('');
@@ -613,12 +613,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, isAdmin]);
 
   useEffect(() => {
-    if (activeTab !== 'PROMPT') return;
+    if (activeTab !== 'PROMPT' || !isAdmin) return;
     void loadScenarios();
-  }, [activeTab]);
+  }, [activeTab, isAdmin]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA' || adminTables.length > 0) return;
+    if (isAdmin) return;
+    if (activeTab === 'USERS' || activeTab === 'PROMPT' || activeTab === 'SYSTEM_DATA') {
+      setActiveTab('RESOURCES');
+    }
+  }, [activeTab, isAdmin]);
+
+  useEffect(() => {
+    if (activeTab !== 'SYSTEM_DATA' || !isAdmin || adminTables.length > 0) return;
 
     let ignore = false;
     setIsLoadingTables(true);
@@ -642,10 +649,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, adminTables.length, selectedTable]);
+  }, [activeTab, isAdmin, adminTables.length, selectedTable]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA') return;
+    if (activeTab !== 'SYSTEM_DATA' || !isAdmin) return;
 
     let ignore = false;
     setIsLoadingOverview(true);
@@ -664,7 +671,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, overviewRefreshKey]);
+  }, [activeTab, isAdmin, overviewRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'RECORDS') return;
@@ -741,7 +748,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, clickFlowDateRange, clickFlowEventType]);
 
   useEffect(() => {
-    if (activeTab !== 'SYSTEM_DATA' || !selectedTable) return;
+    if (activeTab !== 'SYSTEM_DATA' || !isAdmin || !selectedTable) return;
 
     let ignore = false;
     const params = new URLSearchParams({
@@ -777,7 +784,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, selectedTable, tablePage, searchTerm, statusField, statusValue, dateField, dateRange, rowsRefreshKey]);
+  }, [activeTab, isAdmin, selectedTable, tablePage, searchTerm, statusField, statusValue, dateField, dateRange, rowsRefreshKey]);
 
   useEffect(() => {
     const sessionId = selectedTable === 'simulation_sessions' && selectedRow
@@ -2972,12 +2979,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <button onClick={() => setActiveTab('CLICK_FLOW')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'CLICK_FLOW' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <MousePointerClick size={18} /> 点击流分区
           </button>
-          <button onClick={() => setActiveTab('PROMPT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'PROMPT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <Code2 size={18} /> 2.4 提示词工程管理
-          </button>
-          <button onClick={() => setActiveTab('SYSTEM_DATA')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'SYSTEM_DATA' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <Database size={18} /> 2.5 系统数据
-          </button>
+          {isAdmin && (
+            <>
+              <button onClick={() => setActiveTab('PROMPT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'PROMPT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                <Code2 size={18} /> 2.4 提示词工程管理
+              </button>
+              <button onClick={() => setActiveTab('SYSTEM_DATA')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'SYSTEM_DATA' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                <Database size={18} /> 2.5 系统数据
+              </button>
+            </>
+          )}
           <button onClick={() => setActiveTab('ACCOUNT')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'ACCOUNT' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <Users size={18} /> 账户设置
           </button>
@@ -3001,14 +3012,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to="/admin/system"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              <Settings2 size={16} />
-              系统管理
-            </Link>
-            {activeTab === 'PROMPT' && (
+            {isAdmin && (
+              <Link
+                to="/admin/system"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                <Settings2 size={16} />
+                系统管理
+              </Link>
+            )}
+            {isAdmin && activeTab === 'PROMPT' && (
               <button
                 onClick={openNewScenario}
                 className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 text-xs"
@@ -3026,8 +3039,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             ['GROUPS', '2.2 分组'],
             ['RECORDS', '2.3 研究'],
             ['CLICK_FLOW', '点击流'],
-            ['PROMPT', '2.4 Prompt'],
-            ['SYSTEM_DATA', '2.5 数据'],
+            ...(isAdmin ? [['PROMPT', '2.4 Prompt'], ['SYSTEM_DATA', '2.5 数据']] : []),
             ['ACCOUNT', '账户']
           ].map(([tab, label]) => (
             <button
@@ -3047,7 +3059,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
         <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-10">
           {activeTab === 'USERS' && renderUserManagement()}
-          {activeTab === 'PROMPT' && (
+          {isAdmin && activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {(isLoadingScenarios || scenarioError) && (
                 <div className={`md:col-span-2 lg:col-span-3 rounded-2xl border px-5 py-4 text-sm font-semibold ${
@@ -3092,7 +3104,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           {activeTab === 'GROUPS' && <TeachingGroupManager />}
           {activeTab === 'RECORDS' && renderResearchLab()}
           {activeTab === 'CLICK_FLOW' && renderClickFlow()}
-          {activeTab === 'SYSTEM_DATA' && renderSystemData()}
+          {isAdmin && activeTab === 'SYSTEM_DATA' && renderSystemData()}
           {activeTab === 'ACCOUNT' && renderAccountSettings()}
 
           {(isAddingNew || selectedScenarioId) && (

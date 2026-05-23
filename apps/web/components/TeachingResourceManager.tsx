@@ -346,14 +346,15 @@ const TeachingResourceManager: React.FC = () => {
     }
   };
 
-  const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
+  const processBulkImage = async (file: File, sourceLabel = '图片') => {
+    if (!file.type.startsWith('image/')) {
+      setError('请使用图片文件进行 OCR 识别');
+      return;
+    }
 
     setOcrRunning(true);
     setOcrProgress(0);
-    setOcrStatus('正在读取图片并进行本地 OCR');
+    setOcrStatus(`正在读取${sourceLabel}并进行本地 OCR`);
     setError('');
 
     try {
@@ -374,6 +375,48 @@ const TeachingResourceManager: React.FC = () => {
       setOcrRunning(false);
       setOcrProgress(100);
     }
+  };
+
+  const handleBulkImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    await processBulkImage(file, '图片');
+  };
+
+  const getFirstImageFile = (files: FileList) => {
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files.item(index);
+      if (file?.type.startsWith('image/')) return file;
+    }
+    return null;
+  };
+
+  const handleImageDrop = async (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const file = getFirstImageFile(event.dataTransfer.files);
+    if (!file) {
+      setError('请拖入图片文件进行 OCR 识别');
+      return;
+    }
+    await processBulkImage(file, '拖拽图片');
+  };
+
+  const handleImagePaste = async (event: React.ClipboardEvent<HTMLLabelElement>) => {
+    let file = getFirstImageFile(event.clipboardData.files);
+    if (!file) {
+      for (let index = 0; index < event.clipboardData.items.length; index += 1) {
+        const item = event.clipboardData.items.item(index);
+        if (item?.type.startsWith('image/')) {
+          file = item.getAsFile();
+          break;
+        }
+      }
+    }
+    if (!file) return;
+    event.preventDefault();
+    await processBulkImage(file, '粘贴图片');
   };
 
   const importBulkResources = async () => {
@@ -619,17 +662,26 @@ const TeachingResourceManager: React.FC = () => {
                     />
                   </label>
 
-                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center transition hover:bg-slate-100">
+                  <label
+                    className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDrop={handleImageDrop}
+                    onPaste={handleImagePaste}
+                    tabIndex={0}
+                  >
                     {ocrRunning ? (
                       <Loader2 className="animate-spin text-indigo-500" size={24} />
                     ) : (
                       <ImagePlus className="text-indigo-500" size={24} />
                     )}
                     <span className="mt-2 text-sm font-black text-slate-700">
-                      {ocrRunning ? '截图识别中...' : '上传截图辅助 OCR'}
+                      {ocrRunning ? '截图识别中...' : '拖拽 / 粘贴截图辅助 OCR'}
                     </span>
                     <span className="mt-1 text-xs leading-5 text-slate-400">
-                      图片识别只作为补充，识别后仍可在右侧手动校正。
+                      可点击选择图片，也可把截图拖到这里，或点中此处后直接粘贴。
                     </span>
                     <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
                   </label>

@@ -651,15 +651,22 @@ const AppRoutes: React.FC = () => {
             />
           }
         />
-        <Route path="/admin" element={<Navigate to="/admin/system" replace />} />
+        <Route
+          path="/admin"
+          element={<Navigate to={currentUser?.roles?.includes('admin') ? '/admin/system' : '/teacher'} replace />}
+        />
         <Route
           path="/admin/system"
           element={
-            <SystemAdminPage
-              user={currentUser ?? buildDefaultUser(UserRole.TEACHER)}
-              onLogout={handleLogout}
-              onPasswordChange={handlePasswordChange}
-            />
+            currentUser?.roles?.includes('admin') ? (
+              <SystemAdminPage
+                user={currentUser}
+                onLogout={handleLogout}
+                onPasswordChange={handlePasswordChange}
+              />
+            ) : (
+              <Navigate to="/teacher" replace />
+            )
           }
         />
         <Route
