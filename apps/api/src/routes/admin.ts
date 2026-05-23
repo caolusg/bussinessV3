@@ -120,6 +120,13 @@ const researchQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d')
 });
 
+const researchStudentsQuerySchema = z.object({
+  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+  search: z.string().trim().max(120).optional().default(''),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20)
+});
+
 const resourcePayloadSchema = z.object({
   stageId: z.string().uuid(),
   type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary'),
@@ -1139,6 +1146,312 @@ router.get('/research/overview', requirePanel('research'), async (req, res) => {
     }));
   } catch (error) {
     console.error('Get research overview failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/research/students', requirePanel('research'), async (req, res) => {
+  try {
+    const parsed = researchStudentsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+
+    const { dateRange, search, page, pageSize } = parsed.data;
+    const createdAtWhere = buildCreatedAtWhere(dateRange);
+    const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
+    const keyword = search.trim();
+    const searchWhere: Prisma.UserWhereInput = keyword
+      ? {
+          OR: [
+            { username: { contains: keyword, mode: 'insensitive' } },
+            { email: { contains: keyword, mode: 'insensitive' } },
+            { studentProfile: { is: { name: { contains: keyword, mode: 'insensitive' } } } },
+            { studentProfile: { is: { realName: { contains: keyword, mode: 'insensitive' } } } },
+            { studentProfile: { is: { studentNo: { contains: keyword, mode: 'insensitive' } } } },
+            { studentAuth: { is: { idOrName: { contains: keyword, mode: 'insensitive' } } } }
+          ]
+        }
+      : {};
+    const where: Prisma.UserWhereInput = {
+      roles: { some: { role: { key: 'student' } } },
+      ...searchWhere
+    };
+
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          studentProfile: true,
+          studentAuth: true,
+          teachingGroupMemberships: {
+            select: {
+              group: { select: { id: true, name: true, color: true, isActive: true } }
+            }
+          }
+        }
+      })
+    ]);
+
+    const rows = await Promise.all(users.map(async (user) => {
+      const [sessionCount, messageCount, studentMessageCount, aiCallCount, degradedAiCallCount, practiceEventCount, recentMessages, recentAiLogs, recentEvents] =
+        await Promise.all([
+          prisma.simulationSession.count({ where: { userId: user.id, ...dateScopedWhere } }),
+          prisma.simulationMessage.count({ where: { session: { userId: user.id }, ...dateScopedWhere } }),
+          prisma.simulationMessage.count({ where: { role: 'student', session: { userId: user.id }, ...dateScopedWhere } }),
+          prisma.aiInteractionLog.count({ where: { userId: user.id, ...dateScopedWhere } }),
+          prisma.aiInteractionLog.count({ where: { userId: user.id, degraded: true, ...dateScopedWhere } }),
+          prisma.practiceEvent.count({ where: { userId: user.id, ...dateScopedWhere } }),
+          prisma.simulationMessage.findMany({
+            where: { session: { userId: user.id }, ...dateScopedWhere },
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              turnIndex: true,
+              createdAt: true,
+              session: {
+                select: {
+                  id: true,
+                  stage: true,
+                  businessStage: { select: { titleZh: true, titleEn: true, sortOrder: true } }
+                }
+              }
+            }
+          }),
+          prisma.aiInteractionLog.findMany({
+            where: { userId: user.id, ...dateScopedWhere },
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+            select: {
+              id: true,
+              provider: true,
+              model: true,
+              promptVersion: true,
+              degraded: true,
+              latencyMs: true,
+              outputText: true,
+              errorCode: true,
+              createdAt: true
+            }
+          }),
+          prisma.practiceEvent.findMany({
+            where: { userId: user.id, ...dateScopedWhere },
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+            select: {
+              id: true,
+              eventType: true,
+              metadataJson: true,
+              createdAt: true
+            }
+          })
+        ]);
+
+      const latestTimestamps = [
+        recentMessages[0]?.createdAt,
+        recentAiLogs[0]?.createdAt,
+        recentEvents[0]?.createdAt
+      ].filter(Boolean).map((value) => new Date(value as Date).getTime());
+
+      return {
+        user: {
+          id: user.id,
+          anonymousUserCode: anonymousCode(user.id),
+          username: user.username,
+          email: user.email,
+          status: user.status,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          studentProfile: user.studentProfile,
+          studentAuth: user.studentAuth,
+          groups: user.teachingGroupMemberships.map((membership) => membership.group)
+        },
+        stats: {
+          sessionCount,
+          messageCount,
+          studentMessageCount,
+          aiCallCount,
+          degradedAiCallCount,
+          practiceEventCount
+        },
+        recentMessages,
+        recentAiLogs,
+        recentEvents,
+        lastActivityAt: latestTimestamps.length ? new Date(Math.max(...latestTimestamps)).toISOString() : null
+      };
+    }));
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      search,
+      total,
+      page,
+      pageSize,
+      rows
+    }));
+  } catch (error) {
+    console.error('Get research students failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/research/students/:userId/activity', requirePanel('research'), async (req, res) => {
+  try {
+    const params = userParamsSchema.safeParse(req.params);
+    const query = researchStudentsQuerySchema.pick({ dateRange: true }).safeParse(req.query);
+    if (!params.success || !query.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const createdAtWhere = buildCreatedAtWhere(query.data.dateRange);
+    const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
+    const userId = params.data.userId;
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, roles: { some: { role: { key: 'student' } } } },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        studentProfile: true,
+        studentAuth: true,
+        teachingGroupMemberships: {
+          select: {
+            group: { select: { id: true, name: true, color: true, isActive: true } }
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json(fail('NOT_FOUND', 'Student not found'));
+    }
+
+    const [sessions, messages, aiLogs, practiceEvents] = await Promise.all([
+      prisma.simulationSession.findMany({
+        where: { userId, ...dateScopedWhere },
+        orderBy: { updatedAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          stage: true,
+          status: true,
+          attemptNo: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true,
+          businessStage: { select: { key: true, titleZh: true, titleEn: true, sortOrder: true } },
+          task: { select: { title: true } },
+          scenario: { select: { name: true, opponentName: true, opponentRole: true, difficulty: true, promptVersion: true } },
+          _count: { select: { messages: true, aiInteractionLogs: true, practiceEvents: true } }
+        }
+      }),
+      prisma.simulationMessage.findMany({
+        where: { session: { userId }, ...dateScopedWhere },
+        orderBy: [{ createdAt: 'desc' }, { turnIndex: 'desc' }],
+        take: 150,
+        select: {
+          id: true,
+          sessionId: true,
+          role: true,
+          content: true,
+          coachNote: true,
+          assessmentJson: true,
+          traceJson: true,
+          turnIndex: true,
+          createdAt: true,
+          session: {
+            select: {
+              stage: true,
+              businessStage: { select: { key: true, titleZh: true, titleEn: true, sortOrder: true } }
+            }
+          }
+        }
+      }),
+      prisma.aiInteractionLog.findMany({
+        where: { userId, ...dateScopedWhere },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          sessionId: true,
+          messageId: true,
+          provider: true,
+          model: true,
+          promptVersion: true,
+          outputText: true,
+          outputJson: true,
+          latencyMs: true,
+          degraded: true,
+          errorCode: true,
+          errorMessage: true,
+          createdAt: true,
+          stage: { select: { key: true, titleZh: true, titleEn: true, sortOrder: true } }
+        }
+      }),
+      prisma.practiceEvent.findMany({
+        where: { userId, ...dateScopedWhere },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          sessionId: true,
+          eventType: true,
+          metadataJson: true,
+          createdAt: true,
+          stage: { select: { key: true, titleZh: true, titleEn: true, sortOrder: true } },
+          resource: { select: { type: true, term: true } }
+        }
+      })
+    ]);
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange: query.data.dateRange,
+      user: {
+        id: user.id,
+        anonymousUserCode: anonymousCode(user.id),
+        username: user.username,
+        email: user.email,
+        status: user.status,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        studentProfile: user.studentProfile,
+        studentAuth: user.studentAuth,
+        groups: user.teachingGroupMemberships.map((membership) => membership.group)
+      },
+      stats: {
+        sessionCount: sessions.length,
+        messageCount: messages.length,
+        studentMessageCount: messages.filter((message) => message.role === 'student').length,
+        aiCallCount: aiLogs.length,
+        degradedAiCallCount: aiLogs.filter((log) => log.degraded).length,
+        practiceEventCount: practiceEvents.length
+      },
+      sessions,
+      messages,
+      aiLogs,
+      practiceEvents
+    }));
+  } catch (error) {
+    console.error('Get research student activity failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

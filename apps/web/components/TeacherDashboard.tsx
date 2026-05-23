@@ -7,6 +7,7 @@ import {
   Code2,
   Copy,
   Database,
+  Download,
   Edit3,
   Group,
   Loader2,
@@ -130,6 +131,71 @@ type ResearchOverview = {
     major?: string | null;
     createdAt: string;
   }>;
+};
+
+type ResearchStudentRow = {
+  user: Record<string, unknown> & {
+    id: string;
+    anonymousUserCode: string;
+    username: string;
+    email?: string | null;
+    status: string;
+    studentProfile?: Record<string, unknown> | null;
+    studentAuth?: Record<string, unknown> | null;
+    groups?: Array<Record<string, unknown>>;
+  };
+  stats: {
+    sessionCount: number;
+    messageCount: number;
+    studentMessageCount: number;
+    aiCallCount: number;
+    degradedAiCallCount: number;
+    practiceEventCount: number;
+  };
+  recentMessages: Array<Record<string, unknown> & {
+    id: string;
+    role: string;
+    content: string;
+    createdAt: string;
+  }>;
+  recentAiLogs: Array<Record<string, unknown> & {
+    id: string;
+    provider?: string | null;
+    model?: string | null;
+    outputText?: string | null;
+    degraded?: boolean;
+    createdAt: string;
+  }>;
+  recentEvents: Array<Record<string, unknown>>;
+  lastActivityAt?: string | null;
+};
+
+type ResearchStudentDirectory = {
+  generatedAt: string;
+  dateRange: 'today' | '7d' | '30d' | 'all';
+  search: string;
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: ResearchStudentRow[];
+};
+
+type ResearchStudentActivity = {
+  generatedAt: string;
+  dateRange: 'today' | '7d' | '30d' | 'all';
+  user: ResearchStudentRow['user'];
+  stats: ResearchStudentRow['stats'];
+  sessions: Array<Record<string, unknown>>;
+  messages: Array<Record<string, unknown> & {
+    id: string;
+    sessionId: string;
+    role: string;
+    content: string;
+    turnIndex: number;
+    createdAt: string;
+  }>;
+  aiLogs: ResearchStudentRow['recentAiLogs'];
+  practiceEvents: Array<Record<string, unknown>>;
 };
 
 type SessionSummary = {
@@ -592,6 +658,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [tableData, setTableData] = useState<AdminTableListResponse | null>(null);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [researchOverview, setResearchOverview] = useState<ResearchOverview | null>(null);
+  const [researchStudents, setResearchStudents] = useState<ResearchStudentDirectory | null>(null);
+  const [selectedResearchStudentId, setSelectedResearchStudentId] = useState('');
+  const [researchStudentActivity, setResearchStudentActivity] = useState<ResearchStudentActivity | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [studentSummary, setStudentSummary] = useState<StudentSummary | null>(null);
   const [aiLogSummary, setAiLogSummary] = useState<AiLogSummary | null>(null);
@@ -609,6 +678,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [isLoadingOverview, setIsLoadingOverview] = useState(false);
   const [isLoadingResearch, setIsLoadingResearch] = useState(false);
+  const [isLoadingResearchStudents, setIsLoadingResearchStudents] = useState(false);
+  const [isLoadingResearchStudentActivity, setIsLoadingResearchStudentActivity] = useState(false);
   const [isLoadingSessionSummary, setIsLoadingSessionSummary] = useState(false);
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
@@ -619,6 +690,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [adminError, setAdminError] = useState('');
   const [clickFlowDateRange, setClickFlowDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('7d');
   const [clickFlowEventType, setClickFlowEventType] = useState<'all' | 'ui_click' | 'page_view'>('all');
+  const [researchStudentSearchDraft, setResearchStudentSearchDraft] = useState('');
+  const [researchStudentSearch, setResearchStudentSearch] = useState('');
 
   const [researchAiQuestion, setResearchAiQuestion] = useState('最近30天各教学分组活跃人数趋势');
   const [researchAiLoading, setResearchAiLoading] = useState(false);
@@ -812,6 +885,65 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       ignore = true;
     };
   }, [activeTab, researchDateRange, researchRefreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'RECORDS') return;
+
+    let ignore = false;
+    setIsLoadingResearchStudents(true);
+    setAdminError('');
+
+    const params = new URLSearchParams({
+      dateRange: researchDateRange,
+      search: researchStudentSearch,
+      pageSize: '20'
+    });
+
+    apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`)
+      .then((data) => {
+        if (ignore) return;
+        setResearchStudents(data);
+        setSelectedResearchStudentId((current) => current || data.rows[0]?.user.id || '');
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '学生研究数据加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingResearchStudents(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch]);
+
+  useEffect(() => {
+    if (activeTab !== 'RECORDS' || !selectedResearchStudentId) {
+      setResearchStudentActivity(null);
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingResearchStudentActivity(true);
+    setAdminError('');
+
+    apiRequest<ResearchStudentActivity>(
+      `/api/admin/research/students/${selectedResearchStudentId}/activity?dateRange=${researchDateRange}`
+    )
+      .then((data) => {
+        if (!ignore) setResearchStudentActivity(data);
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '学生活动详情加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingResearchStudentActivity(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, selectedResearchStudentId, researchDateRange, researchRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'CLICK_FLOW') return;
@@ -2405,9 +2537,264 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const getResearchStudentName = (row?: ResearchStudentRow | ResearchStudentActivity | null) => {
+    const userRecord = row && 'user' in row ? row.user : null;
+    const profile = userRecord?.studentProfile ?? {};
+    return formatValue(profile.realName ?? profile.name) || formatValue(userRecord?.username) || '未知学生';
+  };
+
+  const buildResearchStudentExportRows = (activity: ResearchStudentActivity) => {
+    const profile = activity.user.studentProfile ?? {};
+    const auth = activity.user.studentAuth ?? {};
+    const studentBase = {
+      anonymousUserCode: activity.user.anonymousUserCode,
+      username: activity.user.username,
+      name: formatValue(profile.realName ?? profile.name),
+      studentNo: formatValue(profile.studentNo),
+      idOrName: formatValue(auth.idOrName),
+      nationality: formatValue(profile.nationality),
+      hskLevel: formatValue(profile.hskLevel),
+      major: formatValue(profile.major)
+    };
+
+    return [
+      ...activity.messages.map((message) => ({
+        recordType: 'message',
+        ...studentBase,
+        createdAt: message.createdAt,
+        sessionId: message.sessionId,
+        role: message.role,
+        turnIndex: message.turnIndex,
+        content: message.content,
+        provider: '',
+        model: '',
+        eventType: ''
+      })),
+      ...activity.aiLogs.map((log) => ({
+        recordType: 'ai_log',
+        ...studentBase,
+        createdAt: log.createdAt,
+        sessionId: formatValue(log.sessionId),
+        role: '',
+        turnIndex: '',
+        content: formatValue(log.outputText),
+        provider: formatValue(log.provider),
+        model: formatValue(log.model),
+        eventType: log.degraded ? 'degraded' : 'normal'
+      })),
+      ...activity.practiceEvents.map((event) => ({
+        recordType: 'practice_event',
+        ...studentBase,
+        createdAt: formatValue(event.createdAt),
+        sessionId: formatValue(event.sessionId),
+        role: '',
+        turnIndex: '',
+        content: formatCell(event.metadataJson),
+        provider: '',
+        model: '',
+        eventType: formatValue(event.eventType)
+      }))
+    ];
+  };
+
+  const downloadResearchStudentCsv = () => {
+    if (!researchStudentActivity) return;
+    const csv = toCsv(buildResearchStudentExportRows(researchStudentActivity));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `student-research-${researchStudentActivity.user.anonymousUserCode}-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const renderResearchLab = () => (
-    <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+    <div className="space-y-6">
+      <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Student Research Data</p>
+              <h3 className="mt-1 text-xl font-black text-slate-900">学生聊天与 AI 使用数据</h3>
+              <p className="mt-1 text-xs text-slate-400">按学生姓名、学号、账号或邮箱检索；查看聊天记录、AI 调用和行为事件。</p>
+            </div>
+            <button
+              type="button"
+              onClick={downloadResearchStudentCsv}
+              disabled={!researchStudentActivity}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={15} />
+              下载当前学生 CSV
+            </button>
+          </div>
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={researchStudentSearchDraft}
+                onChange={(event) => setResearchStudentSearchDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') setResearchStudentSearch(researchStudentSearchDraft.trim());
+                }}
+                placeholder="搜索姓名、学号、账号、邮箱"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setResearchStudentSearch(researchStudentSearchDraft.trim())}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700"
+            >
+              <Search size={16} />
+              查询
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)]">
+          <div className="border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-black text-slate-500">
+                学生列表 {researchStudents ? `(${researchStudents.total})` : ''}
+              </p>
+              {isLoadingResearchStudents && <Loader2 className="animate-spin text-indigo-500" size={16} />}
+            </div>
+            <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+              {(researchStudents?.rows ?? []).map((row) => {
+                const profile = row.user.studentProfile ?? {};
+                const active = selectedResearchStudentId === row.user.id;
+                return (
+                  <button
+                    key={row.user.id}
+                    type="button"
+                    onClick={() => setSelectedResearchStudentId(row.user.id)}
+                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                      active ? 'border-indigo-200 bg-indigo-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-900">{getResearchStudentName(row)}</p>
+                        <p className="mt-1 truncate text-xs text-slate-400">
+                          {formatValue(profile.studentNo) || row.user.username} · {row.user.anonymousUserCode}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-indigo-600">
+                        {row.stats.messageCount} 消息
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-500">
+                      <span className="rounded-lg bg-white px-2 py-1">会话 {row.stats.sessionCount}</span>
+                      <span className="rounded-lg bg-white px-2 py-1">AI {row.stats.aiCallCount}</span>
+                      <span className="rounded-lg bg-white px-2 py-1">事件 {row.stats.practiceEventCount}</span>
+                    </div>
+                  </button>
+                );
+              })}
+              {!isLoadingResearchStudents && !(researchStudents?.rows.length) && (
+                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-xs text-slate-400">
+                  没有匹配学生
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-0 p-6">
+            {isLoadingResearchStudentActivity ? (
+              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-6 text-sm font-bold text-slate-400">
+                <Loader2 className="animate-spin text-indigo-500" size={18} />
+                正在加载学生活动...
+              </div>
+            ) : researchStudentActivity ? (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Selected Student</p>
+                    <h4 className="mt-1 text-lg font-black text-slate-900">{getResearchStudentName(researchStudentActivity)}</h4>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {researchStudentActivity.user.anonymousUserCode} · {formatValue(researchStudentActivity.user.studentProfile?.studentNo) || researchStudentActivity.user.username}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs font-black text-slate-600">
+                    <span className="rounded-xl bg-slate-50 px-3 py-2">消息 {researchStudentActivity.stats.messageCount}</span>
+                    <span className="rounded-xl bg-slate-50 px-3 py-2">AI {researchStudentActivity.stats.aiCallCount}</span>
+                    <span className="rounded-xl bg-slate-50 px-3 py-2">事件 {researchStudentActivity.stats.practiceEventCount}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">最近聊天记录</p>
+                    <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+                      {researchStudentActivity.messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`rounded-2xl p-4 ${
+                            message.role === 'student'
+                              ? 'bg-indigo-600 text-white'
+                              : 'border border-slate-100 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest opacity-70">
+                            <span>{message.role} · turn {message.turnIndex}</span>
+                            <span>{new Date(message.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+                        </div>
+                      ))}
+                      {researchStudentActivity.messages.length === 0 && (
+                        <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs text-slate-400">当前范围暂无聊天记录</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-slate-900 p-4 text-white">
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-indigo-200">AI 调用记录</p>
+                      <div className="max-h-[240px] space-y-3 overflow-y-auto pr-1">
+                        {researchStudentActivity.aiLogs.map((log) => (
+                          <div key={log.id} className="rounded-xl bg-white/10 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-black">{formatValue(log.provider)} · {formatValue(log.model) || '-'}</p>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-black ${log.degraded ? 'bg-rose-500/20 text-rose-100' : 'bg-emerald-500/20 text-emerald-100'}`}>
+                                {log.degraded ? 'fallback' : 'normal'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-300">{new Date(log.createdAt).toLocaleString()}</p>
+                            {log.outputText && <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-100">{log.outputText}</p>}
+                          </div>
+                        ))}
+                        {researchStudentActivity.aiLogs.length === 0 && <p className="text-xs text-slate-400">暂无 AI 调用</p>}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 p-4">
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">行为事件</p>
+                      <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+                        {researchStudentActivity.practiceEvents.map((event) => (
+                          <div key={formatValue(event.id)} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            <p className="font-black text-slate-800">{formatValue(event.eventType)}</p>
+                            <p className="mt-1 text-slate-400">{event.createdAt ? new Date(String(event.createdAt)).toLocaleString() : '-'}</p>
+                          </div>
+                        ))}
+                        {researchStudentActivity.practiceEvents.length === 0 && <p className="text-xs text-slate-400">暂无行为事件</p>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+                请选择一个学生查看研究数据
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="flex h-[calc(100vh-14rem)] min-h-[620px] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="flex-none border-b border-slate-100 px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
