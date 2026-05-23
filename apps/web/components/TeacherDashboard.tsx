@@ -43,7 +43,7 @@ type PasswordChangePayload = {
 };
 
 type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
-type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'research' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
+type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' | 'research_ai' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
 
 type AdminTableMeta = {
   key: string;
@@ -505,6 +505,30 @@ const AI_QUERY_TEMPLATES = [
   '近7天学生练习事件数量趋势（按天）'
 ];
 
+const PRACTICE_EVENT_LABELS: Record<string, { label: string; description: string }> = {
+  coach_context_opened: { label: '打开 AI 教练面板', description: '学生查看了右侧 AI 教练或求助入口。' },
+  coach_question_asked: { label: '向 AI 教练提问', description: '学生向 AI 教练提交了问题。' },
+  ai_coach_answer_copied: { label: '复制 AI 教练回复', description: '学生复制了 AI 教练给出的建议。' },
+  student_message_sent: { label: '发送学生消息', description: '学生在业务对话中发送了一条消息。' },
+  message_sent: { label: '发送消息', description: '对话中产生了一条消息。' },
+  ai_reply_received: { label: '收到 AI 客户回复', description: 'AI 客户生成了回复。' },
+  stage_opened: { label: '打开业务阶段', description: '学生进入或查看了一个业务阶段。' },
+  simulation_started: { label: '开始练习', description: '学生启动了一次业务对话练习。' },
+  simulation_exited: { label: '离开练习', description: '学生退出或结束当前练习。' },
+  resource_viewed: { label: '查看学习资源', description: '学生查看了词汇、句式或知识资源。' },
+  discussion_viewed: { label: '进入小组讨论', description: '学生打开了小组讨论区。' },
+  page_view: { label: '页面浏览', description: '学生打开了一个页面。' },
+  ui_click: { label: '界面点击', description: '学生点击了页面上的按钮或控件。' }
+};
+
+const getPracticeEventMeta = (value: unknown) => {
+  const key = String(value ?? '');
+  return PRACTICE_EVENT_LABELS[key] ?? {
+    label: key || '未知事件',
+    description: '系统记录的一次学习行为。'
+  };
+};
+
 const toCsv = (rows: Record<string, unknown>[]) => {
   if (!rows.length) return '';
   const columns = Array.from(rows.reduce<Set<string>>((set, row) => {
@@ -531,14 +555,14 @@ const USER_STATUS_OPTIONS = [
   { value: 'DISABLED', label: '停用' }
 ] as const;
 
-const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'research', 'click_flow', 'prompt', 'system_data', 'system_admin'];
+const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'student_research', 'research_ai', 'click_flow', 'prompt', 'system_data', 'system_admin'];
 
 const TAB_PERMISSIONS: Partial<Record<TeacherTab, PanelPermissionKey>> = {
   USERS: 'users',
   RESOURCES: 'resources',
   GROUPS: 'groups',
-  STUDENT_RESEARCH: 'research',
-  RECORDS: 'research',
+  STUDENT_RESEARCH: 'student_research',
+  RECORDS: 'research_ai',
   CLICK_FLOW: 'click_flow',
   PROMPT: 'prompt',
   SYSTEM_DATA: 'system_data'
@@ -548,8 +572,8 @@ const NAV_ITEMS: Array<{ tab: TeacherTab; label: string; mobileLabel: string; ic
   { tab: 'USERS', label: '用户管理', mobileLabel: '用户', icon: <ShieldCheck size={18} />, permission: 'users' },
   { tab: 'RESOURCES', label: '教学资源管理', mobileLabel: '资源', icon: <BookOpen size={18} />, permission: 'resources' },
   { tab: 'GROUPS', label: '分组管理', mobileLabel: '分组', icon: <Group size={18} />, permission: 'groups' },
-  { tab: 'STUDENT_RESEARCH', label: '学生数据研究', mobileLabel: '学生数据', icon: <Users size={18} />, permission: 'research' },
-  { tab: 'RECORDS', label: '自然语言数据分析', mobileLabel: 'AI 分析', icon: <BarChart3 size={18} />, permission: 'research' },
+  { tab: 'STUDENT_RESEARCH', label: '学生数据研究', mobileLabel: '学生数据', icon: <Users size={18} />, permission: 'student_research' },
+  { tab: 'RECORDS', label: '自然语言数据分析', mobileLabel: 'AI 分析', icon: <BarChart3 size={18} />, permission: 'research_ai' },
   { tab: 'CLICK_FLOW', label: '点击流分区', mobileLabel: '点击流', icon: <MousePointerClick size={18} />, permission: 'click_flow' },
   { tab: 'PROMPT', label: '提示词工程管理', mobileLabel: 'Prompt', icon: <Code2 size={18} />, permission: 'prompt' },
   { tab: 'SYSTEM_DATA', label: '系统数据', mobileLabel: '数据', icon: <Database size={18} />, permission: 'system_data' },
@@ -899,14 +923,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const params = new URLSearchParams({
       dateRange: researchDateRange,
       search: researchStudentSearch,
-      pageSize: '20'
+      pageSize: '200'
     });
 
     apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`)
       .then((data) => {
         if (ignore) return;
         setResearchStudents(data);
-        setSelectedResearchStudentId((current) => current || data.rows[0]?.user.id || '');
+        setSelectedResearchStudentId((current) =>
+          data.rows.some((row) => row.user.id === current) ? current : data.rows[0]?.user.id || ''
+        );
       })
       .catch((error) => {
         if (!ignore) setAdminError(error instanceof Error ? error.message : '学生研究数据加载失败');
@@ -919,6 +945,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       ignore = true;
     };
   }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch]);
+
+  useEffect(() => {
+    if (activeTab !== 'STUDENT_RESEARCH') return;
+    const timer = window.setTimeout(() => {
+      setResearchStudentSearch(researchStudentSearchDraft.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, researchStudentSearchDraft]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH' || !selectedResearchStudentId) {
@@ -2600,6 +2634,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     ];
   };
 
+  const buildResearchStudentDirectoryExportRows = (directory: ResearchStudentDirectory) =>
+    directory.rows.map((row) => {
+      const profile = row.user.studentProfile ?? {};
+      const auth = row.user.studentAuth ?? {};
+      return {
+        anonymousUserCode: row.user.anonymousUserCode,
+        username: row.user.username,
+        name: formatValue(profile.realName ?? profile.name),
+        studentNo: formatValue(profile.studentNo),
+        idOrName: formatValue(auth.idOrName),
+        email: formatValue(row.user.email),
+        status: formatValue(row.user.status),
+        groups: (row.user.groups ?? []).map((group) => formatValue(group.name)).filter(Boolean).join(' / '),
+        sessionCount: row.stats.sessionCount,
+        messageCount: row.stats.messageCount,
+        studentMessageCount: row.stats.studentMessageCount,
+        aiCallCount: row.stats.aiCallCount,
+        degradedAiCallCount: row.stats.degradedAiCallCount,
+        practiceEventCount: row.stats.practiceEventCount,
+        lastActivityAt: formatValue(row.lastActivityAt)
+      };
+    });
+
   const downloadResearchStudentCsv = () => {
     if (!researchStudentActivity) return;
     const csv = toCsv(buildResearchStudentExportRows(researchStudentActivity));
@@ -2608,6 +2665,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const a = document.createElement('a');
     a.href = url;
     a.download = `student-research-${researchStudentActivity.user.anonymousUserCode}-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadAllResearchStudentsCsv = () => {
+    if (!researchStudents?.rows.length) return;
+    const csv = toCsv(buildResearchStudentDirectoryExportRows(researchStudents));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2622,15 +2691,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <h3 className="mt-1 text-xl font-black text-slate-900">学生聊天与 AI 使用数据</h3>
               <p className="mt-1 text-xs text-slate-400">按学生姓名、学号、账号或邮箱检索；查看聊天记录、AI 调用和行为事件。</p>
             </div>
-            <button
-              type="button"
-              onClick={downloadResearchStudentCsv}
-              disabled={!researchStudentActivity}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              <Download size={15} />
-              下载当前学生 CSV
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={downloadResearchStudentCsv}
+                disabled={!researchStudentActivity}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Download size={15} />
+                下载选中学生 CSV
+              </button>
+              <button
+                type="button"
+                onClick={downloadAllResearchStudentsCsv}
+                disabled={!researchStudents?.rows.length}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Download size={15} />
+                下载全部学生 CSV
+              </button>
+            </div>
           </div>
           <div className="mt-5 flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
@@ -2776,12 +2856,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     <div className="rounded-2xl border border-slate-100 p-4">
                       <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">行为事件</p>
                       <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
-                        {researchStudentActivity.practiceEvents.map((event) => (
-                          <div key={formatValue(event.id)} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                            <p className="font-black text-slate-800">{formatValue(event.eventType)}</p>
-                            <p className="mt-1 text-slate-400">{event.createdAt ? new Date(String(event.createdAt)).toLocaleString() : '-'}</p>
-                          </div>
-                        ))}
+                        {researchStudentActivity.practiceEvents.map((event) => {
+                          const meta = getPracticeEventMeta(event.eventType);
+                          return (
+                            <div key={formatValue(event.id)} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                              <p className="font-black text-slate-800">{meta.label}</p>
+                              <p className="mt-1 leading-5 text-slate-500">{meta.description}</p>
+                              <p className="mt-1 font-mono text-[10px] text-slate-300">{formatValue(event.eventType)}</p>
+                              <p className="mt-1 text-slate-400">{event.createdAt ? new Date(String(event.createdAt)).toLocaleString() : '-'}</p>
+                            </div>
+                          );
+                        })}
                         {researchStudentActivity.practiceEvents.length === 0 && <p className="text-xs text-slate-400">暂无行为事件</p>}
                       </div>
                     </div>
@@ -3803,8 +3888,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
           {canAccessPanel('resources') && activeTab === 'RESOURCES' && <TeachingResourceManager />}
           {canAccessPanel('groups') && activeTab === 'GROUPS' && <TeachingGroupManager />}
-          {canAccessPanel('research') && activeTab === 'STUDENT_RESEARCH' && renderStudentResearchData()}
-          {canAccessPanel('research') && activeTab === 'RECORDS' && renderResearchLab()}
+          {canAccessPanel('student_research') && activeTab === 'STUDENT_RESEARCH' && renderStudentResearchData()}
+          {canAccessPanel('research_ai') && activeTab === 'RECORDS' && renderResearchLab()}
           {canAccessPanel('click_flow') && activeTab === 'CLICK_FLOW' && renderClickFlow()}
           {canAccessPanel('system_data') && activeTab === 'SYSTEM_DATA' && renderSystemData()}
           {activeTab === 'ACCOUNT' && renderAccountSettings()}

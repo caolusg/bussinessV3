@@ -238,7 +238,7 @@ router.post('/query', requireAuth, async (req, res) => {
       });
     }
 
-    const allow = await userHasPanelPermission(req.user?.id, 'research');
+    const allow = await userHasPanelPermission(req.user?.id, 'research_ai');
     if (!allow) {
       return res.status(403).json({ ok: false, error: 'No permission to use research analysis' });
     }

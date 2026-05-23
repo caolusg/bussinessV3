@@ -125,7 +125,7 @@ const researchStudentsQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
   search: z.string().trim().max(120).optional().default(''),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(20)
+  pageSize: z.coerce.number().int().min(1).max(500).default(20)
 });
 
 const resourcePayloadSchema = z.object({
@@ -921,7 +921,7 @@ router.get('/overview', requirePanel('system_data'), async (_req, res) => {
   }
 });
 
-router.get('/research/overview', requirePanel('research'), async (req, res) => {
+router.get('/research/overview', requirePanel('research_ai'), async (req, res) => {
   try {
     const parsed = researchQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -1151,7 +1151,7 @@ router.get('/research/overview', requirePanel('research'), async (req, res) => {
   }
 });
 
-router.get('/research/students', requirePanel('research'), async (req, res) => {
+router.get('/research/students', requirePanel('student_research'), async (req, res) => {
   try {
     const parsed = researchStudentsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -1310,7 +1310,7 @@ router.get('/research/students', requirePanel('research'), async (req, res) => {
   }
 });
 
-router.get('/research/students/:userId/activity', requirePanel('research'), async (req, res) => {
+router.get('/research/students/:userId/activity', requirePanel('student_research'), async (req, res) => {
   try {
     const params = userParamsSchema.safeParse(req.params);
     const query = researchStudentsQuerySchema.pick({ dateRange: true }).safeParse(req.query);
