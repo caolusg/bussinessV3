@@ -392,6 +392,14 @@ const TeachingResourceManager: React.FC = () => {
     return null;
   };
 
+  const getFirstClipboardImage = (items: DataTransferItemList) => {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (item?.type.startsWith('image/')) return item.getAsFile();
+    }
+    return null;
+  };
+
   const handleImageDrop = async (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -404,20 +412,27 @@ const TeachingResourceManager: React.FC = () => {
   };
 
   const handleImagePaste = async (event: React.ClipboardEvent<HTMLLabelElement>) => {
-    let file = getFirstImageFile(event.clipboardData.files);
-    if (!file) {
-      for (let index = 0; index < event.clipboardData.items.length; index += 1) {
-        const item = event.clipboardData.items.item(index);
-        if (item?.type.startsWith('image/')) {
-          file = item.getAsFile();
-          break;
-        }
-      }
-    }
+    const file = getFirstImageFile(event.clipboardData.files) ?? getFirstClipboardImage(event.clipboardData.items);
     if (!file) return;
     event.preventDefault();
     await processBulkImage(file, '粘贴图片');
   };
+
+  useEffect(() => {
+    const handleWindowPaste = (event: ClipboardEvent) => {
+      const clipboardData = event.clipboardData;
+      if (!clipboardData) return;
+
+      const file = getFirstImageFile(clipboardData.files) ?? getFirstClipboardImage(clipboardData.items);
+      if (!file) return;
+
+      event.preventDefault();
+      void processBulkImage(file, '粘贴图片');
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, [nextSortOrder]);
 
   const importBulkResources = async () => {
     const resourcesToImport = bulkResources
@@ -678,10 +693,10 @@ const TeachingResourceManager: React.FC = () => {
                       <ImagePlus className="text-indigo-500" size={24} />
                     )}
                     <span className="mt-2 text-sm font-black text-slate-700">
-                      {ocrRunning ? '截图识别中...' : '拖拽 / 粘贴截图辅助 OCR'}
+                      {ocrRunning ? '截图识别中...' : '粘贴或拖拽截图 OCR'}
                     </span>
                     <span className="mt-1 text-xs leading-5 text-slate-400">
-                      可点击选择图片，也可把截图拖到这里，或点中此处后直接粘贴。
+                      复制截图后可直接在网页粘贴，也可把图片拖到这里。
                     </span>
                     <input type="file" accept="image/*" onChange={handleBulkImage} className="hidden" />
                   </label>

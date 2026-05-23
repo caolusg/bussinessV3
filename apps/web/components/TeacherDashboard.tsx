@@ -2058,7 +2058,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const renderResearchLab = () => (
-    <div className="flex h-[calc(100vh-10rem)] min-h-0 flex-col gap-4 overflow-hidden">
+    <div className="flex h-[calc(100vh-6rem)] min-h-[760px] flex-col gap-4 overflow-hidden">
       <div className="flex-none bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -2154,7 +2154,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </div>
 
-        <div ref={researchAiScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6">
+        <div ref={researchAiScrollRef} className="min-h-[420px] flex-1 overflow-y-auto bg-slate-50/60 p-6">
           {researchAiTurns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
               <Sparkles size={22} className="mx-auto text-indigo-500" />
