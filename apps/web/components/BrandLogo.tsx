@@ -15,7 +15,7 @@ const BrandLogo: React.FC<BrandLogoProps> = ({ inverse = false, compact = false 
 
   return (
     <div className="flex items-center gap-3">
-      <div className={`${markSize} relative shrink-0 rounded-[0.7rem] bg-red-700 shadow-lg shadow-red-950/20`}>
+      <div className={`${markSize} relative shrink-0 rounded-[0.7rem] bg-red-700`}>
         <svg viewBox="0 0 48 48" aria-hidden="true" className="h-full w-full">
           <rect x="5" y="5" width="38" height="38" rx="7" fill="#b91c1c" />
           <rect x="9" y="9" width="30" height="30" rx="3" fill="none" stroke="#fff7ed" strokeWidth="2.8" />

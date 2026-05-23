@@ -253,21 +253,21 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   const showEmailInput = isStudentRegister || emailSetupRequired;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans sm:p-6">
+      <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 overflow-hidden animate-in fade-in duration-300">
         <div className="bg-slate-900 p-8 text-white">
           <BrandLogo inverse />
         </div>
 
         <div className="p-8">
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200">
             <button
               type="button"
               onClick={() => {
                 resetEmailSetup();
                 navigate('/login/student');
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 border border-slate-200' : 'text-slate-500 hover:text-slate-700 border border-transparent'}`}
             >
               <User size={16} />
               学生注册登录
@@ -278,7 +278,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                 resetEmailSetup();
                 navigate('/login/teacher');
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === UserRole.TEACHER ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === UserRole.TEACHER ? 'bg-white text-indigo-600 border border-slate-200' : 'text-slate-500 hover:text-slate-700 border border-transparent'}`}
             >
               <ShieldCheck size={16} />
               教师/管理员
@@ -311,7 +311,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   clearNotice();
                   setFormData({ ...formData, username: e.target.value });
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all disabled:text-slate-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-colors disabled:text-slate-500"
                 placeholder={
                   usernameChangeRequired
                     ? '请输入新用户名'
@@ -344,7 +344,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                     clearNotice();
                     setFormData({ ...formData, email: e.target.value });
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-colors"
                   placeholder="请输入可接收验证邮件的邮箱"
                 />
               </div>
@@ -363,7 +363,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                   clearNotice();
                   setFormData({ ...formData, password: e.target.value });
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-colors"
                 placeholder="至少 6 位"
               />
             </div>
@@ -382,7 +382,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
                     clearNotice();
                     setFormData({ ...formData, confirmPassword: e.target.value });
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-colors"
                   placeholder="请再次输入密码"
                 />
               </div>
@@ -394,7 +394,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full py-4 rounded-xl text-white font-bold shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-slate-900 hover:bg-black shadow-slate-200'}`}
+              className={`w-full py-4 rounded-xl text-white font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${activeTab === UserRole.STUDENT ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-900 hover:bg-black'}`}
             >
               {usernameChangeRequired
                 ? '修改用户名并登录'

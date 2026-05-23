@@ -98,10 +98,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   };
 
   const Content = (
-    <div className={`w-full bg-white ${isModal ? 'rounded-2xl' : 'max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden'} animate-in ${isModal ? 'fade-in' : 'slide-in-from-bottom-8 duration-700'}`}>
-      <div className={`flex flex-col gap-4 bg-gradient-to-r from-blue-600 to-blue-800 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-8 ${isModal ? 'rounded-t-2xl' : ''}`}>
+    <div className={`w-full bg-white ${isModal ? 'rounded-2xl border border-slate-200' : 'max-w-2xl rounded-2xl border border-slate-200 overflow-hidden'} animate-in ${isModal ? 'fade-in' : 'fade-in duration-300'}`}>
+      <div className={`flex flex-col gap-4 bg-blue-600 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-8 ${isModal ? 'rounded-t-2xl' : ''}`}>
         <div className="flex items-center gap-4 sm:gap-6">
-          <img src={profile.avatarUrl} className="h-14 w-14 rounded-full border-2 border-white/20 shadow-lg sm:h-16 sm:w-16" alt="Avatar" />
+          <img src={profile.avatarUrl} className="h-14 w-14 rounded-full border-2 border-white/30 sm:h-16 sm:w-16" alt="Avatar" />
           <div className="min-w-0">
             <h2 className="text-xl font-bold sm:text-2xl">{isModal ? '个人信息维护' : '完善您的学习档案'}</h2>
             <p className="text-blue-100 text-xs opacity-80 mt-1">
@@ -232,6 +232,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
             <option value="HSK4">HSK 4</option>
             <option value="HSK5">HSK 5</option>
             <option value="HSK6">HSK 6</option>
+            <option value="HSK7">HSK 7</option>
+            <option value="HSK8">HSK 8</option>
+            <option value="HSK9">HSK 9</option>
           </select>
         </div>
 
@@ -314,7 +317,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
 
         <button
           type="submit"
-          className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 font-bold text-white shadow-xl transition-all hover:bg-blue-700 active:scale-[0.99] sm:col-span-2"
+          className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 font-bold text-white transition-colors hover:bg-blue-700 sm:col-span-2"
         >
           {isModal ? '保存修改' : '开启商务模拟之旅'}
           {!isModal && <ChevronRight size={20} />}
@@ -332,7 +335,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans sm:p-6">
       {Content}
     </div>
   );
