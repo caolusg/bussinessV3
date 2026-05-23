@@ -408,6 +408,16 @@ const formatCell = (value: unknown) => {
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
 };
 
+const getManagedUserSearchText = (user: ManagedUser) => {
+  const profile = user.studentProfile ?? {};
+  return [
+    user.username,
+    user.email,
+    profile.realName,
+    profile.name
+  ].map(formatValue).join(' ').toLowerCase();
+};
+
 const buildResearchChartData = (rows: Record<string, unknown>[]) => {
   if (!rows.length) return [];
   const columns = Object.keys(rows[0]);
@@ -539,6 +549,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userManagerError, setUserManagerError] = useState('');
   const [userManagerMessage, setUserManagerMessage] = useState('');
+  const [userSearchTerm, setUserSearchTerm] = useState('');
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
   const [newUserForm, setNewUserForm] = useState<ManagedUserForm>({
@@ -1375,6 +1386,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
 
     const users = userManager?.users ?? [];
+    const normalizedUserSearch = userSearchTerm.trim().toLowerCase();
+    const filteredUsers = normalizedUserSearch
+      ? users.filter((item) => getManagedUserSearchText(item).includes(normalizedUserSearch))
+      : users;
 
     return (
       <div className="space-y-6">
@@ -1569,18 +1584,41 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </section>
 
         <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-6">
             <div>
               <h3 className="text-lg font-black text-slate-900">用户列表</h3>
-              <p className="text-sm text-slate-500">可修改状态、角色和重置密码。密码哈希不会在前端展示。</p>
+              <p className="text-sm text-slate-500">
+                可按用户名、邮箱、真实姓名搜索。当前显示 {filteredUsers.length} / {users.length} 个用户。
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={loadUserManager}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-            >
-              <RefreshCw size={14} /> 刷新
-            </button>
+            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+              <div className="relative min-w-[260px] flex-1 lg:w-80 lg:flex-none">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={userSearchTerm}
+                  onChange={(event) => setUserSearchTerm(event.target.value)}
+                  placeholder="搜索用户名 / 邮箱 / 真实姓名"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-9 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                />
+                {userSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setUserSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    title="清空搜索"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={loadUserManager}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                <RefreshCw size={14} /> 刷新
+              </button>
+            </div>
           </div>
 
           {isLoadingUsers && !userManager ? (
@@ -1602,7 +1640,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {users.map((item) => {
+                  {filteredUsers.map((item) => {
                     const isSelf = item.id === userManager?.currentUserId;
                     return (
                       <tr key={item.id} className="align-top">
@@ -1671,6 +1709,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       </tr>
                     );
                   })}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td className="px-5 py-10 text-center text-sm font-semibold text-slate-400" colSpan={6}>
+                        没有匹配的用户
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
