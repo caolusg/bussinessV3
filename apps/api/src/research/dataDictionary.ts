@@ -27,9 +27,9 @@ Tables and columns:
 - teaching_group_members: group_id, user_id, assigned_by, created_at
   Meaning: membership relation between a teaching group and a student user.
 - users: id, username, status, created_at, updated_at
-  Meaning: login accounts for students and teachers. Do not expose username unless absolutely necessary.
-- student_profile: user_id, nationality, age, gender, hsk_level, major, completed_at
-  Meaning: student learning profile. Do not expose real_name, name, student_no, email, or password_hash.
+  Meaning: login accounts for students and teachers. Use username only as a fallback display name when student_profile.real_name and student_profile.name are empty.
+- student_profile: user_id, name, real_name, nationality, age, gender, hsk_level, major, completed_at
+  Meaning: student learning profile. real_name is the preferred teacher-facing student display name. Do not expose student_no, email, or password_hash.
 - practice_events: id, user_id, stage_id, session_id, resource_id, event_type, metadata_json, created_at
   Meaning: behavior and research event log. This includes clickstream and learning/practice events.
 - ai_interaction_logs: id, user_id, session_id, message_id, stage_id, provider, model, prompt_version, system_prompt, input_messages_json, output_text, output_json, latency_ms, degraded, error_code, error_message, created_at
@@ -89,7 +89,8 @@ SQL generation rules:
 - Use only the allowed tables and columns listed above.
 - Always include LIMIT 200.
 - Prefer aggregate summaries for research questions.
-- Never query password_hash, email, real_name, name, student_no, or other directly identifying fields.
+- When listing or grouping by individual students, join student_profile and select COALESCE(NULLIF(student_profile.real_name, ''), NULLIF(student_profile.name, ''), users.username) AS student_name. Do not return raw user_id values as display labels.
+- Never query password_hash, email, student_no, or other sensitive fields.
 - If the current user message corrects a previous result, treat it as new evidence and generate a direct verification query.
 - The current user question has priority over previous context. Previous context may clarify references, but must not override the current question's metric, time range, grouping, or event_type filters.
 `.trim();
@@ -105,6 +106,7 @@ Answer rules for research analysis:
 - Do not include markdown code blocks.
 - If rows are empty, say no matching records were found for this query scope.
 - If rows contain counts, state the counts plainly.
+- Use the student_name column as the student identifier in answers. Do not write "用户ID" or expose raw UUID/user_id values; say "学生" or "学生姓名" instead.
 - For clickstream results, call them "clickstream/click events" and distinguish ui_click from page_view when present.
 - For AI-help results, distinguish explicit AI coach help (prompt_version = 'coach-v1') from role-play AI responses (prompt_version = 'v1').
 - For copied AI content, summarize copied themes from answer_excerpt/question rather than exposing raw full transcripts unless the user asks for samples.

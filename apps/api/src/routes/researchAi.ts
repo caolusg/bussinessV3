@@ -35,7 +35,9 @@ function buildSqlPrompt(question: string, contextText: string, previous?: { sql:
     'For teaching-group active student counts or trends, count distinct practice_events.user_id joined through teaching_group_members and do not restrict event_type unless the current question asks for clickstream.',
     'Return only SQL. Do not include explanations, markdown, comments, or prose.',
     'The query must be read-only, start with SELECT, use only the allowed tables/columns, and include LIMIT 200.',
-    'Do not select directly identifying fields such as username, real_name, student_no, email, or password_hash.',
+    'When a result needs to identify a student, join student_profile and select COALESCE(NULLIF(student_profile.real_name, \'\'), NULLIF(student_profile.name, \'\'), users.username) AS student_name instead of selecting user_id.',
+    'Do not display or select raw user_id values in the final result unless the user explicitly asks for technical IDs.',
+    'Do not select sensitive fields such as student_no, email, or password_hash.',
     researchDataDictionaryPrompt,
     previous
       ? `Previous SQL failed. Fix it using the schema above.\nFailed SQL:\n${previous.sql}\nDatabase error:\n${previous.error}`
@@ -75,6 +77,13 @@ function normalizeGeneratedSql(sql: string) {
   const selectStart = withoutCodeFence.search(/\bselect\b/i);
   if (selectStart < 0) return withoutCodeFence;
   return withoutCodeFence.slice(selectStart).replace(/;\s*$/, '').trim();
+}
+
+function maskUserIdsInText(text: string) {
+  return text
+    .replace(/用户\s*ID\s*[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, '学生')
+    .replace(/\buser_?id\s*[:：=]?\s*[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, 'student_name')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '学生');
 }
 
 function assertReadOnlySql(sql: string) {
@@ -140,6 +149,71 @@ function toJsonSafeRows(rows: Record<string, unknown>[]) {
   return rows.map((row) => toJsonSafeValue(row) as Record<string, unknown>);
 }
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUserIdColumn(key: string) {
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return normalized === 'userid' || normalized.endsWith('userid');
+}
+
+function toStudentNameColumn(key: string) {
+  if (key === 'user_id') return 'student_name';
+  if (key === 'userId') return 'studentName';
+  return key.replace(/user_?id/gi, 'student_name');
+}
+
+async function replaceUserIdsWithStudentNames(rows: Record<string, unknown>[]) {
+  const userIds = new Set<string>();
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(row)) {
+      if (isUserIdColumn(key) && typeof value === 'string' && uuidPattern.test(value)) {
+        userIds.add(value);
+      }
+    }
+  }
+
+  if (!userIds.size) return rows;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...userIds] } },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      studentProfile: {
+        select: {
+          realName: true,
+          name: true
+        }
+      }
+    }
+  });
+
+  const nameById = new Map(
+    users.map((user) => {
+      const displayName =
+        user.studentProfile?.realName?.trim() ||
+        user.studentProfile?.name?.trim() ||
+        user.username?.trim() ||
+        user.email?.trim() ||
+        `学生-${user.id.slice(0, 8)}`;
+      return [user.id, displayName];
+    })
+  );
+
+  return rows.map((row) => {
+    const next: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (isUserIdColumn(key) && typeof value === 'string' && uuidPattern.test(value)) {
+        next[toStudentNameColumn(key)] = nameById.get(value) ?? `学生-${value.slice(0, 8)}`;
+      } else {
+        next[key] = value;
+      }
+    }
+    return next;
+  });
+}
+
 function evaluateSqlRisk(sql: string) {
   const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
   const risks: string[] = [];
@@ -180,7 +254,7 @@ router.post('/query', requireAuth, async (req, res) => {
     const question = parsed.data.question;
     const context = parsed.data.context ?? [];
     const contextText = context.length
-      ? `\nPrevious follow-up context:\n${context.map((item, idx) => `${idx + 1}. Q:${item.question}\nA:${item.answer}`).join('\n')}`
+      ? `\nPrevious follow-up context:\n${context.map((item, idx) => `${idx + 1}. Q:${maskUserIdsInText(item.question)}\nA:${maskUserIdsInText(item.answer)}`).join('\n')}`
       : '';
     const sqlCompletion = await generateCoachingReply({
       stage: 'quotation',
@@ -231,7 +305,7 @@ router.post('/query', requireAuth, async (req, res) => {
       rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql);
       durationMs = Date.now() - startedAt;
     }
-    const safeRows = toJsonSafeRows(rows);
+    const safeRows = await replaceUserIdsWithStudentNames(toJsonSafeRows(rows));
 
     const summary = await generateCoachingReply({
       stage: 'quotation',
