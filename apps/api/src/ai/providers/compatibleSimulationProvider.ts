@@ -39,6 +39,26 @@ const STAGE_LABELS: Record<SimulationStage, string> = {
   after_sales: '售后'
 };
 
+const STAGE_BOUNDARY_RULES: Record<SimulationStage, string> = {
+  acquisition: '只围绕初次接触、客户需求、采购背景、决策角色、联系方式和后续跟进展开。即使学生提出报价、谈判、签合同或付款，也不要进入那些环节；请自然拉回获客阶段，例如先要求确认需求、预算范围、决策流程或会后资料。',
+  quotation: '只围绕报价信息、价格构成、贸易术语、数量阶梯、交期、报价有效期和报价澄清展开。即使学生提出压价谈判、合同签署、备货或付款，也不要进入那些环节；请自然拉回报价阶段，例如要求先说明报价依据或报价边界。',
+  negotiation: '只围绕价格、数量、付款方式、交期、让步交换和双方条件拉扯展开。即使学生提出签合同、生产备货、报关或售后，也不要进入那些环节；请自然拉回磋商阶段，例如继续追问可交换条件。',
+  contract: '只围绕合同条款、附件、规格、交付责任、违约责任、争议解决和书面确认展开。即使学生提出生产、报关、结算或售后，也不要进入那些环节；请自然拉回合同阶段，例如要求把承诺写清楚。',
+  preparation: '只围绕生产进度、原料、质检、包装、装运准备、延期风险和异常预案展开。即使学生提出报关、付款或售后处理，也不要进入那些环节；请自然拉回备货阶段，例如追问时间节点和质检安排。',
+  customs: '只围绕发票、装箱单、报关资料、单证一致性、清关时限和合规风险展开。即使学生提出付款放单或售后赔偿，也不要进入那些环节；请自然拉回报关阶段，例如要求确认单证和提交时间。',
+  settlement: '只围绕付款节点、尾款、账期、付款凭证、放单条件和财务核对展开。即使学生提出售后补偿或重新谈判，也不要进入那些环节；请自然拉回结算阶段，例如要求明确付款安排。',
+  after_sales: '只围绕质量问题、破损、延迟、证据确认、责任认定、补救方案和后续改进展开。不要回到获客、报价、合同等前序环节；请自然拉回售后阶段，例如要求确认问题事实和处理时间表。'
+};
+
+function buildStageBoundaryPrompt(stage: SimulationStage) {
+  return [
+    `当前练习阶段是「${STAGE_LABELS[stage]}」。你必须严格停留在这个阶段。`,
+    STAGE_BOUNDARY_RULES[stage],
+    '如果学生表达已经成交、签约、付款、发货或跳到其他阶段，你不能顺着推进剧情，也不能替学生完成跨阶段结果；要以客户身份把话题拉回当前阶段需要确认的事项。',
+    '回复只能是一段客户/采购方的自然对话，不要说明规则，不要评价学生。'
+  ].join('\n');
+}
+
 function buildAssessment(input: SimulationOrchestratorInput) {
   const lastStudentMessage = [...input.messages]
     .reverse()
@@ -61,6 +81,7 @@ export class CompatibleSimulationProvider implements SimulationProvider {
     const productCatalogContext = input.productCatalogContext?.trim();
     const systemPrompt = [
       input.scenario?.systemPrompt,
+      buildStageBoundaryPrompt(input.stage),
       productCatalogContext
         ? [
             '以下是我方上传的产品目录资料。你扮演客户时必须阅读并参考这些产品信息。',

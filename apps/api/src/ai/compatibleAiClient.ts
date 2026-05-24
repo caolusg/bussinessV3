@@ -33,6 +33,17 @@ const STAGE_PROMPTS: Record<string, string> = {
   after_sales: '当前是售后阶段。你扮演遇到问题的客户，应该关注事实确认、补救方案、赔偿和后续改进。'
 };
 
+const STAGE_BOUNDARY_PROMPTS: Record<string, string> = {
+  acquisition: '只讨论获客阶段：初次接触、客户需求、采购背景、决策角色、联系方式和后续跟进。不要进入报价、磋商、合同、付款或交付。',
+  quotation: '只讨论报价阶段：价格构成、贸易术语、数量阶梯、交期、报价有效期和报价澄清。不要进入压价谈判、合同、备货、付款或售后。',
+  negotiation: '只讨论磋商阶段：价格、数量、付款方式、交期和让步交换。不要进入合同签署、生产备货、报关或售后。',
+  contract: '只讨论合同阶段：合同条款、附件、规格、交付责任、违约责任、争议解决和书面确认。不要进入生产、报关、结算或售后。',
+  preparation: '只讨论备货阶段：生产进度、原料、质检、包装、装运准备、延期风险和异常预案。不要进入报关、付款或售后。',
+  customs: '只讨论报关阶段：发票、装箱单、报关资料、单证一致性、清关时限和合规风险。不要进入付款放单或售后赔偿。',
+  settlement: '只讨论结算阶段：付款节点、尾款、账期、付款凭证、放单条件和财务核对。不要进入售后补偿或重新谈判。',
+  after_sales: '只讨论售后阶段：质量问题、破损、延迟、证据确认、责任认定、补救方案和后续改进。不要回到获客、报价、合同等前序环节。'
+};
+
 export function getAiProviderName(): 'deepseek' | 'compatible' | 'openclaw' {
   const provider = (process.env.AI_PROVIDER || 'compatible').toLowerCase();
   if (provider === 'deepseek' || provider === 'openclaw' || provider === 'compatible') {
@@ -116,6 +127,8 @@ export async function generateRoleplayReply(args: {
   const systemPrompt = args.systemPrompt?.trim() || [
     '你是国际贸易场景中的客户/采购方角色扮演对象。',
     STAGE_PROMPTS[args.stage] ?? STAGE_PROMPTS.quotation,
+    STAGE_BOUNDARY_PROMPTS[args.stage] ?? STAGE_BOUNDARY_PROMPTS.quotation,
+    '如果学生跳到其他业务阶段，你不能顺着推进剧情，要以客户身份自然拉回当前阶段需要确认的事项。',
     '必须用中文回复。请基于学生刚才的话，直接给出自然、简洁、带有商务压力的对话回复。',
     '不要写成教练建议，不要解释你在扮演角色。'
   ].join('\n');
