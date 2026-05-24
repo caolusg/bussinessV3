@@ -953,6 +953,17 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     </button>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => void handleRestart()}
+                      disabled={restarting || endingSession || sending || loadingSession}
+                      aria-label="重新开始当前练习"
+                      title="重新开始当前练习"
+                      className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <RotateCcw size={14} />
+                      {restarting ? '创建中...' : '重新开始'}
+                    </button>
                     <div
                       className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:py-2 ${
                         uploadingContext
@@ -965,18 +976,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                         {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => void handleRestart()}
-                        disabled={restarting || endingSession || sending || loadingSession}
-                        aria-label="开始新的练习"
-                        title="开始新的练习"
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <RotateCcw size={14} />
-                        {restarting ? '创建中...' : '新的练习'}
-                      </button>
+                    <div className="flex shrink-0">
                       <button
                         type="button"
                         onClick={() => void handleEndAndExit()}
