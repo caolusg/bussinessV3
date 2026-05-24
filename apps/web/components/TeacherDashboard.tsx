@@ -679,6 +679,18 @@ const USER_STATUS_OPTIONS = [
 
 const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'student_research', 'research_ai', 'click_flow', 'prompt', 'system_data', 'system_admin'];
 
+const FALLBACK_PANELS: PanelPermission[] = [
+  { key: 'users', label: '用户管理', description: '创建用户、分配角色、重置密码' },
+  { key: 'resources', label: '教学资源管理', description: '维护阶段词汇、句式和知识资源' },
+  { key: 'groups', label: '分组管理', description: '管理教学分组和学生成员' },
+  { key: 'student_research', label: '学生数据研究', description: '查看学生聊天记录、AI 调用和行为事件' },
+  { key: 'research_ai', label: '自然语言数据分析', description: '使用自然语言查询研究数据' },
+  { key: 'click_flow', label: '点击流分区', description: '查看点击流和页面访问记录' },
+  { key: 'prompt', label: '提示词工程管理', description: '管理 AI 场景提示词模板' },
+  { key: 'system_data', label: '系统数据', description: '查看底层数据表、会话和 AI 调用记录' },
+  { key: 'system_admin', label: '系统管理', description: '维护运行配置、AI 设置和系统级参数' }
+];
+
 const TAB_PERMISSIONS: Partial<Record<TeacherTab, PanelPermissionKey>> = {
   USERS: 'users',
   RESOURCES: 'resources',
@@ -1872,7 +1884,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
               />
               <div className="flex flex-wrap gap-2">
-                {(availablePanels.length ? availablePanels : ALL_PANEL_KEYS.map((key) => ({ key, label: key, description: '' }))).map((panel) => (
+                {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => (
                   <label key={panel.key} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600">
                     <input
                       type="checkbox"
@@ -1930,7 +1942,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(availablePanels.length ? availablePanels : ALL_PANEL_KEYS.map((key) => ({ key, label: key, description: '' }))).map((panel) => (
+                  {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => (
                     <label key={panel.key} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${
                       role.key === 'admin'
                         ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
