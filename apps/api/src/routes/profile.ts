@@ -44,6 +44,25 @@ const getRoles = async (userId: string) => {
   return roles.map((r: { role: { key: string } }) => r.role.key);
 };
 
+router.get('/options', requireAuth, async (_req, res) => {
+  try {
+    const majorOptions = await prisma.profileOption.findMany({
+      where: { category: 'major', isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      select: {
+        id: true,
+        value: true,
+        label: true
+      }
+    });
+
+    return res.status(200).json(ok({ majorOptions }));
+  } catch (error) {
+    console.error('Get profile options failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
 router.get('/student', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -97,6 +116,14 @@ router.post('/student', requireAuth, async (req, res) => {
 
     const { realName, studentNo, nationality, age, gender, hskLevel, major } = parsed.data;
     const normalizedAge = age && age > 0 ? age : null;
+    const majorOption = await prisma.profileOption.findFirst({
+      where: { category: 'major', value: major, isActive: true },
+      select: { id: true }
+    });
+
+    if (!majorOption) {
+      return res.status(400).json(fail('INVALID_MAJOR', '请选择系统允许的专业方向'));
+    }
 
     const profile = await prisma.studentProfile.upsert({
       where: { userId },

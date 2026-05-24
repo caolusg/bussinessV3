@@ -638,6 +638,14 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     >
       <header className="z-50 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 shadow-sm sm:px-4">
         <div className="flex min-w-0 items-center gap-4">
+          <button
+            type="button"
+            onClick={onExit}
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeft size={15} />
+            返回主页面
+          </button>
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-bold text-slate-800">
               当前：第 {currentStageMeta.id} 环节「{currentStageMeta.title.split(' ')[0]}」
@@ -971,7 +979,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </main>
 
-        <aside className="hidden w-[30rem] shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white xl:flex 2xl:w-[36rem]">
+        <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white xl:flex 2xl:w-96">
           {(coachNote || assessmentSummary) && (
             <div className="border-b border-gray-100 bg-amber-50/40 p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-700">

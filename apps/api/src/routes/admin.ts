@@ -61,6 +61,7 @@ const tableConfigs: TableConfig[] = [
   { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', include: { role: { select: { key: true, name: true } } }, searchableFields: ['panelKey'], summaryColumns: ['roleName', 'roleKey', 'panelLabel', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['username', 'idOrName'] },
   { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
+  { key: 'profile_options', label: '档案选项', group: '学生档案', delegate: 'profileOption', idField: 'id', searchableFields: ['category', 'value', 'label'], summaryColumns: ['category', 'label', 'value', 'sortOrder', 'isActive', 'updatedAt'], statusFields: ['category', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
   { key: 'teaching_groups', label: '教学分组', group: '教学组织', delegate: 'teachingGroup', idField: 'id', searchableFields: ['name', 'description', 'color'], summaryColumns: ['name', 'description', 'color', 'isActive', 'updatedAt'], statusFields: ['isActive', 'color'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
   { key: 'teaching_group_members', label: '分组成员', group: '教学组织', delegate: 'teachingGroupMember', include: { group: { select: { name: true, color: true } }, user: { select: { username: true, email: true } }, assigner: { select: { username: true } } }, searchableFields: [], summaryColumns: ['groupName', 'username', 'assignedByUsername', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'business_stages', label: '业务阶段', group: '学习内容', delegate: 'businessStage', idField: 'id', searchableFields: ['titleZh', 'titleEn', 'description'], summaryColumns: ['sortOrder', 'key', 'titleZh', 'titleEn', 'isActive', 'updatedAt'], statusFields: ['isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
@@ -116,6 +117,18 @@ const runtimeConfigSchema = z.object({
 const teacherPasswordSchema = z.object({
   username: z.string().trim().min(1).default('teacher'),
   password: z.string().min(6)
+});
+
+const profileOptionSchema = z.object({
+  category: z.enum(['major']).default('major'),
+  value: z.string().trim().min(1).max(120),
+  label: z.string().trim().min(1).max(120),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+  isActive: z.coerce.boolean().default(true)
+});
+
+const profileOptionParamsSchema = z.object({
+  optionId: z.string().uuid()
 });
 
 const researchQuerySchema = z.object({
@@ -636,6 +649,77 @@ router.post('/teacher-password', requirePanel('system_admin'), async (req, res) 
     return res.status(200).json(ok({ username: teacher.username, reset: true }));
   } catch (error) {
     console.error('Reset teacher password failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/profile-options', requirePanel('system_admin'), async (_req, res) => {
+  try {
+    const options = await prisma.profileOption.findMany({
+      where: { category: 'major' },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
+    });
+    return res.status(200).json(ok({ options }));
+  } catch (error) {
+    console.error('List profile options failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/profile-options', requirePanel('system_admin'), async (req, res) => {
+  try {
+    const parsed = profileOptionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const option = await prisma.profileOption.create({ data: parsed.data });
+    return res.status(201).json(ok({ option }));
+  } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json(fail('OPTION_EXISTS', '该选项已存在'));
+    }
+    console.error('Create profile option failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.put('/profile-options/:optionId', requirePanel('system_admin'), async (req, res) => {
+  try {
+    const params = profileOptionParamsSchema.safeParse(req.params);
+    const parsed = profileOptionSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const option = await prisma.profileOption.update({
+      where: { id: params.data.optionId },
+      data: parsed.data
+    });
+    return res.status(200).json(ok({ option }));
+  } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json(fail('OPTION_EXISTS', '该选项已存在'));
+    }
+    console.error('Update profile option failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.delete('/profile-options/:optionId', requirePanel('system_admin'), async (req, res) => {
+  try {
+    const params = profileOptionParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const option = await prisma.profileOption.update({
+      where: { id: params.data.optionId },
+      data: { isActive: false }
+    });
+    return res.status(200).json(ok({ option }));
+  } catch (error) {
+    console.error('Disable profile option failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

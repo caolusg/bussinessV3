@@ -39,6 +39,26 @@ const STAGE_LABELS: Record<SimulationStage, string> = {
   after_sales: '售后'
 };
 
+const NEXT_STAGE: Partial<Record<SimulationStage, SimulationStage>> = {
+  acquisition: 'quotation',
+  quotation: 'negotiation',
+  negotiation: 'contract',
+  contract: 'preparation',
+  preparation: 'customs',
+  customs: 'settlement',
+  settlement: 'after_sales'
+};
+
+const NEXT_STAGE_INTENT_KEYWORDS: Partial<Record<SimulationStage, string[]>> = {
+  acquisition: ['报价', '价格', '多少钱', '单价', '签合同', '合同', '付款', '下单'],
+  quotation: ['压价', '降价', '让步', '合同', '签约', '付款', '生产', '备货'],
+  negotiation: ['合同', '签约', '条款', '备货', '生产', '报关', '付款'],
+  contract: ['生产', '备货', '发货', '报关', '清关', '付款', '尾款'],
+  preparation: ['报关', '清关', '发票', '装箱单', '付款', '尾款', '售后'],
+  customs: ['付款', '尾款', '放单', '结算', '售后', '赔偿'],
+  settlement: ['售后', '质量问题', '破损', '赔偿', '补发']
+};
+
 const STAGE_BOUNDARY_RULES: Record<SimulationStage, string> = {
   acquisition: '只围绕初次接触、客户需求、采购背景、决策角色、联系方式和后续跟进展开。即使学生提出报价、谈判、签合同或付款，也不要进入那些环节；请自然拉回获客阶段，例如先要求确认需求、预算范围、决策流程或会后资料。',
   quotation: '只围绕报价信息、价格构成、贸易术语、数量阶梯、交期、报价有效期和报价澄清展开。即使学生提出压价谈判、合同签署、备货或付款，也不要进入那些环节；请自然拉回报价阶段，例如要求先说明报价依据或报价边界。',
@@ -57,6 +77,26 @@ function buildStageBoundaryPrompt(stage: SimulationStage) {
     '如果学生表达已经成交、签约、付款、发货或跳到其他阶段，你不能顺着推进剧情，也不能替学生完成跨阶段结果；要以客户身份把话题拉回当前阶段需要确认的事项。',
     '回复只能是一段客户/采购方的自然对话，不要说明规则，不要评价学生。'
   ].join('\n');
+}
+
+function buildCoachNote(input: SimulationOrchestratorInput) {
+  const baseNote = STAGE_COACH_NOTES[input.stage];
+  const nextStage = NEXT_STAGE[input.stage];
+  if (!nextStage) return baseNote;
+
+  const studentMessages = input.messages.filter((message) => message.role === 'student');
+  const latestStudentContent = studentMessages.at(-1)?.content ?? '';
+  const mentionsNextStage = (NEXT_STAGE_INTENT_KEYWORDS[input.stage] ?? []).some((keyword) =>
+    latestStudentContent.includes(keyword)
+  );
+  const enoughPracticeTurns = studentMessages.length >= 4;
+
+  if (!mentionsNextStage && !enoughPracticeTurns) return baseNote;
+
+  return [
+    baseNote,
+    `这个${STAGE_LABELS[input.stage]}阶段已经练得差不多了。可以结束当前对话，切换到「${STAGE_LABELS[nextStage]}」阶段继续练习。`
+  ].join(' ');
 }
 
 function buildAssessment(input: SimulationOrchestratorInput) {
@@ -100,7 +140,7 @@ export class CompatibleSimulationProvider implements SimulationProvider {
 
     return {
       roleplayReply: roleplay.content,
-      coachNote: STAGE_COACH_NOTES[input.stage],
+      coachNote: buildCoachNote(input),
       assessment: buildAssessment(input),
       personaSnapshot: {
         difficultyAdjustment: 'keep'

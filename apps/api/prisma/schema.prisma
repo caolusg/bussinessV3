@@ -221,6 +221,21 @@ model StudentProfile {
   @@map("student_profile")
 }
 
+model ProfileOption {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category  String
+  value     String
+  label     String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([category, value], map: "profile_options_category_value_unique")
+  @@index([category, isActive, sortOrder], map: "profile_options_category_active_sort_idx")
+  @@map("profile_options")
+}
+
 model TeachingGroup {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -13,6 +13,7 @@ import {
   X
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { apiRequest } from '../utils/apiFetch';
 
 interface PasswordChangePayload {
   currentPassword: string;
@@ -28,6 +29,12 @@ interface ProfileSetupProps {
   onClose?: () => void;
   onBack?: () => void;
 }
+
+type ProfileOption = {
+  id: string;
+  value: string;
+  label: string;
+};
 
 const ProfileSetup: React.FC<ProfileSetupProps> = ({
   initialProfile,
@@ -48,6 +55,32 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [majorOptions, setMajorOptions] = useState<ProfileOption[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest<{ majorOptions: ProfileOption[] }>('/api/profile/options')
+      .then((payload) => {
+        if (!cancelled) setMajorOptions(payload.majorOptions);
+      })
+      .catch(() => {
+        if (!cancelled) setMajorOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOptions(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectableMajorOptions = useMemo(() => {
+    const currentMajor = profile.major?.trim();
+    if (!currentMajor || majorOptions.some((option) => option.value === currentMajor)) return majorOptions;
+    return [{ id: `current-${currentMajor}`, value: currentMajor, label: `${currentMajor}（当前值）` }, ...majorOptions];
+  }, [majorOptions, profile.major]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,12 +275,22 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <GraduationCap size={12} /> 专业方向
           </label>
-          <input
-            type="text"
+          <select
             value={profile.major || ''}
             onChange={(e) => setProfile({ ...profile, major: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-          />
+            disabled={loadingOptions || selectableMajorOptions.length === 0}
+          >
+            <option value="">{loadingOptions ? '正在加载专业方向...' : '请选择专业方向'}</option>
+            {selectableMajorOptions.map((option) => (
+              <option key={option.id} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {!loadingOptions && selectableMajorOptions.length === 0 && (
+            <p className="text-xs font-semibold text-red-600">管理员尚未配置专业方向，请先联系管理员。</p>
+          )}
         </div>
 
         {onPasswordChange && (

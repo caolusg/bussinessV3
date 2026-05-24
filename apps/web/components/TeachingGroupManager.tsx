@@ -263,28 +263,37 @@ const TeachingGroupManager: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
-          ['学生总数', data?.totals.studentCount ?? 0],
-          ['教学分组', data?.totals.groupCount ?? 0],
-          ['启用分组', data?.totals.activeGroupCount ?? 0],
-          ['未入组学生', data?.totals.ungroupedStudentCount ?? 0]
+          ['学生', data?.totals.studentCount ?? 0],
+          ['分组', data?.totals.groupCount ?? 0],
+          ['使用中', data?.totals.activeGroupCount ?? 0],
+          ['未入组', data?.totals.ungroupedStudentCount ?? 0]
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div key={String(label)} className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
             <p className="text-[10px] font-black text-slate-400">{label}</p>
-            <p className="mt-2 text-3xl font-black text-slate-900">{value}</p>
+            <p className="mt-1 text-2xl font-black text-slate-900">{value}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
         <aside className="space-y-4">
           <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-sm font-black text-slate-800">分组列表</h4>
-              {loading && <Loader2 className="animate-spin text-indigo-500" size={16} />}
+              <div className="flex items-center gap-2">
+                {loading && <Loader2 className="animate-spin text-indigo-500" size={16} />}
+                <button
+                  onClick={resetForm}
+                  className="inline-flex items-center gap-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-100"
+                >
+                  <Plus size={13} />
+                  新建
+                </button>
+              </div>
             </div>
-            <div className="space-y-2">
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
               {(data?.groups ?? []).map((group) => (
                 <button
                   key={group.id}
@@ -315,8 +324,75 @@ const TeachingGroupManager: React.FC = () => {
             </div>
           </div>
 
+          <form onSubmit={saveGroup} className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                  {editingGroupId ? 'Edit Group' : 'New Group'}
+                </p>
+                <h4 className="mt-1 text-base font-black text-slate-900">
+                  {editingGroupId ? '编辑当前分组' : '新建分组'}
+                </h4>
+              </div>
+              <Users className="text-indigo-500" size={18} />
+            </div>
+
+            <div className="space-y-3">
+              <input
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                placeholder="分组名称，如 HSK4 强化组"
+              />
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm({ ...form, description: event.target.value })}
+                className="h-20 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                placeholder="分组说明、教学目标或筛选标准"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={form.color}
+                  onChange={(event) => setForm({ ...form, color: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                >
+                  {GROUP_COLORS.map((color) => (
+                    <option key={color.value} value={color.value}>{color.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={form.isActive ? 'true' : 'false'}
+                  onChange={(event) => setForm({ ...form, isActive: event.target.value === 'true' })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                >
+                  <option value="true">使用中</option>
+                  <option value="false">已归档</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-500 hover:bg-slate-50"
+              >
+                清空
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                {editingGroupId ? '保存' : '创建'}
+              </button>
+            </div>
+          </form>
+
           <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
-            <h4 className="text-sm font-black text-slate-800">自动统计</h4>
+            <h4 className="text-sm font-black text-slate-800">学生概览</h4>
             {[
               ['HSK', data?.facets.hskLevel ?? {}],
               ['专业', data?.facets.major ?? {}],
@@ -369,211 +445,131 @@ const TeachingGroupManager: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {selectedGroup && (
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="text-xs font-bold text-slate-500">
-                  从右侧列表勾选学生后批量加入当前分组，已选 {selectedStudentIds.length} 名。
-                </span>
-                <button
-                  onClick={addMember}
-                  disabled={selectedStudentIds.length === 0 || saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-                  批量加入
-                </button>
-              </div>
-            )}
           </div>
 
-          <div className="divide-y divide-slate-100">
-            {(selectedGroup?.members ?? []).map((member) => (
-              <div key={member.user.id} className="flex items-center justify-between gap-4 p-5">
-                <div className="min-w-0">
-                  <p className="font-black text-slate-900">{displayStudentName(member.user)}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {member.user.username} · {member.user.studentProfile?.studentNo || '无学号'} · {member.user.status}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-                      {member.user.studentProfile?.hskLevel || 'HSK 未填'}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-                      {member.user.studentProfile?.major || '专业未填'}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-                      {member.user.studentProfile?.nationality || '国籍未填'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeMember(member.user.id)}
-                  disabled={saving}
-                  className="rounded-xl bg-slate-50 p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                  title="移出分组"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-            {selectedGroup && selectedGroup.members.length === 0 && (
-              <div className="p-12 text-center text-sm text-slate-400">
-                这个分组还没有学生。
-              </div>
-            )}
-          </div>
-        </section>
-
-        <aside className="space-y-6">
-          <form onSubmit={saveGroup} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
-                  {editingGroupId ? 'Edit Group' : 'New Group'}
-                </p>
-                <h4 className="mt-1 text-lg font-black text-slate-900">
-                  {editingGroupId ? '编辑分组' : '新建分组'}
-                </h4>
-              </div>
-              <Users className="text-indigo-500" size={20} />
-            </div>
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="text-xs font-black text-slate-400">分组名称</span>
-                <input
-                  value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
-                  required
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  placeholder="如 HSK4 强化组 / 2026 春季 A 组"
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-xs font-black text-slate-400">说明</span>
-                <textarea
-                  value={form.description}
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
-                  className="mt-2 h-24 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  placeholder="记录这个分组的教学目标、筛选标准或备注"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-xs font-black text-slate-400">颜色</span>
-                  <select
-                    value={form.color}
-                    onChange={(event) => setForm({ ...form, color: event.target.value })}
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  >
-                    {GROUP_COLORS.map((color) => (
-                      <option key={color.value} value={color.value}>{color.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black text-slate-400">状态</span>
-                  <select
-                    value={form.isActive ? 'true' : 'false'}
-                    onChange={(event) => setForm({ ...form, isActive: event.target.value === 'true' })}
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                  >
-                    <option value="true">启用</option>
-                    <option value="false">停用</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-500 hover:bg-slate-50"
-              >
-                清空
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                {editingGroupId ? '保存分组' : '新建分组'}
-              </button>
-            </div>
-          </form>
-
-          <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <Search size={16} className="text-slate-400" />
-              <input
-                value={studentSearch}
-                onChange={(event) => setStudentSearch(event.target.value)}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                placeholder="搜索可加入学生"
-              />
-            </div>
-            <div className="mb-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  disabled={visibleAvailableIds.length === 0}
-                  onChange={(event) => {
-                    const checked = event.target.checked;
-                    setSelectedStudentIds((current) => {
-                      const next = new Set(current);
-                      visibleAvailableIds.forEach((id) => {
-                        if (checked) next.add(id);
-                        else next.delete(id);
-                      });
-                      return Array.from(next);
-                    });
-                  }}
-                />
-                选择当前列表
-              </label>
-              <span>
-                已选 {selectedVisibleCount}/{visibleAvailableIds.length}
-              </span>
-            </div>
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {visibleAvailableStudents.map((student) => {
-                const checked = selectedStudentIds.includes(student.id);
-                return (
-                  <label
-                    key={student.id}
-                    className={`flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left text-sm transition ${
-                      checked ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleStudentSelection(student.id, event.target.checked)}
-                      className="mt-1"
-                    />
-                    <span className="min-w-0">
-                      <span className="block font-black">{displayStudentName(student)}</span>
-                      <span className="mt-1 block text-xs text-slate-400">
-                        {student.studentProfile?.hskLevel || 'HSK 未填'} · {student.studentProfile?.major || '专业未填'}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="min-h-[520px] divide-y divide-slate-100">
+              {(selectedGroup?.members ?? []).map((member) => (
+                <div key={member.user.id} className="flex items-center justify-between gap-4 p-5">
+                  <div className="min-w-0">
+                    <p className="font-black text-slate-900">{displayStudentName(member.user)}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {member.user.username} · {member.user.studentProfile?.studentNo || '无学号'} · {member.user.status}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+                        {member.user.studentProfile?.hskLevel || 'HSK 未填'}
                       </span>
-                    </span>
-                  </label>
-                );
-              })}
-              {!visibleAvailableStudents.length && (
-                <div className="rounded-2xl bg-slate-50 p-5 text-center text-sm text-slate-400">
-                  没有可加入的学生。
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+                        {member.user.studentProfile?.major || '专业未填'}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+                        {member.user.studentProfile?.nationality || '国籍未填'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeMember(member.user.id)}
+                    disabled={saving}
+                    className="rounded-xl bg-slate-50 p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                    title="移出分组"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              {selectedGroup && selectedGroup.members.length === 0 && (
+                <div className="p-12 text-center text-sm text-slate-400">
+                  这个分组还没有学生。请在右侧搜索并批量加入。
                 </div>
               )}
             </div>
+
+            <aside className="border-t border-slate-100 bg-slate-50 p-5 lg:border-l lg:border-t-0">
+              <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Add Students</p>
+                    <h4 className="mt-1 text-base font-black text-slate-900">添加学生</h4>
+                  </div>
+                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">
+                    已选 {selectedStudentIds.length}
+                  </span>
+                </div>
+                <div className="mb-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <Search size={16} className="text-slate-400" />
+                  <input
+                    value={studentSearch}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                    placeholder="按姓名、账号、学号搜索"
+                  />
+                </div>
+                <div className="mb-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      disabled={visibleAvailableIds.length === 0}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setSelectedStudentIds((current) => {
+                          const next = new Set(current);
+                          visibleAvailableIds.forEach((id) => {
+                            if (checked) next.add(id);
+                            else next.delete(id);
+                          });
+                          return Array.from(next);
+                        });
+                      }}
+                    />
+                    选择当前结果
+                  </label>
+                  <span>{selectedVisibleCount}/{visibleAvailableIds.length}</span>
+                </div>
+                <div className="max-h-[390px] space-y-2 overflow-y-auto pr-1">
+                  {visibleAvailableStudents.map((student) => {
+                    const checked = selectedStudentIds.includes(student.id);
+                    return (
+                      <label
+                        key={student.id}
+                        className={`flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left text-sm transition ${
+                          checked ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => toggleStudentSelection(student.id, event.target.checked)}
+                          className="mt-1"
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate font-black">{displayStudentName(student)}</span>
+                          <span className="mt-1 block truncate text-xs text-slate-400">
+                            {student.username} · {student.studentProfile?.hskLevel || 'HSK 未填'} · {student.studentProfile?.major || '专业未填'}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {!visibleAvailableStudents.length && (
+                    <div className="rounded-2xl bg-slate-50 p-5 text-center text-sm text-slate-400">
+                      没有可加入的学生。
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={addMember}
+                  disabled={selectedStudentIds.length === 0 || saving || !selectedGroup}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                  加入当前分组
+                </button>
+              </div>
+            </aside>
           </div>
-        </aside>
+        </section>
       </div>
     </div>
   );
