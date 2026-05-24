@@ -782,7 +782,7 @@ const getRoleLabelFallback = (role: string) => {
   return role;
 };
 
-const SYSTEM_ROLE_KEYS = ['admin', 'teacher', 'student', 'test'];
+const SYSTEM_ROLE_KEYS = ['admin', 'teacher', 'student', 'test', 'researcher'];
 const isProtectedRole = (role: ManagedRole) => role.isSystem || SYSTEM_ROLE_KEYS.includes(role.key.trim().toLowerCase());
 
 const formatCurrentUserRoles = (roles?: string[]) => {
@@ -3755,6 +3755,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <Sparkles size={22} className="mx-auto text-indigo-500" />
               <p className="mt-3 text-sm font-black text-slate-700">输入一个研究问题开始分析</p>
               <p className="mt-1 text-xs text-slate-400">例如：最近 30 天各教学分组活跃人数趋势，或者继续追问“按 HSK 水平拆分”。</p>
+              <div className="mx-auto mt-5 max-w-3xl rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-left">
+                <div className="flex items-start gap-3">
+                  <Sparkles size={17} className="mt-0.5 flex-none text-indigo-600" />
+                  <div>
+                    <p className="text-sm font-black text-slate-800">扫描科研机会会自动寻找可研究 topic</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      系统会读取数据表说明和表之间关系，再对学生画像、实训会话、练习事件、AI 调用日志做聚合扫描，生成候选研究问题、核心变量、推荐方法、样本依据和下一步 SQL。
+                    </p>
+                    <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+                      扫描口径：只统计有效学生样本，默认排除管理员、教师、研究员、测试角色、停用账号和明显测试账号。
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-5">
