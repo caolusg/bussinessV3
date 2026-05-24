@@ -896,6 +896,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchAiHistory, setResearchAiHistory] = useState<ResearchAiHistoryItem[]>([]);
   const [researchAiContext, setResearchAiContext] = useState<ResearchAiContextItem[]>([]);
   const [researchAiTurns, setResearchAiTurns] = useState<ResearchAiConversationTurn[]>([]);
+  const [researchAiPendingQuestion, setResearchAiPendingQuestion] = useState('');
   const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
   const researchAiScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -2217,10 +2218,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <table className="w-full min-w-[960px] table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[150px]" />
-                  <col className="w-[220px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[260px]" />
-                  <col className="w-[120px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[280px]" />
+                  <col className="w-[150px]" />
                   <col className="w-[100px]" />
                 </colgroup>
                 <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
@@ -2995,6 +2996,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     try {
       setResearchAiLoading(true);
       setResearchAiError('');
+      setResearchAiPendingQuestion(question);
       setResearchAiQuestion('');
       const requestContext = sanitizeResearchAiContext(researchAiContext);
       const data = await apiRequest<ResearchAiResult>('/api/research/ai/query', {
@@ -3038,6 +3040,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       setResearchAiError(error instanceof Error ? error.message : 'AI 分析请求失败');
       setResearchAiQuestion((current) => current || question);
     } finally {
+      setResearchAiPendingQuestion('');
       setResearchAiLoading(false);
     }
   };
@@ -3083,7 +3086,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [researchAiTurns.length, researchAiLoading, researchAiError]);
+  }, [researchAiTurns.length, researchAiLoading, researchAiPendingQuestion, researchAiError]);
 
   const handleResearchAiKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
@@ -3602,7 +3605,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
 
         <div ref={researchAiScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6">
-          {researchAiTurns.length === 0 ? (
+          {researchAiTurns.length === 0 && !researchAiLoading ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
               <Sparkles size={22} className="mx-auto text-indigo-500" />
               <p className="mt-3 text-sm font-black text-slate-700">输入一个研究问题开始分析</p>
@@ -3677,6 +3680,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   </div>
                 </div>
               ))}
+              {researchAiPendingQuestion ? (
+                <div className="flex justify-end">
+                  <div className="max-w-[82%] rounded-2xl rounded-tr-md bg-indigo-600 px-4 py-3 text-sm leading-6 text-white shadow-sm">
+                    {researchAiPendingQuestion}
+                  </div>
+                </div>
+              ) : null}
               {researchAiLoading ? (
                 <div className="flex justify-start">
                   <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-500">
