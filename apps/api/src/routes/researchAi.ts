@@ -21,6 +21,21 @@ const schema = z.object({
   })).max(6).optional()
 });
 const chartSuggestionSchema = z.enum(['line', 'bar', 'table']);
+const discoveredTopicSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  researchQuestion: z.string().trim().min(1).max(500),
+  tables: z.array(z.string().trim().min(1)).max(8).default([]),
+  variables: z.array(z.string().trim().min(1)).max(12).default([]),
+  method: z.string().trim().min(1).max(300),
+  feasibilityScore: z.coerce.number().min(0).max(100),
+  sampleEvidence: z.string().trim().min(1).max(500),
+  limitations: z.array(z.string().trim().min(1)).max(5).default([]),
+  nextSql: z.string().trim().min(1).max(2000)
+});
+const topicDiscoverySchema = z.object({
+  overview: z.string().trim().min(1).max(1200),
+  topics: z.array(discoveredTopicSchema).min(1).max(8)
+});
 
 const allowedTables = new Set(getResearchAllowedTables());
 const researchAnswerRulesPrompt = buildResearchAnswerRulesPrompt();
@@ -256,6 +271,255 @@ function evaluateSqlRisk(sql: string) {
     items: risks
   } as const;
 }
+
+type ResearchScan = {
+  key: string;
+  label: string;
+  sql: string;
+  rows: Record<string, unknown>[];
+};
+
+const DISCOVERY_SCANS = [
+  {
+    key: 'table_counts',
+    label: '核心表规模',
+    sql: `
+      SELECT 'users' AS table_name, COUNT(*)::int AS row_count FROM users
+      UNION ALL SELECT 'student_profile', COUNT(*)::int FROM student_profile
+      UNION ALL SELECT 'teaching_groups', COUNT(*)::int FROM teaching_groups
+      UNION ALL SELECT 'teaching_group_members', COUNT(*)::int FROM teaching_group_members
+      UNION ALL SELECT 'simulation_sessions', COUNT(*)::int FROM simulation_sessions
+      UNION ALL SELECT 'simulation_messages', COUNT(*)::int FROM simulation_messages
+      UNION ALL SELECT 'practice_events', COUNT(*)::int FROM practice_events
+      UNION ALL SELECT 'ai_interaction_logs', COUNT(*)::int FROM ai_interaction_logs
+      ORDER BY row_count DESC
+    `
+  },
+  {
+    key: 'student_profile_distribution',
+    label: '学生画像分布',
+    sql: `
+      SELECT 'hsk_level' AS dimension, COALESCE(NULLIF(hsk_level, ''), 'unknown') AS value, COUNT(*)::int AS count
+      FROM student_profile
+      GROUP BY COALESCE(NULLIF(hsk_level, ''), 'unknown')
+      UNION ALL
+      SELECT 'major' AS dimension, COALESCE(NULLIF(major, ''), 'unknown') AS value, COUNT(*)::int AS count
+      FROM student_profile
+      GROUP BY COALESCE(NULLIF(major, ''), 'unknown')
+      UNION ALL
+      SELECT 'class_group' AS dimension, COALESCE(NULLIF(class_group, ''), 'unknown') AS value, COUNT(*)::int AS count
+      FROM student_profile
+      GROUP BY COALESCE(NULLIF(class_group, ''), 'unknown')
+      ORDER BY dimension, count DESC
+      LIMIT 80
+    `
+  },
+  {
+    key: 'teaching_group_distribution',
+    label: '教学分组规模',
+    sql: `
+      SELECT tg.name AS group_name, COUNT(tgm.user_id)::int AS student_count
+      FROM teaching_groups tg
+      LEFT JOIN teaching_group_members tgm ON tgm.group_id = tg.id
+      GROUP BY tg.id, tg.name
+      ORDER BY student_count DESC, tg.name ASC
+      LIMIT 50
+    `
+  },
+  {
+    key: 'session_stage_status',
+    label: '实训会话阶段与状态',
+    sql: `
+      SELECT stage::text AS stage, status, COUNT(*)::int AS session_count
+      FROM simulation_sessions
+      GROUP BY stage, status
+      ORDER BY session_count DESC
+      LIMIT 80
+    `
+  },
+  {
+    key: 'practice_event_distribution',
+    label: '行为事件类型',
+    sql: `
+      SELECT event_type, COUNT(*)::int AS event_count, COUNT(DISTINCT user_id)::int AS user_count
+      FROM practice_events
+      GROUP BY event_type
+      ORDER BY event_count DESC
+      LIMIT 80
+    `
+  },
+  {
+    key: 'ai_usage_distribution',
+    label: 'AI 调用类型',
+    sql: `
+      SELECT COALESCE(NULLIF(prompt_version, ''), 'unknown') AS prompt_version,
+             degraded,
+             COUNT(*)::int AS call_count,
+             COUNT(DISTINCT user_id)::int AS user_count,
+             ROUND(AVG(latency_ms))::int AS avg_latency_ms
+      FROM ai_interaction_logs
+      GROUP BY COALESCE(NULLIF(prompt_version, ''), 'unknown'), degraded
+      ORDER BY call_count DESC
+      LIMIT 80
+    `
+  },
+  {
+    key: 'recent_activity_trend',
+    label: '近 30 天活跃趋势',
+    sql: `
+      SELECT day, metric, count::int
+      FROM (
+        SELECT DATE_TRUNC('day', created_at)::date AS day, 'practice_events' AS metric, COUNT(*) AS count
+        FROM practice_events
+        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY DATE_TRUNC('day', created_at)::date
+        UNION ALL
+        SELECT DATE_TRUNC('day', created_at)::date AS day, 'ai_calls' AS metric, COUNT(*) AS count
+        FROM ai_interaction_logs
+        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY DATE_TRUNC('day', created_at)::date
+        UNION ALL
+        SELECT DATE_TRUNC('day', created_at)::date AS day, 'sessions' AS metric, COUNT(*) AS count
+        FROM simulation_sessions
+        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY DATE_TRUNC('day', created_at)::date
+      ) trend
+      ORDER BY day DESC, metric ASC
+      LIMIT 120
+    `
+  }
+] as const;
+
+async function runDiscoveryScans() {
+  const scans: ResearchScan[] = [];
+  for (const scan of DISCOVERY_SCANS) {
+    try {
+      const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(scan.sql);
+      scans.push({
+        key: scan.key,
+        label: scan.label,
+        sql: scan.sql.replace(/\s+/g, ' ').trim(),
+        rows: toJsonSafeRows(rows)
+      });
+    } catch (error) {
+      scans.push({
+        key: scan.key,
+        label: scan.label,
+        sql: scan.sql.replace(/\s+/g, ' ').trim(),
+        rows: [{ error: getErrorMessage(error) }]
+      });
+    }
+  }
+  return scans;
+}
+
+function normalizeTopicSql(sql: string) {
+  const normalized = normalizeGeneratedSql(sql);
+  const lowered = normalized.replace(/\s+/g, ' ').trim().toLowerCase();
+  const banned = ['insert', 'update', 'delete', 'drop', 'alter', 'truncate', 'create', 'grant', 'revoke', 'copy'];
+  if (!lowered.startsWith('select') || lowered.includes(';') || banned.some((keyword) => new RegExp(`\\b${keyword}\\b`, 'i').test(lowered))) {
+    return 'SELECT event_type, COUNT(*) AS event_count FROM practice_events GROUP BY event_type ORDER BY event_count DESC LIMIT 200';
+  }
+  return /\blimit\s+\d+\b/i.test(normalized) ? normalized : `${normalized} LIMIT 200`;
+}
+
+function buildFallbackTopics(scans: ResearchScan[]) {
+  const eventScan = scans.find((scan) => scan.key === 'practice_event_distribution');
+  const aiScan = scans.find((scan) => scan.key === 'ai_usage_distribution');
+  return [
+    {
+      title: '学生 AI 教练求助行为与学习活动的关系',
+      researchQuestion: '学生显式向 AI 教练求助的频率，是否与后续练习事件数量或会话参与度相关？',
+      tables: ['ai_interaction_logs', 'practice_events', 'simulation_sessions', 'student_profile'],
+      variables: ['prompt_version', 'event_type', 'session_id', 'created_at', 'hsk_level'],
+      method: '按学生和时间窗口聚合 AI 求助次数、练习事件数和会话数，进行分组比较或相关分析。',
+      feasibilityScore: aiScan?.rows.length ? 78 : 55,
+      sampleEvidence: `扫描到 ${aiScan?.rows.length ?? 0} 类 AI 调用分布记录，${eventScan?.rows.length ?? 0} 类行为事件分布记录。`,
+      limitations: ['第一版扫描只看聚合分布，不能直接证明因果关系。', '需要进一步区分 AI 教练和角色扮演 AI 响应。'],
+      nextSql: 'SELECT prompt_version, COUNT(*) AS call_count, COUNT(DISTINCT user_id) AS user_count FROM ai_interaction_logs GROUP BY prompt_version ORDER BY call_count DESC LIMIT 200'
+    },
+    {
+      title: '不同学生画像群体的实训参与差异',
+      researchQuestion: '不同 HSK 水平、专业或班级的学生，在实训会话和行为事件参与度上是否存在差异？',
+      tables: ['student_profile', 'simulation_sessions', 'practice_events'],
+      variables: ['hsk_level', 'major', 'class_group', 'stage', 'event_type'],
+      method: '连接学生画像与会话/行为事件，按画像维度比较会话数、事件数和最近活跃时间。',
+      feasibilityScore: 74,
+      sampleEvidence: '学生画像、实训会话和行为事件均已纳入扫描，可以构造画像维度的参与度指标。',
+      limitations: ['画像字段可能存在空值或填写不一致。', '样本量较小的分组需要合并或谨慎解释。'],
+      nextSql: 'SELECT COALESCE(NULLIF(sp.hsk_level, \'\'), \'unknown\') AS hsk_level, COUNT(DISTINCT ss.id) AS session_count, COUNT(DISTINCT pe.id) AS event_count FROM student_profile sp LEFT JOIN simulation_sessions ss ON ss.user_id = sp.user_id LEFT JOIN practice_events pe ON pe.user_id = sp.user_id GROUP BY COALESCE(NULLIF(sp.hsk_level, \'\'), \'unknown\') ORDER BY session_count DESC LIMIT 200'
+    }
+  ];
+}
+
+router.post('/discover-topics', requireAuth, async (req, res) => {
+  try {
+    const allow = await userHasPanelPermission(req.user?.id, 'research_ai');
+    if (!allow) {
+      return res.status(403).json({ ok: false, error: 'No permission to use research analysis' });
+    }
+
+    const startedAt = Date.now();
+    const [researchDataDictionaryPrompt, scans] = await Promise.all([
+      loadResearchDataDictionaryPrompt(),
+      runDiscoveryScans()
+    ]);
+
+    const completion = await generateCoachingReply({
+      stage: 'quotation',
+      question: [
+        'You are an educational data research assistant for a teacher dashboard.',
+        'Use the database semantics and scan results to propose practical research topics.',
+        'Return JSON only with this shape:',
+        '{"overview":"...","topics":[{"title":"...","researchQuestion":"...","tables":["..."],"variables":["..."],"method":"...","feasibilityScore":0-100,"sampleEvidence":"...","limitations":["..."],"nextSql":"SELECT ... LIMIT 200"}]}',
+        'Write Chinese text in all user-facing fields.',
+        'Do not invent tables or columns outside the provided semantics.',
+        'Do not include sensitive fields such as password_hash, email, student_no, token_hash, or raw user_id in nextSql.',
+        'Every nextSql must be one read-only PostgreSQL SELECT statement and include LIMIT 200.',
+        'Prefer topics with measurable variables and enough observed data.',
+        'Database semantics:',
+        researchDataDictionaryPrompt,
+        `Scan results JSON: ${JSON.stringify(scans).slice(0, 20000)}`
+      ].join('\n\n'),
+      messages: []
+    });
+
+    let parsed = {
+      overview: '已基于数据表语义和聚合扫描生成第一批科研机会。建议先选择样本量较充足、变量定义清晰的 topic 继续验证。',
+      topics: buildFallbackTopics(scans)
+    };
+
+    if (!completion.degraded) {
+      try {
+        const payload = JSON.parse(extractJsonObject(completion.content)) as unknown;
+        const result = topicDiscoverySchema.safeParse(payload);
+        if (result.success) parsed = result.data;
+      } catch {
+        parsed = {
+          overview: 'AI 返回格式不完整，系统已使用内置规则生成可研究 topic。',
+          topics: buildFallbackTopics(scans)
+        };
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        overview: parsed.overview,
+        topics: parsed.topics.map((topic) => ({
+          ...topic,
+          nextSql: normalizeTopicSql(topic.nextSql)
+        })),
+        scans,
+        durationMs: Date.now() - startedAt,
+        modelDegraded: completion.degraded
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Topic discovery failed';
+    return res.status(400).json({ ok: false, error: message });
+  }
+});
 
 router.post('/query', requireAuth, async (req, res) => {
   try {

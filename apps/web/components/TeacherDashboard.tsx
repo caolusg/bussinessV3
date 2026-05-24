@@ -334,6 +334,31 @@ type ResearchAiResult = {
   modelDegraded?: boolean;
 };
 
+type ResearchTopic = {
+  title: string;
+  researchQuestion: string;
+  tables: string[];
+  variables: string[];
+  method: string;
+  feasibilityScore: number;
+  sampleEvidence: string;
+  limitations: string[];
+  nextSql: string;
+};
+
+type ResearchTopicDiscovery = {
+  overview: string;
+  topics: ResearchTopic[];
+  scans: Array<{
+    key: string;
+    label: string;
+    sql: string;
+    rows: Record<string, unknown>[];
+  }>;
+  durationMs: number;
+  modelDegraded?: boolean;
+};
+
 type ResearchAiHistoryItem = {
   ts: string;
   question: string;
@@ -898,6 +923,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchAiTurns, setResearchAiTurns] = useState<ResearchAiConversationTurn[]>([]);
   const [researchAiPendingQuestion, setResearchAiPendingQuestion] = useState('');
   const [researchAiFeedback, setResearchAiFeedback] = useState<Record<string, 'up' | 'down'>>({});
+  const [topicDiscovery, setTopicDiscovery] = useState<ResearchTopicDiscovery | null>(null);
+  const [topicDiscoveryLoading, setTopicDiscoveryLoading] = useState(false);
+  const [topicDiscoveryError, setTopicDiscoveryError] = useState('');
   const researchAiScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [legacyScenarios] = useState([
@@ -2285,13 +2313,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           </div>
                         </td>
                         <td className="px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
-                        <td className="px-3 py-4">
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="min-w-[180px] px-3 py-4">
+                          <div className="flex flex-nowrap items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => resetManagedUserPassword(item)}
                               disabled={savingUserId === item.id}
-                              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              className="inline-flex h-10 w-20 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                               title="重置密码"
                             >
                               重置
@@ -2300,7 +2328,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                               type="button"
                               onClick={() => saveManagedUser(item)}
                               disabled={savingUserId === item.id}
-                              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white disabled:opacity-60"
+                              className="inline-flex h-10 w-20 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white disabled:opacity-60"
                             >
                               {savingUserId === item.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                               保存
@@ -3038,6 +3066,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const discoverResearchTopics = async () => {
+    try {
+      setTopicDiscoveryLoading(true);
+      setTopicDiscoveryError('');
+      const data = await apiRequest<ResearchTopicDiscovery>('/api/research/ai/discover-topics', {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      setTopicDiscovery(data);
+    } catch (error) {
+      setTopicDiscoveryError(error instanceof Error ? error.message : '科研 topic 扫描失败');
+    } finally {
+      setTopicDiscoveryLoading(false);
+    }
+  };
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem('research_ai_history');
@@ -3547,6 +3591,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 <RefreshCw size={13} className={isLoadingResearch ? 'animate-spin' : ''} />
                 刷新
               </button>
+              <button
+                onClick={() => void discoverResearchTopics()}
+                disabled={topicDiscoveryLoading || researchAiLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {topicDiscoveryLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                扫描科研机会
+              </button>
               {researchAiTurns.length > 0 ? (
                 <button
                   onClick={() => {
@@ -3598,7 +3650,86 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         </div>
 
         <div ref={researchAiScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6">
-          {researchAiTurns.length === 0 && !researchAiLoading ? (
+          {topicDiscoveryError ? (
+            <div className="mb-5 flex items-start gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-bold leading-5 text-rose-600">
+              <AlertCircle size={15} className="mt-0.5 flex-none" />
+              <span>{topicDiscoveryError}</span>
+            </div>
+          ) : null}
+          {topicDiscovery ? (
+            <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Topic Discovery</p>
+                  <h5 className="mt-1 text-lg font-black text-slate-900">自动科研机会扫描</h5>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{topicDiscovery.overview}</p>
+                </div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                  {topicDiscovery.topics.length} 个 topic · {topicDiscovery.durationMs} ms
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                {topicDiscovery.topics.map((topic, index) => (
+                  <article key={`${topic.title}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Topic {index + 1}</p>
+                        <h6 className="mt-1 text-sm font-black leading-6 text-slate-900">{topic.title}</h6>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white">
+                        {topic.feasibilityScore}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs font-bold leading-5 text-slate-700">{topic.researchQuestion}</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {topic.tables.slice(0, 6).map((table) => (
+                        <span key={table} className="rounded-full bg-white px-2 py-1 font-mono text-[10px] font-bold text-indigo-600">
+                          {table}
+                        </span>
+                      ))}
+                    </div>
+                    <dl className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+                      <div>
+                        <dt className="font-black text-slate-500">核心变量</dt>
+                        <dd>{topic.variables.join(' / ') || '-'}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-slate-500">推荐方法</dt>
+                        <dd>{topic.method}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-slate-500">样本依据</dt>
+                        <dd>{topic.sampleEvidence}</dd>
+                      </div>
+                      {topic.limitations.length ? (
+                        <div>
+                          <dt className="font-black text-slate-500">局限</dt>
+                          <dd>{topic.limitations.join('；')}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <summary className="cursor-pointer text-xs font-black text-slate-500">下一步 SQL</summary>
+                      <pre className="mt-2 max-h-36 overflow-auto rounded-xl bg-slate-900 p-3 text-xs leading-5 text-slate-100">{topic.nextSql}</pre>
+                    </details>
+                    <button
+                      onClick={() => {
+                        const prompt = `继续分析这个科研 topic：${topic.title}。研究问题：${topic.researchQuestion}`;
+                        setResearchAiQuestion(prompt);
+                        void runResearchAiQuery(prompt);
+                      }}
+                      disabled={researchAiLoading}
+                      className="mt-3 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      继续分析这个 topic
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {researchAiTurns.length === 0 && !researchAiLoading && !topicDiscovery ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
               <Sparkles size={22} className="mx-auto text-indigo-500" />
               <p className="mt-3 text-sm font-black text-slate-700">输入一个研究问题开始分析</p>
