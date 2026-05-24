@@ -278,7 +278,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
 
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Star size={12} /> HSK 水平
+            <Star size={12} /> HSK 等级
           </label>
           <select
             value={profile.hskLevel || ''}

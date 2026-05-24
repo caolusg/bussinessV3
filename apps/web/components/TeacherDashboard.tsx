@@ -1775,9 +1775,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const filteredUsers = normalizedUserSearch
       ? users.filter((item) => getManagedUserSearchText(item).includes(normalizedUserSearch))
       : users;
-    const hskProfileOptions = profileOptions.filter((option) => option.category === 'hsk_level');
-    const majorProfileOptions = profileOptions.filter((option) => option.category === 'major');
-    const managedGroups = userManager?.groups ?? [];
+    const hskProfileOptions = profileOptions.filter((option) => option.category === 'hsk_level' && option.isActive);
+    const majorProfileOptions = profileOptions.filter((option) => option.category === 'major' && option.isActive);
+    const managedGroups = (userManager?.groups ?? []).filter((group) => group.isActive);
 
     return (
       <div className="space-y-6">
@@ -1980,73 +1980,77 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             <GraduationCap className="text-indigo-500" size={22} />
           </div>
 
-          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-            <div className="grid gap-3 md:grid-cols-[140px_minmax(0,1fr)_120px_140px_auto]">
-              <select
-                value={profileOptionForm.category}
-                onChange={(e) => setProfileOptionForm((current) => ({ ...current, category: e.target.value as ProfileOptionForm['category'] }))}
-                disabled={Boolean(profileOptionForm.id)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:bg-slate-100 disabled:text-slate-500"
-              >
-                <option value="hsk_level">HSK 等级</option>
-                <option value="major">专业方向</option>
-              </select>
-              <input
-                value={profileOptionForm.label}
-                onChange={(e) => {
-                  const label = e.target.value;
-                  setProfileOptionForm((current) => ({
-                    ...current,
-                    label,
-                    value: current.id ? current.value : label
-                  }));
-                }}
-                placeholder={profileOptionForm.category === 'major' ? '专业方向名称，如 商务汉语' : 'HSK 等级名称，如 HSK 6'}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              />
-              <input
-                type="number"
-                value={profileOptionForm.sortOrder}
-                onChange={(e) => setProfileOptionForm((current) => ({ ...current, sortOrder: Number(e.target.value) }))}
-                placeholder="排序"
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              />
-              <select
-                value={profileOptionForm.isActive ? 'true' : 'false'}
-                onChange={(e) => setProfileOptionForm((current) => ({ ...current, isActive: e.target.value === 'true' }))}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              >
-                <option value="true">启用</option>
-                <option value="false">停用</option>
-              </select>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProfileOptionForm(emptyProfileOptionForm)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
-                >
-                  清空
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void saveProfileOption()}
-                  disabled={savingProfileOption}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
-                >
-                  {savingProfileOption ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
-                  {profileOptionForm.id ? '保存' : '新增'}
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div className="mt-5 grid gap-4 xl:grid-cols-3">
             {[
               ['HSK 等级', hskProfileOptions],
               ['专业方向', majorProfileOptions]
-            ].map(([title, options]) => (
+            ].map(([title, options]) => {
+              const category = title === 'HSK 等级' ? 'hsk_level' : 'major';
+              const isActiveForm = profileOptionForm.category === category;
+              return (
               <div key={String(title)} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <h4 className="text-sm font-black text-slate-900">{String(title)}</h4>
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-black text-slate-900">{String(title)}</h4>
+                  <button
+                    type="button"
+                    onClick={() => setProfileOptionForm({ ...emptyProfileOptionForm, category })}
+                    className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-600 hover:bg-indigo-50"
+                  >
+                    + 新增
+                  </button>
+                </div>
+                {isActiveForm && (
+                  <div className="mt-3 rounded-2xl border border-indigo-100 bg-white p-3">
+                    <div className="grid gap-2">
+                      <input
+                        value={profileOptionForm.label}
+                        onChange={(e) => {
+                          const label = e.target.value;
+                          setProfileOptionForm((current) => ({
+                            ...current,
+                            label,
+                            value: current.id ? current.value : label
+                          }));
+                        }}
+                        placeholder={category === 'major' ? '专业方向名称，如 商务汉语' : 'HSK 等级名称，如 HSK 6'}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                      />
+                      <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                        <input
+                          type="number"
+                          value={profileOptionForm.sortOrder}
+                          onChange={(e) => setProfileOptionForm((current) => ({ ...current, sortOrder: Number(e.target.value) }))}
+                          placeholder="排序"
+                          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                        />
+                        <select
+                          value={profileOptionForm.isActive ? 'true' : 'false'}
+                          onChange={(e) => setProfileOptionForm((current) => ({ ...current, isActive: e.target.value === 'true' }))}
+                          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                        >
+                          <option value="true">启用</option>
+                          <option value="false">停用</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => void saveProfileOption()}
+                          disabled={savingProfileOption}
+                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                        >
+                          {savingProfileOption ? <Loader2 className="animate-spin" size={13} /> : <Save size={13} />}
+                          {profileOptionForm.id ? '保存' : '新增'}
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProfileOptionForm(emptyProfileOptionForm)}
+                        className="text-left text-xs font-bold text-slate-400 hover:text-slate-700"
+                      >
+                        取消编辑
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 space-y-2">
                   {(options as ProfileOption[]).map((option) => (
                     <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3">
@@ -2086,7 +2090,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <h4 className="text-sm font-black text-slate-900">班级/组</h4>
