@@ -2953,7 +2953,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5">
             {AI_QUERY_TEMPLATES.map((tpl) => (
               <button
                 key={tpl}
@@ -2962,7 +2962,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   void runResearchAiQuery(tpl);
                 }}
                 disabled={researchAiLoading}
-                className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold leading-4 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold leading-3 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
               >
                 {tpl}
               </button>
