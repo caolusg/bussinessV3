@@ -2069,8 +2069,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   <th className="px-5 py-3 text-left">事件</th>
                   <th className="px-5 py-3 text-left">用户</th>
                   <th className="px-5 py-3 text-left">页面</th>
-                  <th className="px-5 py-3 text-left">标签</th>
-                  <th className="px-5 py-3 text-left">目标</th>
                   <th className="px-5 py-3 text-left">阶段</th>
                   <th className="px-5 py-3 text-left">会话</th>
                   <th className="px-5 py-3 text-left">附加信息</th>
@@ -2096,8 +2094,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         ) : null}
                       </td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.page) || '-'}</td>
-                      <td className="px-5 py-4 text-xs">{formatValue(metadata.label) || '-'}</td>
-                      <td className="px-5 py-4 text-xs">{formatValue(metadata.target) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.stage) || '-'}</td>
                       <td className="px-5 py-4 text-xs font-mono">{formatValue(row.sessionId) || '-'}</td>
                       <td className="px-5 py-4 max-w-md text-xs text-slate-500">
