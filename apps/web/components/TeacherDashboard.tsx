@@ -3334,7 +3334,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">行为事件</p>
                       <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
                         {researchStudentActivity.practiceEvents.map((event) => {
-                          const meta = getPracticeEventMeta(event.eventType);
+                          const meta = getPracticeEventMeta(event);
                           return (
                             <div key={formatValue(event.id)} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
                               <p className="font-black text-slate-800">{meta.label}</p>
@@ -3426,7 +3426,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5">
+          <div className="mt-2 flex flex-wrap gap-1">
             {AI_QUERY_TEMPLATES.map((tpl) => (
               <button
                 key={tpl}
@@ -3435,7 +3435,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   void runResearchAiQuery(tpl);
                 }}
                 disabled={researchAiLoading}
-                className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold leading-3 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="max-w-full rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold leading-3 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
               >
                 {tpl}
               </button>
