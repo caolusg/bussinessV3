@@ -1851,17 +1851,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-3">
-              {availableRoles.map((role) => (
-                <label key={role.key} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={newUserForm.roleKeys.includes(role.key)}
-                    onChange={(e) => setNewUserRole(role.key, e.target.checked)}
-                  />
-                  {role.name}
-                </label>
-              ))}
+            <div className="grid w-full max-w-[520px] grid-cols-2 gap-2 md:grid-cols-4">
+              {availableRoles.map((role) => {
+                const checked = newUserForm.roleKeys.includes(role.key);
+                return (
+                  <label
+                    key={role.key}
+                    className={`flex h-10 min-w-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
+                      checked
+                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                    title={role.name}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => setNewUserRole(role.key, e.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-indigo-600"
+                    />
+                    <span className="truncate">{role.name}</span>
+                  </label>
+                );
+              })}
             </div>
             <button
               type="button"
@@ -1915,7 +1927,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 type="button"
                 onClick={createManagedRole}
                 disabled={savingRoleId === 'new'}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white disabled:opacity-60"
               >
                 {savingRoleId === 'new' ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
                 新增角色
@@ -1926,46 +1938,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <div className="mt-4 space-y-3">
             {availableRoles.map((role) => (
               <div key={role.id} className="rounded-2xl border border-slate-100 p-4">
-                <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_auto]">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-24 shrink-0 rounded-full bg-slate-100 px-3 py-1 text-center text-xs font-black text-slate-500">{role.key}</span>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-[260px] max-w-md flex-1 items-center gap-3">
+                    <span className="w-24 shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-center text-xs font-black text-slate-500">{role.key}</span>
                     <input
                       value={role.name}
                       onChange={(e) => updateManagedRoleDraft(role.id, { name: e.target.value })}
-                      className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-5">
-                    {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => {
-                      const checked = role.key === 'admin' || role.permissions.includes(panel.key);
-                      return (
-                        <label
-                          key={panel.key}
-                          className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition ${
-                            checked
-                              ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                              : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-                          } ${role.key === 'admin' ? 'opacity-70' : ''}`}
-                          title={role.key === 'admin' ? '系统管理员固定拥有全部权限' : panel.label}
-                        >
-                          <input
-                            type="checkbox"
-                            disabled={role.key === 'admin'}
-                            checked={checked}
-                            onChange={(e) => toggleManagedRolePermission(role, panel.key, e.target.checked)}
-                            className="h-4 w-4 shrink-0 accent-indigo-600"
-                          />
-                          <span className="truncate">{panel.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
                       onClick={() => saveManagedRole(role)}
                       disabled={savingRoleId === role.id}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                      className="inline-flex h-10 w-20 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white disabled:opacity-60"
                     >
                       {savingRoleId === role.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                       保存
@@ -1975,12 +1962,37 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         type="button"
                         onClick={() => deleteManagedRole(role)}
                         disabled={savingRoleId === role.id}
-                        className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        className="h-10 w-16 rounded-xl border border-red-200 px-3 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
                         删除
                       </button>
                     )}
                   </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => {
+                    const checked = role.key === 'admin' || role.permissions.includes(panel.key);
+                    return (
+                      <label
+                        key={panel.key}
+                        className={`flex h-10 min-w-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
+                          checked
+                            ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                        } ${role.key === 'admin' ? 'opacity-70' : ''}`}
+                        title={role.key === 'admin' ? '系统管理员固定拥有全部权限' : panel.label}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={role.key === 'admin'}
+                          checked={checked}
+                          onChange={(e) => toggleManagedRolePermission(role, panel.key, e.target.checked)}
+                          className="h-4 w-4 shrink-0 accent-indigo-600"
+                        />
+                        <span className="truncate">{panel.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -2202,23 +2214,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[960px] table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[220px]" />
-                  <col className="w-[270px]" />
-                  <col className="w-[140px]" />
-                  <col className="w-[360px]" />
                   <col className="w-[150px]" />
-                  <col className="w-[140px]" />
+                  <col className="w-[220px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[260px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[100px]" />
                 </colgroup>
                 <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
                   <tr>
-                    <th className="px-5 py-4">用户</th>
-                    <th className="px-5 py-4">邮箱</th>
-                    <th className="px-5 py-4">状态</th>
-                    <th className="px-5 py-4">角色</th>
-                    <th className="px-5 py-4">创建时间</th>
-                    <th className="px-5 py-4 text-right">操作</th>
+                    <th className="px-3 py-4">用户</th>
+                    <th className="px-3 py-4">邮箱</th>
+                    <th className="px-3 py-4">状态</th>
+                    <th className="px-3 py-4">角色</th>
+                    <th className="px-3 py-4">创建时间</th>
+                    <th className="px-3 py-4 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2226,7 +2238,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     const isSelf = item.id === userManager?.currentUserId;
                     return (
                       <tr key={item.id} className="align-top">
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <input
                             value={item.username}
                             onChange={(e) => updateManagedUserDraft(item.id, { username: e.target.value })}
@@ -2234,14 +2246,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           />
                           {isSelf && <p className="mt-1 text-xs font-bold text-indigo-600">当前账号</p>}
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <input
                             value={item.email ?? ''}
                             onChange={(e) => updateManagedUserDraft(item.id, { email: e.target.value })}
                             className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-400"
                           />
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <select
                             value={item.status}
                             onChange={(e) => updateManagedUserDraft(item.id, { status: e.target.value as ManagedUser['status'] })}
@@ -2252,7 +2264,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             ))}
                           </select>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <div className="grid grid-cols-2 gap-2">
                             {availableRoles.map((role) => {
                               const checked = item.roles.includes(role.key);
@@ -2278,16 +2290,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             })}
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="px-3 py-4">
                           <div className="flex flex-col items-stretch gap-2">
                             <button
                               type="button"
                               onClick={() => resetManagedUserPassword(item)}
                               disabled={savingUserId === item.id}
                               className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              title="重置密码"
                             >
-                              重置密码
+                              重置
                             </button>
                             <button
                               type="button"
