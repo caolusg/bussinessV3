@@ -1999,13 +1999,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     )}
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-4 xl:grid-cols-8">
                   {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => {
                     const checked = role.key === 'admin' || role.permissions.includes(panel.key);
                     return (
                       <label
                         key={panel.key}
-                        className={`flex h-10 min-w-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
+                        className={`flex h-9 min-w-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-bold transition ${
                           checked
                             ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                             : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
@@ -2017,7 +2017,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           disabled={role.key === 'admin'}
                           checked={checked}
                           onChange={(e) => toggleManagedRolePermission(role, panel.key, e.target.checked)}
-                          className="h-4 w-4 shrink-0 accent-indigo-600"
+                          className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
                         />
                         <span className="truncate">{panel.label}</span>
                       </label>
