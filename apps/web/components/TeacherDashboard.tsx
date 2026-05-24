@@ -1999,13 +1999,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     )}
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-4 xl:grid-cols-8">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => {
                     const checked = role.key === 'admin' || role.permissions.includes(panel.key);
                     return (
                       <label
                         key={panel.key}
-                        className={`flex h-9 min-w-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-bold transition ${
+                        className={`flex h-9 w-[132px] min-w-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-bold transition ${
                           checked
                             ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                             : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
