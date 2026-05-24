@@ -282,16 +282,32 @@ type ResearchScan = {
 const DISCOVERY_SCANS = [
   {
     key: 'table_counts',
-    label: '核心表规模',
+    label: '有效学生样本规模',
     sql: `
-      SELECT 'users' AS table_name, COUNT(*)::int AS row_count FROM users
-      UNION ALL SELECT 'student_profile', COUNT(*)::int FROM student_profile
+      WITH eligible_students AS (
+        SELECT DISTINCT u.id
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE r.key = 'student'
+          AND u.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_roles ur2
+            INNER JOIN roles r2 ON r2.id = ur2.role_id
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+          )
+          AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+          AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
+      SELECT 'eligible_students' AS table_name, COUNT(*)::int AS row_count FROM eligible_students
+      UNION ALL SELECT 'student_profile', COUNT(*)::int FROM student_profile sp WHERE sp.user_id IN (SELECT id FROM eligible_students)
       UNION ALL SELECT 'teaching_groups', COUNT(*)::int FROM teaching_groups
-      UNION ALL SELECT 'teaching_group_members', COUNT(*)::int FROM teaching_group_members
-      UNION ALL SELECT 'simulation_sessions', COUNT(*)::int FROM simulation_sessions
-      UNION ALL SELECT 'simulation_messages', COUNT(*)::int FROM simulation_messages
-      UNION ALL SELECT 'practice_events', COUNT(*)::int FROM practice_events
-      UNION ALL SELECT 'ai_interaction_logs', COUNT(*)::int FROM ai_interaction_logs
+      UNION ALL SELECT 'teaching_group_members', COUNT(*)::int FROM teaching_group_members tgm WHERE tgm.user_id IN (SELECT id FROM eligible_students)
+      UNION ALL SELECT 'simulation_sessions', COUNT(*)::int FROM simulation_sessions ss WHERE ss.user_id IN (SELECT id FROM eligible_students)
+      UNION ALL SELECT 'simulation_messages', COUNT(*)::int FROM simulation_messages sm INNER JOIN simulation_sessions ss ON ss.id = sm.session_id WHERE ss.user_id IN (SELECT id FROM eligible_students)
+      UNION ALL SELECT 'practice_events', COUNT(*)::int FROM practice_events pe WHERE pe.user_id IN (SELECT id FROM eligible_students)
+      UNION ALL SELECT 'ai_interaction_logs', COUNT(*)::int FROM ai_interaction_logs ail WHERE ail.user_id IN (SELECT id FROM eligible_students)
       ORDER BY row_count DESC
     `
   },
@@ -299,16 +315,33 @@ const DISCOVERY_SCANS = [
     key: 'student_profile_distribution',
     label: '学生画像分布',
     sql: `
+      WITH eligible_students AS (
+        SELECT DISTINCT u.id
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE r.key = 'student'
+          AND u.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+          )
+          AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+          AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
       SELECT 'hsk_level' AS dimension, COALESCE(NULLIF(hsk_level, ''), 'unknown') AS value, COUNT(*)::int AS count
       FROM student_profile
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY COALESCE(NULLIF(hsk_level, ''), 'unknown')
       UNION ALL
       SELECT 'major' AS dimension, COALESCE(NULLIF(major, ''), 'unknown') AS value, COUNT(*)::int AS count
       FROM student_profile
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY COALESCE(NULLIF(major, ''), 'unknown')
       UNION ALL
       SELECT 'class_group' AS dimension, COALESCE(NULLIF(class_group, ''), 'unknown') AS value, COUNT(*)::int AS count
       FROM student_profile
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY COALESCE(NULLIF(class_group, ''), 'unknown')
       ORDER BY dimension, count DESC
       LIMIT 80
@@ -321,6 +354,12 @@ const DISCOVERY_SCANS = [
       SELECT tg.name AS group_name, COUNT(tgm.user_id)::int AS student_count
       FROM teaching_groups tg
       LEFT JOIN teaching_group_members tgm ON tgm.group_id = tg.id
+      LEFT JOIN users u ON u.id = tgm.user_id
+      WHERE tgm.user_id IS NULL OR (
+        u.status = 'ACTIVE'
+        AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+        AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
       GROUP BY tg.id, tg.name
       ORDER BY student_count DESC, tg.name ASC
       LIMIT 50
@@ -330,8 +369,23 @@ const DISCOVERY_SCANS = [
     key: 'session_stage_status',
     label: '实训会话阶段与状态',
     sql: `
+      WITH eligible_students AS (
+        SELECT DISTINCT u.id
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE r.key = 'student'
+          AND u.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+          )
+          AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+          AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
       SELECT stage::text AS stage, status, COUNT(*)::int AS session_count
       FROM simulation_sessions
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY stage, status
       ORDER BY session_count DESC
       LIMIT 80
@@ -341,8 +395,23 @@ const DISCOVERY_SCANS = [
     key: 'practice_event_distribution',
     label: '行为事件类型',
     sql: `
+      WITH eligible_students AS (
+        SELECT DISTINCT u.id
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE r.key = 'student'
+          AND u.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+          )
+          AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+          AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
       SELECT event_type, COUNT(*)::int AS event_count, COUNT(DISTINCT user_id)::int AS user_count
       FROM practice_events
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY event_type
       ORDER BY event_count DESC
       LIMIT 80
@@ -352,12 +421,27 @@ const DISCOVERY_SCANS = [
     key: 'ai_usage_distribution',
     label: 'AI 调用类型',
     sql: `
+      WITH eligible_students AS (
+        SELECT DISTINCT u.id
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE r.key = 'student'
+          AND u.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+          )
+          AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+          AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+      )
       SELECT COALESCE(NULLIF(prompt_version, ''), 'unknown') AS prompt_version,
              degraded,
              COUNT(*)::int AS call_count,
              COUNT(DISTINCT user_id)::int AS user_count,
              ROUND(AVG(latency_ms))::int AS avg_latency_ms
       FROM ai_interaction_logs
+      WHERE user_id IN (SELECT id FROM eligible_students)
       GROUP BY COALESCE(NULLIF(prompt_version, ''), 'unknown'), degraded
       ORDER BY call_count DESC
       LIMIT 80
@@ -369,19 +453,36 @@ const DISCOVERY_SCANS = [
     sql: `
       SELECT day, metric, count::int
       FROM (
+        WITH eligible_students AS (
+          SELECT DISTINCT u.id
+          FROM users u
+          INNER JOIN user_roles ur ON ur.user_id = u.id
+          INNER JOIN roles r ON r.id = ur.role_id
+          WHERE r.key = 'student'
+            AND u.status = 'ACTIVE'
+            AND NOT EXISTS (
+              SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
+              WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            )
+            AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
+            AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
+        )
         SELECT DATE_TRUNC('day', created_at)::date AS day, 'practice_events' AS metric, COUNT(*) AS count
         FROM practice_events
         WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+          AND user_id IN (SELECT id FROM eligible_students)
         GROUP BY DATE_TRUNC('day', created_at)::date
         UNION ALL
         SELECT DATE_TRUNC('day', created_at)::date AS day, 'ai_calls' AS metric, COUNT(*) AS count
         FROM ai_interaction_logs
         WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+          AND user_id IN (SELECT id FROM eligible_students)
         GROUP BY DATE_TRUNC('day', created_at)::date
         UNION ALL
         SELECT DATE_TRUNC('day', created_at)::date AS day, 'sessions' AS metric, COUNT(*) AS count
         FROM simulation_sessions
         WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+          AND user_id IN (SELECT id FROM eligible_students)
         GROUP BY DATE_TRUNC('day', created_at)::date
       ) trend
       ORDER BY day DESC, metric ASC

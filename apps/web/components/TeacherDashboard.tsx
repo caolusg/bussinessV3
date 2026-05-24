@@ -2235,14 +2235,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[130px]" />
-                  <col className="w-[170px]" />
-                  <col className="w-[90px]" />
-                  <col className="w-[400px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[240px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[500px]" />
                   <col className="w-[150px]" />
-                  <col className="w-[80px]" />
+                  <col className="w-[190px]" />
                 </colgroup>
                 <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
                   <tr>
@@ -2286,13 +2286,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           </select>
                         </td>
                         <td className="px-3 py-4">
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="flex flex-wrap gap-2">
                             {availableRoles.map((role) => {
                               const checked = getSelectedManagedRoleKey(item.roles) === role.key;
                               return (
                                 <label
                                   key={role.key}
-                                  className={`flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
+                                  className={`flex h-9 w-[116px] items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
                                     checked
                                       ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                                       : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
@@ -3594,6 +3594,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <button
                 onClick={() => void discoverResearchTopics()}
                 disabled={topicDiscoveryLoading || researchAiLoading}
+                title="基于数据表语义和聚合统计扫描，默认排除管理员、教师、停用账号和明显测试账号。通常需要 10-20 秒。"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50"
               >
                 {topicDiscoveryLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
@@ -3656,6 +3657,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <span>{topicDiscoveryError}</span>
             </div>
           ) : null}
+          {topicDiscoveryLoading ? (
+            <div className="mb-5 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <Loader2 size={18} className="mt-0.5 animate-spin text-indigo-600" />
+                <div>
+                  <p className="text-sm font-black text-slate-900">正在扫描科研机会</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    系统会先读取数据表说明，再执行聚合统计扫描。扫描默认排除管理员、教师、停用账号，以及用户名或邮箱中包含 test、demo、admin、teacher、测试等标记的账号。
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {topicDiscovery ? (
             <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3663,6 +3677,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Topic Discovery</p>
                   <h5 className="mt-1 text-lg font-black text-slate-900">自动科研机会扫描</h5>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{topicDiscovery.overview}</p>
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-400">
+                    扫描口径：仅统计有效学生样本；默认排除管理员、教师、停用账号和明显测试账号。结果用于发现 topic，不直接证明因果关系。
+                  </p>
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
                   {topicDiscovery.topics.length} 个 topic · {topicDiscovery.durationMs} ms
