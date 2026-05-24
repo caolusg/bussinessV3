@@ -56,6 +56,7 @@ type SimulationApiMessage = {
 
 type SessionCache = {
   sessionId: string | null;
+  cachedAt: number;
   messages: ChatMessage[];
   coachNote: string | null;
   assessmentSummary: string | null;
@@ -65,6 +66,8 @@ type SessionCache = {
   difficultyLabel: string | null;
   cultureHints: string[];
 };
+
+const SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type DocumentContext = {
   id: string;
@@ -180,8 +183,14 @@ function readSessionCache(stage: SimulationStage): SessionCache | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SessionCache>;
     if (!Array.isArray(parsed.messages)) return null;
+    const cachedAt = typeof parsed.cachedAt === 'number' ? parsed.cachedAt : 0;
+    if (!cachedAt || Date.now() - cachedAt >= SESSION_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(getSessionCacheKey(stage));
+      return null;
+    }
     return {
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
+      cachedAt,
       messages: parsed.messages as ChatMessage[],
       coachNote: typeof parsed.coachNote === 'string' ? parsed.coachNote : null,
       assessmentSummary: typeof parsed.assessmentSummary === 'string' ? parsed.assessmentSummary : null,
@@ -349,6 +358,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
     writeSessionCache(currentStage, {
       sessionId: currentSessionId,
+      cachedAt: Date.now(),
       messages,
       coachNote,
       assessmentSummary,

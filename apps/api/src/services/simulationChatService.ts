@@ -48,11 +48,37 @@ const simulationOrchestrator = new SimulationOrchestrator(
   new CompatibleSimulationProvider()
 );
 
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getSessionExpiresBefore(now = new Date()) {
+  return new Date(now.getTime() - SESSION_TTL_MS);
+}
+
+async function expireStaleActiveSessions(
+  prisma: Pick<Db, 'simulationSession'>,
+  userId: string,
+  stage?: SimulationStage
+) {
+  await prisma.simulationSession.updateMany({
+    where: {
+      userId,
+      status: 'active',
+      ...(stage ? { stage } : {}),
+      updatedAt: { lt: getSessionExpiresBefore() }
+    },
+    data: {
+      status: 'ended'
+    }
+  });
+}
+
 export async function getOrCreateActiveSession(
   prisma: Db,
   userId: string,
   stage: SimulationStage
 ) {
+  await expireStaleActiveSessions(prisma, userId, stage);
+
   const existing = await prisma.simulationSession.findFirst({
     where: {
       userId,
@@ -118,6 +144,8 @@ export async function restartStageSession(
   userId: string,
   stage: SimulationStage
 ) {
+  await expireStaleActiveSessions(prisma, userId, stage);
+
   const stageRecord = await prisma.businessStage.findUnique({
     where: { key: stage },
     include: {
@@ -173,6 +201,8 @@ export async function endStageSession(
   userId: string,
   stage: SimulationStage
 ) {
+  await expireStaleActiveSessions(prisma, userId, stage);
+
   await prisma.simulationSession.updateMany({
     where: {
       userId,
@@ -389,6 +419,11 @@ export async function appendStudentAndOpponent(
       personaJson: toJsonValue(orchestration.personaSnapshot),
       turnIndex: nextTurn + 1
     }
+  });
+
+  await prisma.simulationSession.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() }
   });
 
   return { studentMessage, opponentMessage, orchestration, scenario };
