@@ -293,6 +293,21 @@ type ClickFlowSummary = {
   total: number;
   uiClickCount: number;
   pageViewCount: number;
+  activeStudentCount: number;
+  eventBreakdown: Array<{ eventType: string; count: number }>;
+  stageBreakdown: Array<{
+    stageId?: string | null;
+    key?: string | null;
+    titleZh?: string | null;
+    sortOrder?: number | null;
+    count: number;
+  }>;
+  students: Array<{
+    userId?: string | null;
+    username?: string | null;
+    displayName?: string | null;
+    eventCount: number;
+  }>;
   rows: Array<Record<string, unknown> & {
     id: string;
     eventType: string;
@@ -300,6 +315,8 @@ type ClickFlowSummary = {
     stageId?: string | null;
     resourceId?: string | null;
     metadataJson?: unknown;
+    stage?: Record<string, unknown> | null;
+    resource?: Record<string, unknown> | null;
     createdAt: string;
   }>;
 };
@@ -864,6 +881,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [adminError, setAdminError] = useState('');
   const [clickFlowDateRange, setClickFlowDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('7d');
   const [clickFlowEventType, setClickFlowEventType] = useState<'all' | 'ui_click' | 'page_view'>('all');
+  const [clickFlowStudentId, setClickFlowStudentId] = useState('all');
   const [researchStudentSearchDraft, setResearchStudentSearchDraft] = useState('');
   const [researchStudentSearch, setResearchStudentSearch] = useState('');
 
@@ -1152,37 +1170,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     setIsLoadingClickFlow(true);
     setAdminError('');
 
-    const buildQuery = (eventType: 'all' | 'ui_click' | 'page_view') => {
-      const params = new URLSearchParams({
-        page: '1',
-        pageSize: eventType === 'all' ? '50' : '100',
-        dateField: 'createdAt',
-        dateRange: clickFlowDateRange
-      });
+    const params = new URLSearchParams({
+      dateRange: clickFlowDateRange,
+      eventType: clickFlowEventType,
+      pageSize: '100'
+    });
 
-      if (eventType !== 'all') {
-        params.set('statusField', 'eventType');
-        params.set('status', eventType);
-      }
+    if (clickFlowStudentId !== 'all') {
+      params.set('userId', clickFlowStudentId);
+    }
 
-      return `/api/admin/tables/practice_events?${params.toString()}`;
-    };
-
-    Promise.all([
-      apiRequest<AdminTableListResponse>(buildQuery(clickFlowEventType)),
-      apiRequest<AdminTableListResponse>(buildQuery('ui_click')),
-      apiRequest<AdminTableListResponse>(buildQuery('page_view'))
-    ])
-      .then(([rowsResponse, clickResponse, viewResponse]) => {
-        if (ignore) return;
-
-        setClickFlowSummary({
-          generatedAt: new Date().toISOString(),
-          total: rowsResponse.total,
-          uiClickCount: clickResponse.total,
-          pageViewCount: viewResponse.total,
-          rows: rowsResponse.rows as ClickFlowSummary['rows']
-        });
+    apiRequest<ClickFlowSummary>(`/api/admin/click-flow/summary?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) setClickFlowSummary(data);
       })
       .catch((error) => {
         if (!ignore) setAdminError(error instanceof Error ? error.message : '点击流加载失败');
@@ -1194,7 +1194,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, clickFlowDateRange, clickFlowEventType]);
+  }, [activeTab, clickFlowDateRange, clickFlowEventType, clickFlowStudentId]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data') || !selectedTable) return;
@@ -2303,22 +2303,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     if (!clickFlowSummary) return null;
 
     const rows = clickFlowSummary.rows;
+    const maxEventCount = Math.max(1, ...clickFlowSummary.eventBreakdown.map((item) => item.count));
+    const maxStageCount = Math.max(1, ...clickFlowSummary.stageBreakdown.map((item) => item.count));
+    const topStudents = clickFlowSummary.students.slice(0, 8);
+    const selectedStudent = clickFlowSummary.students.find((item) => item.userId === clickFlowStudentId);
+    const getStudentLabel = (item: ClickFlowSummary['students'][number]) => {
+      const name = item.displayName || item.username || '未知学生';
+      return `${name} · ${item.eventCount} 条`;
+    };
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            ['总事件', clickFlowSummary.total, 'practice_events'],
-            ['点击事件', clickFlowSummary.uiClickCount, 'ui_click'],
-            ['页面浏览', clickFlowSummary.pageViewCount, 'page_view']
+            ['行为记录', clickFlowSummary.total, '学生动作总数'],
+            ['界面点击', clickFlowSummary.uiClickCount, '按钮、入口和控件点击'],
+            ['页面浏览', clickFlowSummary.pageViewCount, '学生打开页面次数'],
+            ['活跃学生', clickFlowSummary.activeStudentCount, '该时间范围内有行为的学生']
           ].map(([label, value, detail]) => (
             <div key={String(label)} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+              <p className="text-xs font-black text-slate-500">{label}</p>
               <div className="mt-3 flex items-end justify-between gap-3">
                 <span className="text-3xl font-black text-slate-900">{value}</span>
                 <MousePointerClick size={18} className="text-indigo-400" />
               </div>
-              <p className="mt-2 text-xs font-bold text-slate-400">{detail}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">{detail}</p>
             </div>
           ))}
         </div>
@@ -2326,13 +2335,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Click Flow</p>
-              <h3 className="text-xl font-black text-slate-900 mt-1">最近点击流</h3>
+              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Behavior Flow</p>
+              <h3 className="text-xl font-black text-slate-900 mt-1">学生行为流</h3>
               <p className="mt-1 text-xs text-slate-400">
-                generated {new Date(clickFlowSummary.generatedAt).toLocaleString()}
+                {selectedStudent ? `当前学生：${selectedStudent.displayName || selectedStudent.username || '未知学生'} · ` : ''}
+                更新于 {new Date(clickFlowSummary.generatedAt).toLocaleString()}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={clickFlowStudentId}
+                onChange={(event) => setClickFlowStudentId(event.target.value)}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
+              >
+                <option value="all">全部学生</option>
+                {clickFlowSummary.students
+                  .filter((item) => item.userId)
+                  .map((item) => (
+                    <option key={item.userId ?? ''} value={item.userId ?? ''}>
+                      {getStudentLabel(item)}
+                    </option>
+                  ))}
+              </select>
               {(['all', 'ui_click', 'page_view'] as const).map((type) => (
                 <button
                   key={type}
@@ -2360,56 +2384,119 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">
-                <tr>
-                  <th className="px-5 py-3 text-left">时间</th>
-                  <th className="px-5 py-3 text-left">事件</th>
-                  <th className="px-5 py-3 text-left">用户</th>
-                  <th className="px-5 py-3 text-left">页面</th>
-                  <th className="px-5 py-3 text-left">阶段</th>
-                  <th className="px-5 py-3 text-left">会话</th>
-                  <th className="px-5 py-3 text-left">附加信息</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => {
-                  const metadata = row.metadataJson && typeof row.metadataJson === 'object' ? (row.metadataJson as Record<string, unknown>) : {};
+          <div className="grid gap-4 border-b border-slate-100 bg-slate-50/60 p-6 xl:grid-cols-[1.1fr_1fr_0.9fr]">
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+              <h4 className="text-sm font-black text-slate-900">事件构成</h4>
+              <div className="mt-4 space-y-3">
+                {clickFlowSummary.eventBreakdown.map((item) => {
+                  const percent = Math.max(5, Math.round((item.count / maxEventCount) * 100));
                   return (
-                    <tr key={row.id} className="text-slate-600 align-top">
-                      <td className="px-5 py-4 whitespace-nowrap text-xs text-slate-400">
-                        {new Date(row.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600">
-                          {formatEventTypeLabel(row.eventType)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-xs font-bold text-slate-600">
-                        <div>{formatValue(row.displayName ?? row.username) || '-'}</div>
-                        {row.username && row.displayName !== row.username ? (
-                          <div className="mt-1 text-[10px] font-mono font-normal text-slate-400">{formatValue(row.username)}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-5 py-4 text-xs">{formatValue(metadata.page) || '-'}</td>
-                      <td className="px-5 py-4 text-xs">{formatValue(metadata.stage) || '-'}</td>
-                      <td className="px-5 py-4 text-xs font-mono">{formatValue(row.sessionId) || '-'}</td>
-                      <td className="px-5 py-4 max-w-md text-xs text-slate-500">
-                        <p className="line-clamp-3 whitespace-pre-wrap">{formatCell(row.metadataJson)}</p>
-                      </td>
-                    </tr>
+                    <div key={item.eventType}>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-600">{formatEventTypeLabel(item.eventType)}</span>
+                        <span className="font-black text-slate-900">{item.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
                   );
                 })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td className="px-5 py-8 text-center text-slate-400" colSpan={9}>
-                      当前筛选条件下暂无点击流
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                {clickFlowSummary.eventBreakdown.length === 0 && <p className="text-xs text-slate-400">暂无事件数据</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+              <h4 className="text-sm font-black text-slate-900">阶段路径</h4>
+              <div className="mt-4 space-y-3">
+                {clickFlowSummary.stageBreakdown.map((item, index) => {
+                  const percent = Math.max(5, Math.round((item.count / maxStageCount) * 100));
+                  const label = item.titleZh || formatStageName(item.key) || '未关联阶段';
+                  return (
+                    <div key={item.stageId ?? item.key ?? `stage-${index}`}>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-600">{label}</span>
+                        <span className="font-black text-slate-900">{item.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {clickFlowSummary.stageBreakdown.length === 0 && <p className="text-xs text-slate-400">暂无阶段数据</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+              <h4 className="text-sm font-black text-slate-900">学生排行</h4>
+              <div className="mt-4 space-y-2">
+                {topStudents.map((item) => (
+                  <button
+                    key={item.userId ?? item.username ?? 'unknown'}
+                    type="button"
+                    onClick={() => item.userId && setClickFlowStudentId(item.userId)}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition ${
+                      clickFlowStudentId === item.userId
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="font-bold">{item.displayName || item.username || '未知学生'}</span>
+                    <span className="font-black">{item.eventCount}</span>
+                  </button>
+                ))}
+                {topStudents.length === 0 && <p className="text-xs text-slate-400">暂无学生数据</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-black text-slate-900">最近行为时间线</h4>
+                <p className="mt-1 text-xs text-slate-400">按时间倒序展示学生最近做了什么，点击学生排行可只看某个学生。</p>
+              </div>
+              {isLoadingClickFlow && <Loader2 className="animate-spin text-indigo-500" size={18} />}
+            </div>
+            <div className="space-y-3">
+              {rows.map((row) => {
+                const meta = getPracticeEventMeta(row);
+                const metadata = asRecord(row.metadataJson);
+                const page = formatPageName(metadata.page);
+                const stage = formatValue(asRecord(row.stage).titleZh) || formatStageName(metadata.stage);
+                const studentName = formatValue(row.displayName ?? row.username) || '未知学生';
+                return (
+                  <div key={row.id} className="grid gap-3 rounded-2xl border border-slate-100 bg-white p-4 md:grid-cols-[150px_1fr_170px]">
+                    <div className="text-xs font-semibold text-slate-400">{new Date(row.createdAt).toLocaleString()}</div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600">
+                          {meta.label}
+                        </span>
+                        {stage && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{stage}</span>}
+                        {page && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{page}</span>}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{meta.description}</p>
+                      {row.sessionId && (
+                        <p className="mt-1 text-[10px] font-mono text-slate-300">会话 {String(row.sessionId).slice(0, 8)}</p>
+                      )}
+                    </div>
+                    <div className="text-xs">
+                      <p className="font-black text-slate-700">{studentName}</p>
+                      {row.username && row.displayName !== row.username ? (
+                        <p className="mt-1 font-mono text-[10px] text-slate-400">{formatValue(row.username)}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+              {rows.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-semibold text-slate-400">
+                  当前筛选条件下暂无点击流
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

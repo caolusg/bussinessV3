@@ -142,6 +142,13 @@ const researchStudentsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(500).default(20)
 });
 
+const clickFlowQuerySchema = z.object({
+  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('7d'),
+  eventType: z.enum(['all', 'ui_click', 'page_view']).optional().default('all'),
+  userId: z.union([z.string().uuid(), z.literal('')]).optional().default(''),
+  pageSize: z.coerce.number().int().min(1).max(200).default(80)
+});
+
 const resourcePayloadSchema = z.object({
   stageId: z.string().uuid(),
   type: z.enum(['vocabulary', 'phrases', 'knowledge']).default('vocabulary'),
@@ -2397,6 +2404,142 @@ router.get('/students/:userId/summary', requirePanel('system_data'), async (req,
     }));
   } catch (error) {
     console.error('Get admin student summary failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/click-flow/summary', requirePanel('click_flow'), async (req, res) => {
+  try {
+    const parsed = clickFlowQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+
+    const { dateRange, eventType, userId, pageSize } = parsed.data;
+    const createdAtWhere = buildCreatedAtWhere(dateRange);
+    const where: Prisma.PracticeEventWhereInput = {
+      ...(createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {}),
+      ...(eventType !== 'all' ? { eventType } : {}),
+      ...(userId ? { userId } : {})
+    };
+    const untypedWhere: Prisma.PracticeEventWhereInput = {
+      ...(createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {}),
+      ...(userId ? { userId } : {})
+    };
+
+    const [
+      total,
+      uiClickCount,
+      pageViewCount,
+      eventGroups,
+      stageGroups,
+      userGroups,
+      rows
+    ] = await Promise.all([
+      prisma.practiceEvent.count({ where }),
+      prisma.practiceEvent.count({ where: { ...untypedWhere, eventType: 'ui_click' } }),
+      prisma.practiceEvent.count({ where: { ...untypedWhere, eventType: 'page_view' } }),
+      prisma.practiceEvent.groupBy({
+        by: ['eventType'],
+        where: untypedWhere,
+        _count: { _all: true }
+      }),
+      prisma.practiceEvent.groupBy({
+        by: ['stageId'],
+        where,
+        _count: { _all: true }
+      }),
+      prisma.practiceEvent.groupBy({
+        by: ['userId'],
+        where: {
+          ...(createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {}),
+          userId: { not: null }
+        },
+        _count: { _all: true },
+        orderBy: { _count: { userId: 'desc' } },
+        take: 100
+      }),
+      prisma.practiceEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: pageSize,
+        include: {
+          user: { select: { id: true, username: true, email: true, studentProfile: true } },
+          stage: { select: { id: true, key: true, titleZh: true, titleEn: true, sortOrder: true } },
+          resource: { select: { type: true, term: true } }
+        }
+      })
+    ]);
+
+    const userIds = userGroups
+      .map((group) => group.userId)
+      .filter((value): value is string => Boolean(value));
+    const [users, stages] = await Promise.all([
+      userIds.length
+        ? prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, username: true, email: true, studentProfile: true }
+          })
+        : [],
+      prisma.businessStage.findMany({
+        where: { id: { in: stageGroups.map((group) => group.stageId).filter((value): value is string => Boolean(value)) } },
+        select: { id: true, key: true, titleZh: true, titleEn: true, sortOrder: true }
+      })
+    ]);
+
+    const userById = new Map(users.map((item) => [item.id, item]));
+    const stageById = new Map(stages.map((item) => [item.id, item]));
+    const students = userGroups.map((group) => {
+      const item = group.userId ? userById.get(group.userId) : null;
+      return {
+        userId: group.userId,
+        username: item?.username ?? null,
+        displayName: item ? getDisplayNameFromUser(item as unknown as Record<string, unknown>) : '未知用户',
+        eventCount: group._count._all
+      };
+    });
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      eventType,
+      selectedUserId: userId || null,
+      total,
+      uiClickCount,
+      pageViewCount,
+      activeStudentCount: userGroups.length,
+      eventBreakdown: eventGroups
+        .map((group) => ({
+          eventType: group.eventType,
+          count: group._count._all
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 12),
+      stageBreakdown: stageGroups
+        .map((group) => {
+          const stage = group.stageId ? stageById.get(group.stageId) : null;
+          return {
+            stageId: group.stageId,
+            key: stage?.key ?? null,
+            titleZh: stage?.titleZh ?? null,
+            sortOrder: stage?.sortOrder ?? null,
+            count: group._count._all
+          };
+        })
+        .sort((a, b) => {
+          if (a.sortOrder != null && b.sortOrder != null) return a.sortOrder - b.sortOrder;
+          return b.count - a.count;
+        })
+        .slice(0, 12),
+      students,
+      rows: rows.map((row) => ({
+        ...enhanceDisplayRow('practice_events', row as unknown as Record<string, unknown>),
+        stage: row.stage,
+        resource: row.resource
+      }))
+    }));
+  } catch (error) {
+    console.error('Get click flow summary failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });
