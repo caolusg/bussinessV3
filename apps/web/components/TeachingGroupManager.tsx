@@ -91,7 +91,7 @@ const colorClass = (color: string) =>
 const TeachingGroupManager: React.FC = () => {
   const [data, setData] = useState<GroupManagerData | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState('');
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
   const [form, setForm] = useState<GroupForm>(emptyGroupForm);
   const [editingGroupId, setEditingGroupId] = useState('');
@@ -116,6 +116,10 @@ const TeachingGroupManager: React.FC = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    setSelectedStudentIds([]);
+  }, [selectedGroupId]);
+
   const selectedGroup = data?.groups.find((group) => group.id === selectedGroupId) ?? null;
   const memberIds = new Set((selectedGroup?.members ?? []).map((member) => member.user.id));
 
@@ -134,6 +138,18 @@ const TeachingGroupManager: React.FC = () => {
         ].join(' ').toLowerCase().includes(keyword);
       });
   }, [data?.students, memberIds, studentSearch]);
+
+  const visibleAvailableStudents = availableStudents.slice(0, 50);
+  const visibleAvailableIds = visibleAvailableStudents.map((student) => student.id);
+  const selectedVisibleCount = visibleAvailableIds.filter((id) => selectedStudentIds.includes(id)).length;
+  const allVisibleSelected = visibleAvailableIds.length > 0 && selectedVisibleCount === visibleAvailableIds.length;
+
+  const toggleStudentSelection = (studentId: string, checked: boolean) => {
+    setSelectedStudentIds((current) => {
+      if (checked) return current.includes(studentId) ? current : [...current, studentId];
+      return current.filter((id) => id !== studentId);
+    });
+  };
 
   const resetForm = () => {
     setEditingGroupId('');
@@ -189,15 +205,15 @@ const TeachingGroupManager: React.FC = () => {
   };
 
   const addMember = async () => {
-    if (!selectedGroupId || !selectedStudentId) return;
+    if (!selectedGroupId || selectedStudentIds.length === 0) return;
     setSaving(true);
     setError('');
     try {
       await apiRequest(`/api/admin/groups/${selectedGroupId}/members`, {
         method: 'POST',
-        body: JSON.stringify({ userIds: [selectedStudentId] })
+        body: JSON.stringify({ userIds: selectedStudentIds })
       });
-      setSelectedStudentId('');
+      setSelectedStudentIds([]);
       loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加成员失败');
@@ -355,26 +371,17 @@ const TeachingGroupManager: React.FC = () => {
             </div>
 
             {selectedGroup && (
-              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                <select
-                  value={selectedStudentId}
-                  onChange={(event) => setSelectedStudentId(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
-                >
-                  <option value="">选择学生加入当前分组</option>
-                  {availableStudents.map((student) => (
-                    <option key={student.id} value={student.id}>
-                      {displayStudentName(student)} · {student.studentProfile?.hskLevel || 'HSK 未填'} · {student.studentProfile?.major || '专业未填'}
-                    </option>
-                  ))}
-                </select>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+                <span className="text-xs font-bold text-slate-500">
+                  从右侧列表勾选学生后批量加入当前分组，已选 {selectedStudentIds.length} 名。
+                </span>
                 <button
                   onClick={addMember}
-                  disabled={!selectedStudentId || saving}
+                  disabled={selectedStudentIds.length === 0 || saving}
                   className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  <Plus size={16} />
-                  加入
+                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                  批量加入
                 </button>
               </div>
             )}
@@ -510,22 +517,56 @@ const TeachingGroupManager: React.FC = () => {
                 placeholder="搜索可加入学生"
               />
             </div>
+            <div className="mb-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  disabled={visibleAvailableIds.length === 0}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setSelectedStudentIds((current) => {
+                      const next = new Set(current);
+                      visibleAvailableIds.forEach((id) => {
+                        if (checked) next.add(id);
+                        else next.delete(id);
+                      });
+                      return Array.from(next);
+                    });
+                  }}
+                />
+                选择当前列表
+              </label>
+              <span>
+                已选 {selectedVisibleCount}/{visibleAvailableIds.length}
+              </span>
+            </div>
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {availableStudents.slice(0, 30).map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => setSelectedStudentId(student.id)}
-                  className={`w-full rounded-2xl px-3 py-3 text-left text-sm transition ${
-                    selectedStudentId === student.id ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <p className="font-black">{displayStudentName(student)}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {student.studentProfile?.hskLevel || 'HSK 未填'} · {student.studentProfile?.major || '专业未填'}
-                  </p>
-                </button>
-              ))}
-              {!availableStudents.length && (
+              {visibleAvailableStudents.map((student) => {
+                const checked = selectedStudentIds.includes(student.id);
+                return (
+                  <label
+                    key={student.id}
+                    className={`flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left text-sm transition ${
+                      checked ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleStudentSelection(student.id, event.target.checked)}
+                      className="mt-1"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-black">{displayStudentName(student)}</span>
+                      <span className="mt-1 block text-xs text-slate-400">
+                        {student.studentProfile?.hskLevel || 'HSK 未填'} · {student.studentProfile?.major || '专业未填'}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {!visibleAvailableStudents.length && (
                 <div className="rounded-2xl bg-slate-50 p-5 text-center text-sm text-slate-400">
                   没有可加入的学生。
                 </div>
