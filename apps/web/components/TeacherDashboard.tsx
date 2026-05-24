@@ -505,28 +505,118 @@ const AI_QUERY_TEMPLATES = [
   '近7天学生练习事件数量趋势（按天）'
 ];
 
-const PRACTICE_EVENT_LABELS: Record<string, { label: string; description: string }> = {
-  coach_context_opened: { label: '打开 AI 教练面板', description: '学生查看了右侧 AI 教练或求助入口。' },
-  coach_question_asked: { label: '向 AI 教练提问', description: '学生向 AI 教练提交了问题。' },
-  ai_coach_answer_copied: { label: '复制 AI 教练回复', description: '学生复制了 AI 教练给出的建议。' },
-  student_message_sent: { label: '发送学生消息', description: '学生在业务对话中发送了一条消息。' },
-  message_sent: { label: '发送消息', description: '对话中产生了一条消息。' },
-  ai_reply_received: { label: '收到 AI 客户回复', description: 'AI 客户生成了回复。' },
-  stage_opened: { label: '打开业务阶段', description: '学生进入或查看了一个业务阶段。' },
-  simulation_started: { label: '开始练习', description: '学生启动了一次业务对话练习。' },
-  simulation_exited: { label: '离开练习', description: '学生退出或结束当前练习。' },
-  resource_viewed: { label: '查看学习资源', description: '学生查看了词汇、句式或知识资源。' },
-  discussion_viewed: { label: '进入小组讨论', description: '学生打开了小组讨论区。' },
-  page_view: { label: '页面浏览', description: '学生打开了一个页面。' },
-  ui_click: { label: '界面点击', description: '学生点击了页面上的按钮或控件。' }
+const STAGE_LABELS: Record<string, string> = {
+  acquisition: '获客',
+  quotation: '报价',
+  negotiation: '磋商',
+  contract: '合同',
+  preparation: '备货',
+  customs: '报关',
+  settlement: '结算',
+  after_sales: '售后'
 };
 
-const getPracticeEventMeta = (value: unknown) => {
-  const key = String(value ?? '');
-  return PRACTICE_EVENT_LABELS[key] ?? {
-    label: key || '未知事件',
-    description: '系统记录的一次学习行为。'
-  };
+const PAGE_LABELS: Record<string, string> = {
+  teacher: '教师后台',
+  student: '学生端',
+  simulation: '业务练习页',
+  practice: '业务练习页',
+  resources: '学习资源页',
+  groups: '小组讨论页',
+  login: '登录页'
+};
+
+const PRACTICE_EVENT_LABELS: Record<string, string> = {
+  coach_context_opened: '打开 AI 教练面板',
+  coach_question_asked: '向 AI 教练提问',
+  ai_coach_answer_copied: '复制 AI 教练回复',
+  student_message_sent: '发送学生消息',
+  message_sent: '发送消息',
+  ai_reply_received: '收到 AI 客户回复',
+  stage_opened: '打开业务阶段',
+  simulation_started: '开始练习',
+  simulation_exited: '离开练习',
+  practice_session_opened: '进入业务练习',
+  practice_session_restarted: '重新开始练习',
+  practice_session_ended: '结束练习',
+  resource_list_viewed: '查看资源列表',
+  resource_viewed: '查看学习资源',
+  discussion_viewed: '进入小组讨论',
+  page_view: '页面浏览',
+  ui_click: '界面点击'
+};
+
+const asRecord = (value: unknown) => (value && typeof value === 'object' ? value as Record<string, unknown> : {});
+
+const formatStageName = (value: unknown) => {
+  const key = formatValue(value);
+  return STAGE_LABELS[key] ? `${STAGE_LABELS[key]}阶段` : key;
+};
+
+const formatPageName = (value: unknown) => {
+  const key = formatValue(value);
+  return PAGE_LABELS[key] ?? key;
+};
+
+const formatEventTypeLabel = (value: unknown) => {
+  const key = formatValue(value);
+  return PRACTICE_EVENT_LABELS[key] ?? key;
+};
+
+const getPracticeEventMeta = (event: Record<string, unknown>) => {
+  const key = formatValue(event.eventType);
+  const metadata = asRecord(event.metadataJson);
+  const stage = asRecord(event.stage);
+  const resource = asRecord(event.resource);
+  const stageName = formatValue(stage.titleZh) || formatStageName(metadata.stage);
+  const pageName = formatPageName(metadata.page);
+  const route = formatValue(metadata.route);
+  const label = formatValue(metadata.label);
+  const target = formatValue(metadata.target);
+  const term = formatValue(resource.term ?? metadata.term);
+  const resourceType = formatValue(resource.type ?? metadata.resourceType);
+
+  const labelText = formatEventTypeLabel(key) || '未知事件';
+  let description = '';
+
+  switch (key) {
+    case 'page_view':
+      description = pageName
+        ? `学生打开了「${pageName}」${route ? `，路径：${route}` : ''}。`
+        : '学生打开了页面，但这条记录没有保存具体页面名称。';
+      break;
+    case 'ui_click':
+      description = `学生在「${pageName || '当前页面'}」点击了${label ? `「${label}」` : '一个控件'}${target ? `（${target}）` : ''}。`;
+      break;
+    case 'practice_session_opened':
+      description = `学生进入了${stageName || '某个业务阶段'}的练习。`;
+      break;
+    case 'practice_session_restarted':
+      description = `学生重新开始了${stageName || '当前阶段'}练习${formatValue(metadata.attemptNo) ? `，第 ${formatValue(metadata.attemptNo)} 次尝试` : ''}。`;
+      break;
+    case 'practice_session_ended':
+      description = `学生结束了${stageName || '当前阶段'}练习。`;
+      break;
+    case 'coach_context_opened':
+      description = `学生在${stageName || '当前练习'}中打开 AI 教练面板，查看上下文和求助入口。`;
+      break;
+    case 'coach_question_asked':
+      description = `学生向 AI 教练提问：${formatCell(metadata.question) || '问题内容未记录'}。`;
+      break;
+    case 'student_message_sent':
+      description = `学生在${stageName || '业务对话'}中发送消息，字数 ${formatValue(metadata.characterCount) || '未记录'}。`;
+      break;
+    case 'resource_list_viewed':
+      description = `学生查看了${stageName || '当前阶段'}的学习资源列表。`;
+      break;
+    case 'resource_viewed':
+      description = `学生查看了学习资源${term ? `「${term}」` : ''}${resourceType ? `（${resourceType}）` : ''}。`;
+      break;
+    default:
+      description = `记录到「${labelText}」事件${stageName ? `，关联阶段：${stageName}` : ''}${pageName ? `，页面：${pageName}` : ''}。`;
+  }
+
+  return { label: labelText, description };
 };
 
 const toCsv = (rows: Record<string, unknown>[]) => {
@@ -1954,7 +2044,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
                   }`}
                 >
-                  {type}
+                  {type === 'all' ? '全部' : formatEventTypeLabel(type)}
                 </button>
               ))}
               <select
@@ -1996,7 +2086,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       </td>
                       <td className="px-5 py-4">
                         <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600">
-                          {row.eventType}
+                          {formatEventTypeLabel(row.eventType)}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-xs font-bold text-slate-600">
