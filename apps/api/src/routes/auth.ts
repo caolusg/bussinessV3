@@ -134,6 +134,7 @@ const isStudentProfileComplete = (profile: {
   gender: string | null;
   hskLevel: string | null;
   major: string | null;
+  classGroup: string | null;
   completedAt: Date | null;
 } | null) =>
   Boolean(
@@ -145,7 +146,8 @@ const isStudentProfileComplete = (profile: {
       profile.age > 0 &&
       profile.gender?.trim() &&
       profile.hskLevel?.trim() &&
-      profile.major?.trim()
+      profile.major?.trim() &&
+      profile.classGroup?.trim()
   );
 
 const ensureActiveUser = (status: string) =>
@@ -899,6 +901,7 @@ router.get('/me', requireAuth, async (req, res) => {
           gender: true,
           hskLevel: true,
           major: true,
+          classGroup: true,
           completedAt: true
         }
       });

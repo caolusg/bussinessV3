@@ -41,7 +41,8 @@ const buildDefaultUser = (role: UserRole): UserProfile => ({
   studentNo: role === UserRole.TEACHER ? '' : '',
   role: role === UserRole.TEACHER ? '\u5bfc\u5e08' : '\u9500\u552e\u5b66\u5458',
   company: '\u7cfb\u7edf\u6a21\u62df\u8d26\u6237',
-  avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${role === UserRole.TEACHER ? 'teacher' : 'student'}`
+  avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${role === UserRole.TEACHER ? 'teacher' : 'student'}`,
+  classGroup: role === UserRole.STUDENT ? '其他' : ''
 });
 
 type ContentTask = {
@@ -90,6 +91,7 @@ type StudentProfileData = {
   gender?: string | null;
   hskLevel?: string | null;
   major?: string | null;
+  classGroup?: string | null;
 };
 
 const buildUserFromAuth = (me: AuthMe, studentProfile?: StudentProfileData | null): UserProfile => {
@@ -109,7 +111,8 @@ const buildUserFromAuth = (me: AuthMe, studentProfile?: StudentProfileData | nul
     age: studentProfile?.age ?? undefined,
     gender: studentProfile?.gender ?? '',
     hskLevel: studentProfile?.hskLevel ?? '',
-    major: studentProfile?.major ?? ''
+    major: studentProfile?.major ?? '',
+    classGroup: studentProfile?.classGroup ?? '其他'
   };
 };
 
@@ -552,7 +555,8 @@ const AppRoutes: React.FC = () => {
         age: updatedProfile.age && updatedProfile.age > 0 ? updatedProfile.age : null,
         gender: updatedProfile.gender ?? '',
         hskLevel: updatedProfile.hskLevel ?? '',
-        major: updatedProfile.major ?? ''
+        major: updatedProfile.major ?? '',
+        classGroup: updatedProfile.classGroup ?? '其他'
       })
     });
 

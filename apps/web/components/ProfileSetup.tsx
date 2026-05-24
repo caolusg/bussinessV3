@@ -56,16 +56,27 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   const [changingPassword, setChangingPassword] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [majorOptions, setMajorOptions] = useState<ProfileOption[]>([]);
+  const [classGroupOptions, setClassGroupOptions] = useState<ProfileOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest<{ majorOptions: ProfileOption[] }>('/api/profile/options')
+    apiRequest<{ majorOptions: ProfileOption[]; classGroupOptions: ProfileOption[] }>('/api/profile/options')
       .then((payload) => {
-        if (!cancelled) setMajorOptions(payload.majorOptions);
+        if (!cancelled) {
+          setMajorOptions(payload.majorOptions);
+          setClassGroupOptions(payload.classGroupOptions);
+          const defaultClassGroup = payload.classGroupOptions.find((option) => option.value === '其他') ?? payload.classGroupOptions[0];
+          if (!profile.classGroup?.trim() && defaultClassGroup) {
+            setProfile((current) => ({ ...current, classGroup: defaultClassGroup.value }));
+          }
+        }
       })
       .catch(() => {
-        if (!cancelled) setMajorOptions([]);
+        if (!cancelled) {
+          setMajorOptions([]);
+          setClassGroupOptions([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingOptions(false);
@@ -82,6 +93,12 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
     return [{ id: `current-${currentMajor}`, value: currentMajor, label: `${currentMajor}（当前值）` }, ...majorOptions];
   }, [majorOptions, profile.major]);
 
+  const selectableClassGroupOptions = useMemo(() => {
+    const currentClassGroup = profile.classGroup?.trim();
+    if (!currentClassGroup || classGroupOptions.some((option) => option.value === currentClassGroup)) return classGroupOptions;
+    return [{ id: `current-${currentClassGroup}`, value: currentClassGroup, label: `${currentClassGroup}（当前值）` }, ...classGroupOptions];
+  }, [classGroupOptions, profile.classGroup]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
@@ -92,7 +109,8 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
       profile.nationality,
       profile.gender,
       profile.hskLevel,
-      profile.major
+      profile.major,
+      profile.classGroup
     ];
     const missingText = requiredFields.some((value) => !value?.trim());
     const missingAge = !profile.age || profile.age <= 0;
@@ -290,6 +308,28 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
           </select>
           {!loadingOptions && selectableMajorOptions.length === 0 && (
             <p className="text-xs font-semibold text-red-600">管理员尚未配置专业方向，请先联系管理员。</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Users size={12} /> 班级/组
+          </label>
+          <select
+            value={profile.classGroup || ''}
+            onChange={(e) => setProfile({ ...profile, classGroup: e.target.value })}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+            disabled={loadingOptions || selectableClassGroupOptions.length === 0}
+          >
+            <option value="">{loadingOptions ? '正在加载班级/组...' : '请选择班级/组'}</option>
+            {selectableClassGroupOptions.map((option) => (
+              <option key={option.id} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {!loadingOptions && selectableClassGroupOptions.length === 0 && (
+            <p className="text-xs font-semibold text-red-600">管理员尚未配置班级/组选项，请先联系管理员。</p>
           )}
         </div>
 

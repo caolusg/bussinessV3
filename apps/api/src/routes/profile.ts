@@ -14,7 +14,8 @@ const profileSchema = z.object({
   age: z.number().int().positive(),
   gender: z.string().trim().min(1),
   hskLevel: z.string().trim().min(1),
-  major: z.string().trim().min(1)
+  major: z.string().trim().min(1),
+  classGroup: z.string().trim().min(1).default('其他')
 });
 
 const passwordSchema = z
@@ -46,17 +47,20 @@ const getRoles = async (userId: string) => {
 
 router.get('/options', requireAuth, async (_req, res) => {
   try {
-    const majorOptions = await prisma.profileOption.findMany({
-      where: { category: 'major', isActive: true },
-      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
-      select: {
-        id: true,
-        value: true,
-        label: true
-      }
-    });
+    const [majorOptions, classGroupOptions] = await Promise.all([
+      prisma.profileOption.findMany({
+        where: { category: 'major', isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+        select: { id: true, value: true, label: true }
+      }),
+      prisma.profileOption.findMany({
+        where: { category: 'class_group', isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+        select: { id: true, value: true, label: true }
+      })
+    ]);
 
-    return res.status(200).json(ok({ majorOptions }));
+    return res.status(200).json(ok({ majorOptions, classGroupOptions }));
   } catch (error) {
     console.error('Get profile options failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
@@ -86,6 +90,7 @@ router.get('/student', requireAuth, async (req, res) => {
         gender: true,
         hskLevel: true,
         major: true,
+        classGroup: true,
         completedAt: true
       }
     });
@@ -114,15 +119,24 @@ router.post('/student', requireAuth, async (req, res) => {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
     }
 
-    const { realName, studentNo, nationality, age, gender, hskLevel, major } = parsed.data;
+    const { realName, studentNo, nationality, age, gender, hskLevel, major, classGroup } = parsed.data;
     const normalizedAge = age && age > 0 ? age : null;
-    const majorOption = await prisma.profileOption.findFirst({
-      where: { category: 'major', value: major, isActive: true },
-      select: { id: true }
-    });
+    const [majorOption, classGroupOption] = await Promise.all([
+      prisma.profileOption.findFirst({
+        where: { category: 'major', value: major, isActive: true },
+        select: { id: true }
+      }),
+      prisma.profileOption.findFirst({
+        where: { category: 'class_group', value: classGroup, isActive: true },
+        select: { id: true }
+      })
+    ]);
 
     if (!majorOption) {
       return res.status(400).json(fail('INVALID_MAJOR', '请选择系统允许的专业方向'));
+    }
+    if (!classGroupOption) {
+      return res.status(400).json(fail('INVALID_CLASS_GROUP', '请选择系统允许的班级/组'));
     }
 
     const profile = await prisma.studentProfile.upsert({
@@ -135,6 +149,7 @@ router.post('/student', requireAuth, async (req, res) => {
         gender,
         hskLevel,
         major,
+        classGroup,
         completedAt: new Date()
       },
       create: {
@@ -146,6 +161,7 @@ router.post('/student', requireAuth, async (req, res) => {
         gender,
         hskLevel,
         major,
+        classGroup,
         completedAt: new Date()
       }
     });

@@ -214,6 +214,7 @@ model StudentProfile {
   gender       String?
   hskLevel     String?  @map("hsk_level")
   major        String?
+  classGroup   String?  @map("class_group")
   completedAt  DateTime? @map("completed_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

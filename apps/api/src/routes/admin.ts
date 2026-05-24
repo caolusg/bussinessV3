@@ -60,7 +60,7 @@ const tableConfigs: TableConfig[] = [
   { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', include: { user: { select: { username: true, email: true } }, role: { select: { key: true, name: true } } }, summaryColumns: ['username', 'roleName', 'roleKey'] },
   { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', include: { role: { select: { key: true, name: true } } }, searchableFields: ['panelKey'], summaryColumns: ['roleName', 'roleKey', 'panelLabel', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['username', 'idOrName'] },
-  { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
+  { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major', 'classGroup'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'classGroup', 'completedAt'], dateFields: ['completedAt'] },
   { key: 'profile_options', label: '档案选项', group: '学生档案', delegate: 'profileOption', idField: 'id', searchableFields: ['category', 'value', 'label'], summaryColumns: ['category', 'label', 'value', 'sortOrder', 'isActive', 'updatedAt'], statusFields: ['category', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
   { key: 'teaching_groups', label: '教学分组', group: '教学组织', delegate: 'teachingGroup', idField: 'id', searchableFields: ['name', 'description', 'color'], summaryColumns: ['name', 'description', 'color', 'isActive', 'updatedAt'], statusFields: ['isActive', 'color'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
   { key: 'teaching_group_members', label: '分组成员', group: '教学组织', delegate: 'teachingGroupMember', include: { group: { select: { name: true, color: true } }, user: { select: { username: true, email: true } }, assigner: { select: { username: true } } }, searchableFields: [], summaryColumns: ['groupName', 'username', 'assignedByUsername', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
@@ -120,7 +120,7 @@ const teacherPasswordSchema = z.object({
 });
 
 const profileOptionSchema = z.object({
-  category: z.enum(['major']).default('major'),
+  category: z.enum(['major', 'class_group']).default('major'),
   value: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(120),
   sortOrder: z.coerce.number().int().min(0).default(0),
@@ -653,10 +653,9 @@ router.post('/teacher-password', requirePanel('system_admin'), async (req, res) 
   }
 });
 
-router.get('/profile-options', requirePanel('system_admin'), async (_req, res) => {
+router.get('/profile-options', requirePanel('users'), async (_req, res) => {
   try {
     const options = await prisma.profileOption.findMany({
-      where: { category: 'major' },
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
     });
     return res.status(200).json(ok({ options }));
@@ -666,7 +665,7 @@ router.get('/profile-options', requirePanel('system_admin'), async (_req, res) =
   }
 });
 
-router.post('/profile-options', requirePanel('system_admin'), async (req, res) => {
+router.post('/profile-options', requirePanel('users'), async (req, res) => {
   try {
     const parsed = profileOptionSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -684,7 +683,7 @@ router.post('/profile-options', requirePanel('system_admin'), async (req, res) =
   }
 });
 
-router.put('/profile-options/:optionId', requirePanel('system_admin'), async (req, res) => {
+router.put('/profile-options/:optionId', requirePanel('users'), async (req, res) => {
   try {
     const params = profileOptionParamsSchema.safeParse(req.params);
     const parsed = profileOptionSchema.safeParse(req.body);
@@ -706,7 +705,7 @@ router.put('/profile-options/:optionId', requirePanel('system_admin'), async (re
   }
 });
 
-router.delete('/profile-options/:optionId', requirePanel('system_admin'), async (req, res) => {
+router.delete('/profile-options/:optionId', requirePanel('users'), async (req, res) => {
   try {
     const params = profileOptionParamsSchema.safeParse(req.params);
     if (!params.success) {

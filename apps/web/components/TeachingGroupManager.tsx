@@ -447,8 +447,13 @@ const TeachingGroupManager: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="min-h-[520px] divide-y divide-slate-100">
+          <div className="grid grid-cols-1 gap-5 bg-slate-50 p-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Members</p>
+                <h5 className="mt-1 text-base font-black text-slate-900">现有组员</h5>
+              </div>
+              <div className="min-h-[460px] divide-y divide-slate-100">
               {(selectedGroup?.members ?? []).map((member) => (
                 <div key={member.user.id} className="flex items-center justify-between gap-4 p-5">
                   <div className="min-w-0">
@@ -480,12 +485,16 @@ const TeachingGroupManager: React.FC = () => {
               ))}
               {selectedGroup && selectedGroup.members.length === 0 && (
                 <div className="p-12 text-center text-sm text-slate-400">
-                  这个分组还没有学生。请在右侧搜索并批量加入。
+                  这个分组还没有学生。请在右侧添加学生区搜索并批量加入。
                 </div>
               )}
+              </div>
             </div>
 
-            <aside className="border-t border-slate-100 bg-slate-50 p-5 lg:border-l lg:border-t-0">
+            <aside className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-4">
+              <div className="mb-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm">
+                从这里选择学生，然后点击底部按钮加入当前分组。
+              </div>
               <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>

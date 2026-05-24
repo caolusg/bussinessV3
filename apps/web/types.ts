@@ -41,6 +41,7 @@ export interface UserProfile {
   gender?: string;
   hskLevel?: string;
   major?: string;
+  classGroup?: string;
 }
 
 export interface TaskDetail {

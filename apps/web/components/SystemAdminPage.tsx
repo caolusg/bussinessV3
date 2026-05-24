@@ -5,14 +5,11 @@ import {
   ArrowLeft,
   BarChart3,
   Database,
-  GraduationCap,
   KeyRound,
-  Plus,
   RefreshCw,
   Save,
   ShieldCheck,
   Sparkles,
-  Trash2,
   User
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -50,23 +47,6 @@ type AccountPasswordForm = {
   currentPassword: string;
   newPassword: string;
   confirmPassword: string;
-};
-
-type ProfileOption = {
-  id: string;
-  category: 'major';
-  value: string;
-  label: string;
-  sortOrder: number;
-  isActive: boolean;
-};
-
-type ProfileOptionForm = {
-  id?: string;
-  value: string;
-  label: string;
-  sortOrder: number;
-  isActive: boolean;
 };
 
 type AdminOverview = {
@@ -107,13 +87,6 @@ const defaultConfig: SystemConfigForm = {
   aiTimeoutMs: 15000
 };
 
-const emptyProfileOptionForm: ProfileOptionForm = {
-  value: '',
-  label: '',
-  sortOrder: 0,
-  isActive: true
-};
-
 const formatNumber = (value: number) => new Intl.NumberFormat('zh-CN').format(value);
 
 const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPasswordChange }) => {
@@ -136,9 +109,6 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
   const [savingConfig, setSavingConfig] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [changingOwnPassword, setChangingOwnPassword] = useState(false);
-  const [profileOptions, setProfileOptions] = useState<ProfileOption[]>([]);
-  const [profileOptionForm, setProfileOptionForm] = useState<ProfileOptionForm>(emptyProfileOptionForm);
-  const [savingProfileOption, setSavingProfileOption] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -153,15 +123,6 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
       setOverviewError(err instanceof Error ? err.message : '加载系统总览失败');
     } finally {
       setOverviewLoading(false);
-    }
-  };
-
-  const loadProfileOptions = async () => {
-    try {
-      const data = await apiRequest<{ options: ProfileOption[] }>('/api/admin/profile-options');
-      setProfileOptions(data.options);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载专业方向失败');
     }
   };
 
@@ -197,8 +158,6 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
 
     void loadPage();
     void loadOverview();
-    void loadProfileOptions();
-
     return () => {
       cancelled = true;
     };
@@ -206,51 +165,6 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
 
   const updateConfig = <K extends keyof SystemConfigForm>(key: K, value: SystemConfigForm[K]) => {
     setConfig((current) => ({ ...current, [key]: value }));
-  };
-
-  const saveProfileOption = async () => {
-    try {
-      const label = profileOptionForm.label.trim();
-      const value = profileOptionForm.value.trim() || label;
-      if (!label || !value) {
-        setError('请填写专业方向名称');
-        return;
-      }
-
-      setSavingProfileOption(true);
-      setError(null);
-      await apiRequest(
-        profileOptionForm.id ? `/api/admin/profile-options/${profileOptionForm.id}` : '/api/admin/profile-options',
-        {
-          method: profileOptionForm.id ? 'PUT' : 'POST',
-          body: JSON.stringify({
-            category: 'major',
-            value,
-            label,
-            sortOrder: profileOptionForm.sortOrder,
-            isActive: profileOptionForm.isActive
-          })
-        }
-      );
-      setProfileOptionForm(emptyProfileOptionForm);
-      setMessage('专业方向已保存');
-      await loadProfileOptions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存专业方向失败');
-    } finally {
-      setSavingProfileOption(false);
-    }
-  };
-
-  const disableProfileOption = async (optionId: string) => {
-    try {
-      setError(null);
-      await apiRequest(`/api/admin/profile-options/${optionId}`, { method: 'DELETE' });
-      setMessage('专业方向已停用');
-      await loadProfileOptions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '停用专业方向失败');
-    }
   };
 
   const saveConfig = async () => {
@@ -692,101 +606,6 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
           </section>
 
           <aside className="space-y-6">
-            <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold">学生专业方向</h3>
-                  <p className="mt-1 text-sm text-slate-400">学生只能从这里启用的选项中选择专业方向。</p>
-                </div>
-                <GraduationCap size={18} className="text-cyan-300" />
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <input
-                  value={profileOptionForm.label}
-                  onChange={(event) => {
-                    const label = event.target.value;
-                    setProfileOptionForm((current) => ({
-                      ...current,
-                      label,
-                      value: current.id ? current.value : label
-                    }));
-                  }}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm outline-none focus:border-cyan-300/50"
-                  placeholder="专业方向名称，如 商务汉语"
-                />
-                <div className="grid grid-cols-[1fr_120px] gap-3">
-                  <select
-                    value={profileOptionForm.isActive ? 'true' : 'false'}
-                    onChange={(event) => setProfileOptionForm((current) => ({ ...current, isActive: event.target.value === 'true' }))}
-                    className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm outline-none focus:border-cyan-300/50"
-                  >
-                    <option value="true">启用</option>
-                    <option value="false">停用</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={profileOptionForm.sortOrder}
-                    onChange={(event) => setProfileOptionForm((current) => ({ ...current, sortOrder: Number(event.target.value) }))}
-                    className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm outline-none focus:border-cyan-300/50"
-                    placeholder="排序"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setProfileOptionForm(emptyProfileOptionForm)}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/10"
-                  >
-                    清空
-                  </button>
-                  <button
-                    onClick={() => void saveProfileOption()}
-                    disabled={savingProfileOption}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
-                  >
-                    <Plus size={16} />
-                    {savingProfileOption ? '保存中...' : profileOptionForm.id ? '保存修改' : '新增专业'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 max-h-72 space-y-2 overflow-y-auto pr-1">
-                {profileOptions.map((option) => (
-                  <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-950/50 px-4 py-3">
-                    <button
-                      onClick={() => setProfileOptionForm({
-                        id: option.id,
-                        value: option.value,
-                        label: option.label,
-                        sortOrder: option.sortOrder,
-                        isActive: option.isActive
-                      })}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="truncate text-sm font-black text-slate-50">{option.label}</p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
-                      </p>
-                    </button>
-                    {option.isActive && (
-                      <button
-                        onClick={() => void disableProfileOption(option.id)}
-                        className="rounded-xl bg-rose-400/10 p-2 text-rose-200 hover:bg-rose-400/20"
-                        title="停用"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {profileOptions.length === 0 && (
-                  <div className="rounded-2xl bg-slate-950/50 p-4 text-sm text-slate-400">
-                    暂无专业方向选项。
-                  </div>
-                )}
-              </div>
-            </section>
-
             <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold">当前状态</h3>

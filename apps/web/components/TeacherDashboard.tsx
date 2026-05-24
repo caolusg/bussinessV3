@@ -9,6 +9,7 @@ import {
   Database,
   Download,
   Edit3,
+  GraduationCap,
   Group,
   Loader2,
   Lock,
@@ -44,6 +45,24 @@ type PasswordChangePayload = {
 
 type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
 type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' | 'research_ai' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
+
+type ProfileOption = {
+  id: string;
+  category: 'major' | 'class_group';
+  value: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+type ProfileOptionForm = {
+  id?: string;
+  category: 'major' | 'class_group';
+  value: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+};
 
 type AdminTableMeta = {
   key: string;
@@ -462,6 +481,18 @@ type ManagedRoleForm = {
 
 const PAGE_SIZE = 25;
 const RESEARCH_STUDENT_PAGE_SIZE = 25;
+const emptyProfileOptionForm: ProfileOptionForm = {
+  category: 'major',
+  value: '',
+  label: '',
+  sortOrder: 0,
+  isActive: true
+};
+
+const profileOptionCategoryLabels: Record<ProfileOption['category'], string> = {
+  major: '专业方向',
+  class_group: '班级/组'
+};
 
 const formatValue = (value: unknown) => {
   if (value === null || value === undefined) return '';
@@ -755,6 +786,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     name: '',
     permissions: ['resources']
   });
+  const [profileOptions, setProfileOptions] = useState<ProfileOption[]>([]);
+  const [profileOptionForm, setProfileOptionForm] = useState<ProfileOptionForm>(emptyProfileOptionForm);
+  const [savingProfileOption, setSavingProfileOption] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -883,6 +917,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const loadProfileOptions = async () => {
+    if (!canAccessPanel('users')) return;
+    try {
+      const data = await apiRequest<{ options: ProfileOption[] }>('/api/admin/profile-options');
+      setProfileOptions(data.options);
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '档案选项加载失败');
+    }
+  };
+
   const loadScenarios = async () => {
     setIsLoadingScenarios(true);
     setScenarioError('');
@@ -909,6 +953,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   useEffect(() => {
     if (activeTab !== 'USERS') return;
     void loadUserManager();
+    void loadProfileOptions();
   }, [activeTab, isAdmin, user.panelPermissions]);
 
   useEffect(() => {
@@ -1578,6 +1623,54 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const saveProfileOption = async () => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    const label = profileOptionForm.label.trim();
+    const value = profileOptionForm.value.trim() || label;
+    if (!label || !value) {
+      setUserManagerError('请填写档案选项名称');
+      return;
+    }
+
+    try {
+      setSavingProfileOption(true);
+      await apiRequest(
+        profileOptionForm.id ? `/api/admin/profile-options/${profileOptionForm.id}` : '/api/admin/profile-options',
+        {
+          method: profileOptionForm.id ? 'PUT' : 'POST',
+          body: JSON.stringify({
+            category: profileOptionForm.category,
+            value,
+            label,
+            sortOrder: profileOptionForm.sortOrder,
+            isActive: profileOptionForm.isActive
+          })
+        }
+      );
+      setProfileOptionForm(emptyProfileOptionForm);
+      setUserManagerMessage('档案选项已保存');
+      await loadProfileOptions();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '保存档案选项失败');
+    } finally {
+      setSavingProfileOption(false);
+    }
+  };
+
+  const disableProfileOption = async (option: ProfileOption) => {
+    setUserManagerError('');
+    setUserManagerMessage('');
+    try {
+      await apiRequest(`/api/admin/profile-options/${option.id}`, { method: 'DELETE' });
+      setUserManagerMessage('档案选项已停用');
+      if (profileOptionForm.id === option.id) setProfileOptionForm(emptyProfileOptionForm);
+      await loadProfileOptions();
+    } catch (error) {
+      setUserManagerError(error instanceof Error ? error.message : '停用档案选项失败');
+    }
+  };
+
   const saveManagedUser = async (targetUser: ManagedUser) => {
     setUserManagerError('');
     setUserManagerMessage('');
@@ -1855,6 +1948,115 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">学生档案选项</h3>
+              <p className="text-sm text-slate-500">这里维护专业方向和班级/组选项。学生端只能从启用选项中选择。</p>
+            </div>
+            <GraduationCap className="text-indigo-500" size={22} />
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="grid gap-3 md:grid-cols-[140px_minmax(0,1fr)_120px_140px_auto]">
+              <select
+                value={profileOptionForm.category}
+                onChange={(e) => setProfileOptionForm((current) => ({ ...current, category: e.target.value as ProfileOptionForm['category'] }))}
+                disabled={Boolean(profileOptionForm.id)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                <option value="major">专业方向</option>
+                <option value="class_group">班级/组</option>
+              </select>
+              <input
+                value={profileOptionForm.label}
+                onChange={(e) => {
+                  const label = e.target.value;
+                  setProfileOptionForm((current) => ({
+                    ...current,
+                    label,
+                    value: current.id ? current.value : label
+                  }));
+                }}
+                placeholder={profileOptionForm.category === 'major' ? '专业方向名称，如 商务汉语' : '班级/组名称，如 其他'}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              />
+              <input
+                type="number"
+                value={profileOptionForm.sortOrder}
+                onChange={(e) => setProfileOptionForm((current) => ({ ...current, sortOrder: Number(e.target.value) }))}
+                placeholder="排序"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              />
+              <select
+                value={profileOptionForm.isActive ? 'true' : 'false'}
+                onChange={(e) => setProfileOptionForm((current) => ({ ...current, isActive: e.target.value === 'true' }))}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              >
+                <option value="true">启用</option>
+                <option value="false">停用</option>
+              </select>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProfileOptionForm(emptyProfileOptionForm)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                >
+                  清空
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveProfileOption()}
+                  disabled={savingProfileOption}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                >
+                  {savingProfileOption ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
+                  {profileOptionForm.id ? '保存' : '新增'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {profileOptions.map((option) => (
+              <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4">
+                <button
+                  type="button"
+                  onClick={() => setProfileOptionForm({
+                    id: option.id,
+                    category: option.category,
+                    value: option.value,
+                    label: option.label,
+                    sortOrder: option.sortOrder,
+                    isActive: option.isActive
+                  })}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">
+                    {profileOptionCategoryLabels[option.category]} · {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
+                  </p>
+                </button>
+                {option.isActive && (
+                  <button
+                    type="button"
+                    onClick={() => void disableProfileOption(option)}
+                    className="rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
+                    title="停用"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {profileOptions.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm font-semibold text-slate-400">
+                暂无专业方向选项。
+              </div>
+            )}
           </div>
         </section>
 
