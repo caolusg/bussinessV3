@@ -461,6 +461,7 @@ type ManagedRoleForm = {
 };
 
 const PAGE_SIZE = 25;
+const RESEARCH_STUDENT_PAGE_SIZE = 25;
 
 const formatValue = (value: unknown) => {
   if (value === null || value === undefined) return '';
@@ -629,7 +630,7 @@ const toCsv = (rows: Record<string, unknown>[]) => {
   const esc = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const header = columns.map(esc).join(',');
   const body = rows.map((row) => columns.map((col) => esc(row[col])).join(',')).join('\n');
-  return `${header}\n${body}`;
+  return `\uFEFF${header}\n${body}`;
 };
 
 const DATE_RANGES = [
@@ -777,6 +778,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [researchOverview, setResearchOverview] = useState<ResearchOverview | null>(null);
   const [researchStudents, setResearchStudents] = useState<ResearchStudentDirectory | null>(null);
   const [selectedResearchStudentId, setSelectedResearchStudentId] = useState('');
+  const [selectedResearchStudentIds, setSelectedResearchStudentIds] = useState<string[]>([]);
   const [researchStudentActivity, setResearchStudentActivity] = useState<ResearchStudentActivity | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [studentSummary, setStudentSummary] = useState<StudentSummary | null>(null);
@@ -791,12 +793,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [dateField, setDateField] = useState('');
   const [dateRange, setDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('all');
   const [researchDateRange, setResearchDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('30d');
+  const [researchStudentPage, setResearchStudentPage] = useState(1);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [isLoadingOverview, setIsLoadingOverview] = useState(false);
   const [isLoadingResearch, setIsLoadingResearch] = useState(false);
   const [isLoadingResearchStudents, setIsLoadingResearchStudents] = useState(false);
   const [isLoadingResearchStudentActivity, setIsLoadingResearchStudentActivity] = useState(false);
+  const [isDownloadingResearchStudents, setIsDownloadingResearchStudents] = useState(false);
   const [isLoadingSessionSummary, setIsLoadingSessionSummary] = useState(false);
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
@@ -1013,7 +1017,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const params = new URLSearchParams({
       dateRange: researchDateRange,
       search: researchStudentSearch,
-      pageSize: '200'
+      page: String(researchStudentPage),
+      pageSize: String(RESEARCH_STUDENT_PAGE_SIZE)
     });
 
     apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`)
@@ -1034,7 +1039,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch]);
+  }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch, researchStudentPage]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH') return;
@@ -1043,6 +1048,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }, 300);
     return () => window.clearTimeout(timer);
   }, [activeTab, researchStudentSearchDraft]);
+
+  useEffect(() => {
+    setResearchStudentPage(1);
+  }, [researchDateRange, researchStudentSearch]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH' || !selectedResearchStudentId) {
@@ -2671,6 +2680,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return formatValue(profile.realName ?? profile.name) || formatValue(userRecord?.username) || '未知学生';
   };
 
+  const fetchResearchStudentActivity = (studentId: string) =>
+    apiRequest<ResearchStudentActivity>(
+      `/api/admin/research/students/${studentId}/activity?dateRange=${researchDateRange}`
+    );
+
+  const toggleResearchStudentSelection = (studentId: string, checked: boolean) => {
+    setSelectedResearchStudentIds((current) => {
+      if (checked) return current.includes(studentId) ? current : [...current, studentId];
+      return current.filter((id) => id !== studentId);
+    });
+  };
+
   const buildResearchStudentExportRows = (activity: ResearchStudentActivity) => {
     const profile = activity.user.studentProfile ?? {};
     const auth = activity.user.studentAuth ?? {};
@@ -2748,31 +2769,76 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       };
     });
 
-  const downloadResearchStudentCsv = () => {
-    if (!researchStudentActivity) return;
-    const csv = toCsv(buildResearchStudentExportRows(researchStudentActivity));
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `student-research-${researchStudentActivity.user.anonymousUserCode}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadResearchStudentCsv = async () => {
+    if (!selectedResearchStudentIds.length) return;
+    setIsDownloadingResearchStudents(true);
+    try {
+      const activities = await Promise.all(selectedResearchStudentIds.map((id) => fetchResearchStudentActivity(id)));
+      const csv = toCsv(activities.flatMap((activity) => buildResearchStudentExportRows(activity)));
+      if (!csv) return;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `student-research-selected-${selectedResearchStudentIds.length}-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloadingResearchStudents(false);
+    }
   };
 
-  const downloadAllResearchStudentsCsv = () => {
-    if (!researchStudents?.rows.length) return;
-    const csv = toCsv(buildResearchStudentDirectoryExportRows(researchStudents));
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadAllResearchStudentsCsv = async () => {
+    setIsDownloadingResearchStudents(true);
+    try {
+      const rows: ResearchStudentRow[] = [];
+      let page = 1;
+      let total = Number.POSITIVE_INFINITY;
+      while (rows.length < total) {
+        const params = new URLSearchParams({
+          dateRange: researchDateRange,
+          search: researchStudentSearch,
+          page: String(page),
+          pageSize: '500'
+        });
+        const data = await apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`);
+        rows.push(...data.rows);
+        total = data.total;
+        if (data.rows.length === 0) break;
+        page += 1;
+      }
+      const csv = toCsv(buildResearchStudentDirectoryExportRows({
+        generatedAt: new Date().toISOString(),
+        dateRange: researchDateRange,
+        search: researchStudentSearch,
+        total: rows.length,
+        page: 1,
+        pageSize: rows.length,
+        rows
+      }));
+      if (!csv) return;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloadingResearchStudents(false);
+    }
   };
 
-  const renderStudentResearchData = () => (
+  const renderStudentResearchData = () => {
+    const visibleResearchRows = researchStudents?.rows ?? [];
+    const researchStudentTotalPages = researchStudents
+      ? Math.max(1, Math.ceil(researchStudents.total / researchStudents.pageSize))
+      : 1;
+    const visibleResearchIds = visibleResearchRows.map((row) => row.user.id);
+    const selectedVisibleCount = visibleResearchIds.filter((id) => selectedResearchStudentIds.includes(id)).length;
+    const allVisibleSelected = visibleResearchIds.length > 0 && selectedVisibleCount === visibleResearchIds.length;
+
+    return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-6">
@@ -2786,19 +2852,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <button
                 type="button"
                 onClick={downloadResearchStudentCsv}
-                disabled={!researchStudentActivity}
+                disabled={isDownloadingResearchStudents || selectedResearchStudentIds.length === 0}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
-                <Download size={15} />
-                下载选中学生 CSV
+                {isDownloadingResearchStudents ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                下载选中学生 CSV{selectedResearchStudentIds.length ? `（${selectedResearchStudentIds.length}）` : ''}
               </button>
               <button
                 type="button"
                 onClick={downloadAllResearchStudentsCsv}
-                disabled={!researchStudents?.rows.length}
+                disabled={isDownloadingResearchStudents || !researchStudents?.total}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
-                <Download size={15} />
+                {isDownloadingResearchStudents ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                 下载全部学生 CSV
               </button>
             </div>
@@ -2810,7 +2876,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 value={researchStudentSearchDraft}
                 onChange={(event) => setResearchStudentSearchDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') setResearchStudentSearch(researchStudentSearchDraft.trim());
+                  if (event.key === 'Enter') {
+                    setResearchStudentPage(1);
+                    setResearchStudentSearch(researchStudentSearchDraft.trim());
+                  }
                 }}
                 placeholder="搜索姓名、学号、账号、邮箱"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
@@ -2818,7 +2887,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
             <button
               type="button"
-              onClick={() => setResearchStudentSearch(researchStudentSearchDraft.trim())}
+              onClick={() => {
+                setResearchStudentPage(1);
+                setResearchStudentSearch(researchStudentSearchDraft.trim());
+              }}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700"
             >
               <Search size={16} />
@@ -2830,30 +2902,62 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-black text-slate-500">
-                学生列表 {researchStudents ? `(${researchStudents.total})` : ''}
-              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  disabled={visibleResearchIds.length === 0}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setSelectedResearchStudentIds((current) => {
+                      const currentSet = new Set(current);
+                      visibleResearchIds.forEach((id) => {
+                        if (checked) currentSet.add(id);
+                        else currentSet.delete(id);
+                      });
+                      return Array.from(currentSet);
+                    });
+                  }}
+                />
+                <p className="text-xs font-black text-slate-500">
+                  学生列表 {researchStudents ? `(${researchStudents.total})` : ''} · 已选 {selectedResearchStudentIds.length}
+                </p>
+              </div>
               {isLoadingResearchStudents && <Loader2 className="animate-spin text-indigo-500" size={16} />}
             </div>
             <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
-              {(researchStudents?.rows ?? []).map((row) => {
+              {visibleResearchRows.map((row) => {
                 const profile = row.user.studentProfile ?? {};
                 const active = selectedResearchStudentId === row.user.id;
+                const selectedForExport = selectedResearchStudentIds.includes(row.user.id);
                 return (
-                  <button
+                  <div
                     key={row.user.id}
-                    type="button"
                     onClick={() => setSelectedResearchStudentId(row.user.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') setSelectedResearchStudentId(row.user.id);
+                    }}
                     className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                       active ? 'border-indigo-200 bg-indigo-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedForExport}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => toggleResearchStudentSelection(row.user.id, event.target.checked)}
+                          className="mt-1"
+                        />
+                        <div className="min-w-0">
                         <p className="truncate text-sm font-black text-slate-900">{getResearchStudentName(row)}</p>
                         <p className="mt-1 truncate text-xs text-slate-400">
                           {formatValue(profile.studentNo) || row.user.username} · {row.user.anonymousUserCode}
                         </p>
+                        </div>
                       </div>
                       <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-indigo-600">
                         {row.stats.messageCount} 消息
@@ -2864,7 +2968,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       <span className="rounded-lg bg-white px-2 py-1">AI {row.stats.aiCallCount}</span>
                       <span className="rounded-lg bg-white px-2 py-1">事件 {row.stats.practiceEventCount}</span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
               {!isLoadingResearchStudents && !(researchStudents?.rows.length) && (
@@ -2872,6 +2976,27 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   没有匹配学生
                 </div>
               )}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
+              <button
+                type="button"
+                onClick={() => setResearchStudentPage((current) => Math.max(1, current - 1))}
+                disabled={researchStudentPage <= 1 || isLoadingResearchStudents}
+                className="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span>
+                第 {researchStudents?.page ?? researchStudentPage} / {researchStudentTotalPages} 页
+              </span>
+              <button
+                type="button"
+                onClick={() => setResearchStudentPage((current) => Math.min(researchStudentTotalPages, current + 1))}
+                disabled={researchStudentPage >= researchStudentTotalPages || isLoadingResearchStudents}
+                className="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+              >
+                下一页
+              </button>
             </div>
           </div>
 
@@ -2974,7 +3099,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       </section>
 
     </div>
-  );
+    );
+  };
 
   const renderResearchLab = () => (
     <>
