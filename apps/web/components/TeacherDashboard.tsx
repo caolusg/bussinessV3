@@ -2209,12 +2209,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[150px]" />
-                  <col className="w-[190px]" />
+                  <col className="w-[130px]" />
+                  <col className="w-[170px]" />
                   <col className="w-[90px]" />
-                  <col className="w-[280px]" />
+                  <col className="w-[400px]" />
                   <col className="w-[150px]" />
-                  <col className="w-[100px]" />
+                  <col className="w-[80px]" />
                 </colgroup>
                 <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
                   <tr>
@@ -2258,7 +2258,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           </select>
                         </td>
                         <td className="px-3 py-4">
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-4 gap-2">
                             {availableRoles.map((role) => {
                               const checked = getSelectedManagedRoleKey(item.roles) === role.key;
                               return (
