@@ -920,6 +920,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const availableRoles = userManager?.roles ?? [];
   const availablePanels = userManager?.panels ?? [];
 
+  const getSelectedManagedRoleKey = (roleKeys: ManagedRoleKey[]) => {
+    if (roleKeys.includes('admin')) return 'admin';
+    return roleKeys[0] ?? '';
+  };
+
   const tableGroups = useMemo(() => {
     return adminTables.reduce<Record<string, AdminTableMeta[]>>((acc, table) => {
       acc[table.group] = acc[table.group] ?? [];
@@ -1469,16 +1474,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
-  const setNewUserRole = (role: ManagedRoleKey, checked: boolean) => {
-    setNewUserForm((current) => {
-      const nextRoles = new Set(current.roleKeys);
-      if (checked) {
-        nextRoles.add(role);
-      } else {
-        nextRoles.delete(role);
-      }
-      return { ...current, roleKeys: Array.from(nextRoles) };
-    });
+  const setNewUserRole = (role: ManagedRoleKey) => {
+    setNewUserForm((current) => ({ ...current, roleKeys: [role] }));
   };
 
   const setNewRolePermission = (permission: PanelPermissionKey, checked: boolean) => {
@@ -1500,8 +1497,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       setUserManagerError('请填写用户名和初始密码');
       return;
     }
-    if (newUserForm.roleKeys.length === 0) {
-      setUserManagerError('请至少选择一个角色');
+    if (newUserForm.roleKeys.length !== 1) {
+      setUserManagerError('请选择一个角色');
       return;
     }
 
@@ -1543,14 +1540,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     });
   };
 
-  const toggleManagedUserRole = (targetUser: ManagedUser, role: ManagedRoleKey, checked: boolean) => {
-    const nextRoles = new Set(targetUser.roles);
-    if (checked) {
-      nextRoles.add(role);
-    } else {
-      nextRoles.delete(role);
-    }
-    updateManagedUserDraft(targetUser.id, { roles: Array.from(nextRoles) });
+  const selectManagedUserRole = (targetUser: ManagedUser, role: ManagedRoleKey) => {
+    updateManagedUserDraft(targetUser.id, { roles: [role] });
   };
 
   const updateManagedRoleDraft = (roleId: string, patch: Partial<ManagedRole>) => {
@@ -1698,8 +1689,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       setUserManagerError('用户名不能为空');
       return;
     }
-    if (targetUser.roles.length === 0) {
-      setUserManagerError('请至少保留一个角色');
+    if (targetUser.roles.length !== 1) {
+      setUserManagerError('请选择一个角色');
       return;
     }
 
@@ -1854,7 +1845,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <div className="grid w-full max-w-[520px] grid-cols-2 gap-2 md:grid-cols-4">
               {availableRoles.map((role) => {
-                const checked = newUserForm.roleKeys.includes(role.key);
+                const checked = getSelectedManagedRoleKey(newUserForm.roleKeys) === role.key;
                 return (
                   <label
                     key={role.key}
@@ -1866,9 +1857,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     title={role.name}
                   >
                     <input
-                      type="checkbox"
+                      type="radio"
+                      name="new-user-role"
                       checked={checked}
-                      onChange={(e) => setNewUserRole(role.key, e.target.checked)}
+                      onChange={() => setNewUserRole(role.key)}
                       className="h-4 w-4 shrink-0 accent-indigo-600"
                     />
                     <span className="truncate">{role.name}</span>
@@ -2268,7 +2260,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         <td className="px-3 py-4">
                           <div className="grid grid-cols-2 gap-2">
                             {availableRoles.map((role) => {
-                              const checked = item.roles.includes(role.key);
+                              const checked = getSelectedManagedRoleKey(item.roles) === role.key;
                               return (
                                 <label
                                   key={role.key}
@@ -2280,9 +2272,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                                   title={role.name}
                                 >
                                   <input
-                                    type="checkbox"
+                                    type="radio"
+                                    name={`user-role-${item.id}`}
                                     checked={checked}
-                                    onChange={(e) => toggleManagedUserRole(item, role.key, e.target.checked)}
+                                    onChange={() => selectManagedUserRole(item, role.key)}
                                     className="h-4 w-4 shrink-0 accent-indigo-600"
                                   />
                                   <span className="truncate">{role.name}</span>
