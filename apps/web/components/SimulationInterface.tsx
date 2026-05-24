@@ -68,6 +68,9 @@ type SessionCache = {
 };
 
 const SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_SIMULATION_STUDENT_TURNS = 20;
+const SIMULATION_MAX_TURNS_MESSAGE =
+  `本轮话题已达到 ${MAX_SIMULATION_STUDENT_TURNS} 次对话上限，请点击“重新开始”开启新的练习。`;
 
 type DocumentContext = {
   id: string;
@@ -175,6 +178,10 @@ function buildDocumentContextPrompt(contexts: DocumentContext[]) {
   return text.slice(0, 12000);
 }
 
+function countStudentTurns(messages: ChatMessage[]) {
+  return messages.filter((message) => message.sender === 'USER').length;
+}
+
 function readSessionCache(stage: SimulationStage): SessionCache | null {
   if (typeof window === 'undefined') return null;
 
@@ -232,6 +239,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionReloadKey, setSessionReloadKey] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [coachNote, setCoachNote] = useState<string | null>(null);
   const [assessmentSummary, setAssessmentSummary] = useState<string | null>(null);
   const [assessmentStrengths, setAssessmentStrengths] = useState<string[]>([]);
@@ -253,6 +261,8 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const currentStageMeta =
     STAGES.find((stage) => stageKeyMap[stage.id] === currentStage) ?? STAGES[0];
   const currentUserName = currentUser?.realName?.trim() || currentUser?.username?.trim() || '我方';
+  const studentTurnCount = countStudentTurns(messages);
+  const hasReachedTurnLimit = sessionEnded || studentTurnCount >= MAX_SIMULATION_STUDENT_TURNS;
 
   useEffect(() => {
     setCurrentStage(stageKeyMap[task.stageId] ?? 'acquisition');
@@ -392,6 +402,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     if (sessionReloadKey === 0 && hasRestoredConversation) {
       setCurrentSessionId(cached?.sessionId ?? null);
       setMessages(cached?.messages ?? []);
+      setSessionEnded(countStudentTurns(cached?.messages ?? []) >= MAX_SIMULATION_STUDENT_TURNS);
       return () => {
         cancelled = true;
       };
@@ -404,7 +415,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
       try {
         const { res, data } = await apiFetch<{
-          session?: { id: string };
+          session?: { id: string; status?: string };
           orchestration?: SimulationOrchestration | null;
           messages?: SimulationApiMessage[];
         }>(`/api/simulations/session?stage=${currentStage}`);
@@ -426,6 +437,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
         setCurrentSessionId(data?.session?.id ?? null);
         setMessages(nextMessages);
+        setSessionEnded(
+          data?.session?.status === 'ended' ||
+          countStudentTurns(nextMessages) >= MAX_SIMULATION_STUDENT_TURNS
+        );
         updateStructuredFeedback(data?.orchestration ?? undefined);
       } catch (error) {
         if (cancelled) return;
@@ -447,6 +462,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
   const handleSend = async () => {
     if (!inputValue.trim() || sending || loadingSession) return;
+    if (hasReachedTurnLimit) {
+      alert(SIMULATION_MAX_TURNS_MESSAGE);
+      return;
+    }
 
     const token = getAuthToken();
     if (!token) {
@@ -479,6 +498,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         sessionId?: string;
         messages?: SimulationApiMessage[];
         orchestration?: SimulationOrchestration;
+        sessionEnded?: boolean;
+        maxStudentTurns?: number;
+        studentTurnCount?: number;
       }>(`/api/simulations/${currentStage}/message`, {
         method: 'POST',
         body: JSON.stringify({
@@ -490,7 +512,12 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       if (!res.ok) {
         console.error('Simulation send failed', { status: res.status, body: text });
         setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
-        alert('发送失败，请稍后重试');
+        if (res.status === 409) {
+          setSessionEnded(true);
+          alert(SIMULATION_MAX_TURNS_MESSAGE);
+        } else {
+          alert('发送失败，请稍后重试');
+        }
         return;
       }
 
@@ -499,7 +526,12 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         setCurrentSessionId(data.sessionId);
       }
       if (returnedMessages.length > 0) {
-        setMessages(returnedMessages.map(toChatMessage));
+        const nextMessages = returnedMessages.map(toChatMessage);
+        setMessages(nextMessages);
+        setSessionEnded(
+          data?.sessionEnded === true ||
+          countStudentTurns(nextMessages) >= (data?.maxStudentTurns ?? MAX_SIMULATION_STUDENT_TURNS)
+        );
       } else {
         setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
       }
@@ -605,6 +637,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
 
       setCurrentSessionId(data?.session?.id ?? null);
       setMessages(sessionMessages);
+      setSessionEnded(false);
       setInputValue('');
       setDocumentContexts([]);
       updateStructuredFeedback(data?.orchestration ?? undefined);
@@ -630,6 +663,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
       setEndingSession(false);
       setCurrentSessionId(null);
       setMessages([]);
+      setSessionEnded(false);
       setDocumentContexts([]);
       resetStructuredFeedback();
       onExit();
@@ -914,6 +948,11 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               )}
               <div>
                 <div className="flex min-h-[150px] flex-1 flex-col gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[168px] sm:px-4 sm:py-4">
+                  {hasReachedTurnLimit && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                      {SIMULATION_MAX_TURNS_MESSAGE}
+                    </div>
+                  )}
                   <div className="flex flex-1 items-stretch gap-3">
                     <button
                       type="button"
@@ -938,14 +977,15 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                           void handleSend();
                         }
                       }}
-                      placeholder="输入消息，与客户进行业务沟通..."
+                      disabled={hasReachedTurnLimit}
+                      placeholder={hasReachedTurnLimit ? '本轮话题已结束，请重新开始新的练习。' : '输入消息，与客户进行业务沟通...'}
                       className="min-h-[96px] max-h-48 flex-1 resize-none border-none bg-transparent py-1 text-base leading-6 text-slate-700 placeholder:text-slate-400 focus:ring-0 sm:min-h-[112px] sm:max-h-56"
                       rows={4}
                     />
                     <button
                       type="button"
                       onClick={() => void handleSend()}
-                      disabled={!inputValue.trim() || sending || loadingSession}
+                      disabled={!inputValue.trim() || sending || loadingSession || hasReachedTurnLimit}
                       aria-label="发送消息"
                       className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >

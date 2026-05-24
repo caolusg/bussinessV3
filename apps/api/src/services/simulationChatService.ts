@@ -18,6 +18,9 @@ const FALLBACK_REPLY_HISTORY = new Set([
 ]);
 const DEFAULT_OPPONENT_GREETING =
   '你好，我是中国商通外贸公司的采购经理郑远航，请先介绍贵公司的产品。';
+export const MAX_SIMULATION_STUDENT_TURNS = 20;
+export const SIMULATION_MAX_TURNS_MESSAGE =
+  `本轮话题已达到 ${MAX_SIMULATION_STUDENT_TURNS} 次对话上限，请点击“重新开始”开启新的练习。`;
 
 const buildOpponentGreeting = (opponentName?: string | null) =>
   opponentName?.trim()
@@ -313,6 +316,26 @@ export async function appendStudentAndOpponent(
   stage?: SimulationStage,
   productCatalogContext?: string | null
 ) {
+  const existingStudentTurns = await prisma.simulationMessage.count({
+    where: { sessionId, role: 'student' }
+  });
+
+  if (existingStudentTurns >= MAX_SIMULATION_STUDENT_TURNS) {
+    await prisma.simulationSession.update({
+      where: { id: sessionId },
+      data: { status: 'ended', updatedAt: new Date() }
+    });
+    const messages = await prisma.simulationMessage.findMany({
+      where: { sessionId },
+      orderBy: { turnIndex: 'asc' }
+    });
+    return {
+      limitReached: true as const,
+      studentTurnCount: existingStudentTurns,
+      messages
+    };
+  }
+
   const { studentMessage, nextTurn, history, scenario } = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
       const maxTurn = await tx.simulationMessage.aggregate({
@@ -421,10 +444,35 @@ export async function appendStudentAndOpponent(
     }
   });
 
+  const studentTurnCount = existingStudentTurns + 1;
+  let limitMessage = null;
+
+  if (studentTurnCount >= MAX_SIMULATION_STUDENT_TURNS) {
+    limitMessage = await prisma.simulationMessage.create({
+      data: {
+        sessionId,
+        role: 'system',
+        content: SIMULATION_MAX_TURNS_MESSAGE,
+        turnIndex: nextTurn + 2
+      }
+    });
+  }
+
   await prisma.simulationSession.update({
     where: { id: sessionId },
-    data: { updatedAt: new Date() }
+    data: {
+      status: studentTurnCount >= MAX_SIMULATION_STUDENT_TURNS ? 'ended' : 'active',
+      updatedAt: new Date()
+    }
   });
 
-  return { studentMessage, opponentMessage, orchestration, scenario };
+  return {
+    limitReached: false as const,
+    studentTurnCount,
+    studentMessage,
+    opponentMessage,
+    limitMessage,
+    orchestration,
+    scenario
+  };
 }

@@ -9,6 +9,7 @@ import {
   endStageSession,
   ensureSessionGreeting,
   getOrCreateActiveSession,
+  MAX_SIMULATION_STUDENT_TURNS,
   restartStageSession
 } from '../services/simulationChatService.js';
 import { generateCoachingReply, getAiProviderName } from '../ai/compatibleAiClient.js';
@@ -465,13 +466,22 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
     const session = await getOrCreateActiveSession(prisma, userId, stage);
     await ensureSessionGreeting(prisma, session.id);
 
-    const { studentMessage, opponentMessage, orchestration, scenario } = await appendStudentAndOpponent(
+    const appended = await appendStudentAndOpponent(
       prisma,
       session.id,
       content,
       stage,
       productCatalogContext
     );
+
+    if (appended.limitReached) {
+      return res.status(409).json(fail(
+        'SIMULATION_TURN_LIMIT_REACHED',
+        `本轮话题已达到 ${MAX_SIMULATION_STUDENT_TURNS} 次对话上限，请重新开始新的练习。`
+      ));
+    }
+
+    const { studentMessage, opponentMessage, orchestration, scenario, studentTurnCount } = appended;
 
     await logPracticeEvent(prisma, {
       userId,
@@ -554,6 +564,9 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
       sessionId: session.id,
       stage: session.stage,
       attemptNo: session.attemptNo,
+      sessionEnded: studentTurnCount >= MAX_SIMULATION_STUDENT_TURNS,
+      maxStudentTurns: MAX_SIMULATION_STUDENT_TURNS,
+      studentTurnCount,
       orchestration,
       messages
     });
