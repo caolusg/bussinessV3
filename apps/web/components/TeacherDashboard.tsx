@@ -1875,7 +1875,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="grid w-full max-w-[520px] grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="grid w-full gap-2 sm:grid-cols-5 xl:max-w-[680px]">
               {availableRoles.map((role) => {
                 const checked = getSelectedManagedRoleKey(newUserForm.roleKeys) === role.key;
                 return (
@@ -2238,8 +2238,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               正在加载用户...
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
+            <div className="overflow-x-auto bg-slate-100">
+              <table className="w-full min-w-[1280px] table-fixed border-separate border-spacing-0 text-left text-sm">
                 <colgroup>
                   <col className="w-[180px]" />
                   <col className="w-[240px]" />
@@ -2248,22 +2248,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   <col className="w-[150px]" />
                   <col className="w-[190px]" />
                 </colgroup>
-                <thead className="bg-slate-50 text-xs font-black uppercase tracking-widest text-slate-400">
+                <thead className="text-xs font-black uppercase tracking-widest text-slate-400">
                   <tr>
-                    <th className="px-3 py-4">用户</th>
-                    <th className="px-3 py-4">邮箱</th>
-                    <th className="px-3 py-4">状态</th>
-                    <th className="px-3 py-4">角色</th>
-                    <th className="px-3 py-4">创建时间</th>
-                    <th className="px-3 py-4 text-right">操作</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">用户</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">邮箱</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">状态</th>
+                    <th className="border-b border-r border-slate-200 bg-indigo-50/70 px-3 py-4">角色</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">创建时间</th>
+                    <th className="border-b border-slate-200 bg-slate-50 px-3 py-4 text-right">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredUsers.map((item) => {
                     const isSelf = item.id === userManager?.currentUserId;
                     return (
                       <tr key={item.id} className="align-top">
-                        <td className="px-3 py-4">
+                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
                           <input
                             value={item.username}
                             onChange={(e) => updateManagedUserDraft(item.id, { username: e.target.value })}
@@ -2271,14 +2271,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           />
                           {isSelf && <p className="mt-1 text-xs font-bold text-indigo-600">当前账号</p>}
                         </td>
-                        <td className="px-3 py-4">
+                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
                           <input
                             value={item.email ?? ''}
                             onChange={(e) => updateManagedUserDraft(item.id, { email: e.target.value })}
                             className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-400"
                           />
                         </td>
-                        <td className="px-3 py-4">
+                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
                           <select
                             value={item.status}
                             onChange={(e) => updateManagedUserDraft(item.id, { status: e.target.value as ManagedUser['status'] })}
@@ -2289,14 +2289,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             ))}
                           </select>
                         </td>
-                        <td className="px-3 py-4">
-                          <div className="flex flex-wrap gap-2">
+                        <td className="border-b border-r border-indigo-100 bg-indigo-50/30 px-3 py-4">
+                          <div className="flex flex-nowrap gap-2">
                             {availableRoles.map((role) => {
                               const checked = getSelectedManagedRoleKey(item.roles) === role.key;
                               return (
                                 <label
                                   key={role.key}
-                                  className={`flex h-9 w-[116px] items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
+                                  className={`flex h-9 w-[88px] shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${
                                     checked
                                       ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                                       : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
@@ -2316,8 +2316,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             })}
                           </div>
                         </td>
-                        <td className="px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
-                        <td className="min-w-[180px] px-3 py-4">
+                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="min-w-[180px] border-b border-slate-100 bg-slate-50 px-3 py-4">
                           <div className="flex flex-nowrap items-center justify-end gap-2">
                             <button
                               type="button"
