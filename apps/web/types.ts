@@ -98,6 +98,9 @@ export interface SimulationTrace {
   usedTools?: string[];
   usedWebSearch?: boolean;
   degraded?: boolean;
+  model?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 }
 
 export interface SimulationOrchestration {

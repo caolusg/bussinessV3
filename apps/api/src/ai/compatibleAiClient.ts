@@ -55,11 +55,17 @@ export function getAiProviderName(): 'deepseek' | 'compatible' | 'openclaw' {
 export type RoleplayReplyResult = {
   content: string;
   degraded: boolean;
+  model?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 };
 
 export type CoachingReplyResult = {
   content: string;
   degraded: boolean;
+  model?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 };
 
 export type ResourceOcrItem = {
@@ -83,6 +89,29 @@ type ResolvedAiConfig = {
   model: string;
   timeoutMs: number;
 };
+
+function normalizeAiError(error: unknown, fallbackCode = 'AI_CALL_FAILED') {
+  const err = error as {
+    name?: string;
+    status?: number;
+    code?: string;
+    type?: string;
+    message?: string;
+  };
+  const code = String(err.code ?? err.type ?? err.status ?? err.name ?? fallbackCode);
+  const message = [
+    err.message,
+    err.status ? `status=${err.status}` : null,
+    err.name ? `name=${err.name}` : null,
+    err.code ? `code=${err.code}` : null,
+    err.type ? `type=${err.type}` : null
+  ].filter(Boolean).join(' | ');
+
+  return {
+    code,
+    message: message || fallbackCode
+  };
+}
 
 async function resolveAiConfig(): Promise<ResolvedAiConfig> {
   const fallback = getDefaultRuntimeConfig();
@@ -118,7 +147,13 @@ export async function generateRoleplayReply(args: {
 }): Promise<RoleplayReplyResult> {
   const runtimeConfig = await resolveAiConfig();
   if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
-    return { content: MOCK_ROLEPLAY_REPLY, degraded: true };
+    return {
+      content: MOCK_ROLEPLAY_REPLY,
+      degraded: true,
+      model: runtimeConfig.model,
+      errorCode: !runtimeConfig.enabled ? 'AI_DISABLED' : 'AI_API_KEY_MISSING',
+      errorMessage: !runtimeConfig.enabled ? 'AI runtime is disabled.' : 'AI API key is not configured.'
+    };
   }
 
   const controller = new AbortController();
@@ -150,26 +185,31 @@ export async function generateRoleplayReply(args: {
     );
 
     const content = completion.choices?.[0]?.message?.content?.trim();
-    return content ? { content, degraded: false } : { content: MOCK_ROLEPLAY_REPLY, degraded: true };
+    return content
+      ? { content, degraded: false, model: runtimeConfig.model }
+      : {
+          content: MOCK_ROLEPLAY_REPLY,
+          degraded: true,
+          model: runtimeConfig.model,
+          errorCode: 'AI_EMPTY_RESPONSE',
+          errorMessage: 'AI provider returned an empty response.'
+        };
   } catch (error) {
-    const err = error as {
-      name?: string;
-      status?: number;
-      code?: string;
-      type?: string;
-      message?: string;
-    };
+    const aiError = normalizeAiError(error);
     console.warn('Compatible AI roleplay reply failed, using fallback:', {
       provider: runtimeConfig.provider,
       baseURL: runtimeConfig.baseURL,
       model: runtimeConfig.model,
-      name: err.name,
-      status: err.status,
-      code: err.code,
-      type: err.type,
-      message: err.message
+      code: aiError.code,
+      message: aiError.message
     });
-    return { content: MOCK_ROLEPLAY_REPLY, degraded: true };
+    return {
+      content: MOCK_ROLEPLAY_REPLY,
+      degraded: true,
+      model: runtimeConfig.model,
+      errorCode: aiError.code,
+      errorMessage: aiError.message
+    };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -182,7 +222,13 @@ export async function generateCoachingReply(args: {
 }): Promise<CoachingReplyResult> {
   const runtimeConfig = await resolveAiConfig();
   if (!runtimeConfig.enabled || !runtimeConfig.apiKey) {
-    return { content: MOCK_COACHING_REPLY, degraded: true };
+    return {
+      content: MOCK_COACHING_REPLY,
+      degraded: true,
+      model: runtimeConfig.model,
+      errorCode: !runtimeConfig.enabled ? 'AI_DISABLED' : 'AI_API_KEY_MISSING',
+      errorMessage: !runtimeConfig.enabled ? 'AI runtime is disabled.' : 'AI API key is not configured.'
+    };
   }
 
   const controller = new AbortController();
@@ -225,26 +271,31 @@ export async function generateCoachingReply(args: {
     );
 
     const content = completion.choices?.[0]?.message?.content?.trim();
-    return content ? { content, degraded: false } : { content: MOCK_COACHING_REPLY, degraded: true };
+    return content
+      ? { content, degraded: false, model: runtimeConfig.model }
+      : {
+          content: MOCK_COACHING_REPLY,
+          degraded: true,
+          model: runtimeConfig.model,
+          errorCode: 'AI_EMPTY_RESPONSE',
+          errorMessage: 'AI provider returned an empty response.'
+        };
   } catch (error) {
-    const err = error as {
-      name?: string;
-      status?: number;
-      code?: string;
-      type?: string;
-      message?: string;
-    };
+    const aiError = normalizeAiError(error);
     console.warn('Compatible AI coaching reply failed, using fallback:', {
       provider: runtimeConfig.provider,
       baseURL: runtimeConfig.baseURL,
       model: runtimeConfig.model,
-      name: err.name,
-      status: err.status,
-      code: err.code,
-      type: err.type,
-      message: err.message
+      code: aiError.code,
+      message: aiError.message
     });
-    return { content: MOCK_COACHING_REPLY, degraded: true };
+    return {
+      content: MOCK_COACHING_REPLY,
+      degraded: true,
+      model: runtimeConfig.model,
+      errorCode: aiError.code,
+      errorMessage: aiError.message
+    };
   } finally {
     clearTimeout(timeoutId);
   }

@@ -150,6 +150,9 @@ export class CompatibleSimulationProvider implements SimulationProvider {
         usedTools: productCatalogContext ? ['product_catalog_context'] : [],
         usedWebSearch: false,
         degraded: roleplay.degraded,
+        model: roleplay.model ?? null,
+        errorCode: roleplay.errorCode ?? null,
+        errorMessage: roleplay.errorMessage ?? null,
         promptVersion: input.scenario?.promptVersion ?? 'v1',
         scenarioId: input.scenario?.id ?? null
       }

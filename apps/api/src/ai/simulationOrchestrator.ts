@@ -50,6 +50,9 @@ export type SimulationOrchestratorResult = {
     usedTools?: string[];
     usedWebSearch?: boolean;
     degraded?: boolean;
+    model?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
     promptVersion?: string | null;
     scenarioId?: string | null;
   };

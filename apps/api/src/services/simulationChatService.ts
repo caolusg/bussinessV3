@@ -237,6 +237,9 @@ function createFallbackOrchestration(): SimulationOrchestratorResult {
       usedTools: [],
       usedWebSearch: false,
       degraded: true,
+      model: null,
+      errorCode: 'AI_ORCHESTRATION_FAILED',
+      errorMessage: 'Simulation AI orchestration failed before a provider response was available.',
       promptVersion: 'v1',
       scenarioId: null
     }
@@ -365,8 +368,10 @@ export async function appendStudentAndOpponent(
       productCatalogContext,
       scenario
     });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown simulation AI orchestration error.';
     orchestration = createFallbackOrchestration();
+    orchestration.trace.errorMessage = message;
   }
 
   const opponentMessage = await prisma.simulationMessage.create({

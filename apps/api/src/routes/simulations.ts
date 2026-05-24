@@ -418,6 +418,7 @@ router.post('/coach/:sessionId/message', requireAuth, async (req, res) => {
       stageId: session.stageId,
       sessionId: session.id,
       provider: getAiProviderName(),
+      model: reply.model ?? undefined,
       promptVersion: 'coach-v1',
       inputMessages: {
         question: bodyParsed.data.question,
@@ -428,7 +429,9 @@ router.post('/coach/:sessionId/message', requireAuth, async (req, res) => {
         mode: 'coaching',
         degraded: reply.degraded
       },
-      degraded: reply.degraded
+      degraded: reply.degraded,
+      errorCode: reply.errorCode ?? undefined,
+      errorMessage: reply.errorMessage ?? undefined
     });
 
     return res.status(200).json(ok({
@@ -488,6 +491,7 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
       sessionId: session.id,
       messageId: opponentMessage.id,
       provider: orchestration.trace.provider,
+      model: orchestration.trace.model ?? undefined,
       promptVersion: scenario?.promptVersion ?? orchestration.trace.promptVersion ?? 'v1',
       systemPrompt: scenario?.systemPrompt ?? undefined,
       inputMessages: {
@@ -509,7 +513,9 @@ router.post('/:stage/message', requireAuth, async (req, res) => {
         personaSnapshot: orchestration.personaSnapshot ?? null,
         trace: orchestration.trace
       },
-      degraded: orchestration.trace.degraded ?? false
+      degraded: orchestration.trace.degraded ?? false,
+      errorCode: orchestration.trace.errorCode ?? undefined,
+      errorMessage: orchestration.trace.errorMessage ?? undefined
     });
 
     await logMessageAnalysis(prisma, {

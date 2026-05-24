@@ -772,6 +772,11 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
             {displayMessages.map((msg) => {
               const isMe = msg.sender === 'USER';
               const isSystem = msg.sender === 'SYSTEM';
+              const isAiFailure = !isMe && msg.trace?.degraded === true;
+              const aiFailureText = [
+                'AI 调用未成功，已暂停生成新的客户回复。',
+                '请稍后重试，或联系管理员在“系统管理 > 最近异常”查看原因。'
+              ].join('');
 
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -809,13 +814,24 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                         className={`rounded-2xl px-3 py-2.5 text-sm leading-relaxed shadow-sm sm:px-4 sm:py-3 ${
                           isMe
                             ? 'rounded-tr-sm bg-blue-600 text-white'
+                            : isAiFailure
+                              ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-800'
                             : isSystem
                               ? 'rounded-tl-sm border border-amber-200 bg-amber-50 text-amber-900'
                               : 'rounded-tl-sm border border-gray-200 bg-white text-slate-700'
                         }`}
                       >
-                        {msg.text}
+                        {isAiFailure ? aiFailureText : msg.text}
                       </div>
+                      {isAiFailure && (
+                        <div className="mt-2 max-w-full rounded-xl border border-rose-100 bg-white px-3 py-2 text-xs leading-5 text-rose-700 shadow-sm">
+                          <div className="font-bold">调用失败</div>
+                          <div className="break-words">
+                            {msg.trace?.errorCode || 'AI_CALL_FAILED'}
+                            {msg.trace?.errorMessage ? ` · ${msg.trace.errorMessage}` : ''}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

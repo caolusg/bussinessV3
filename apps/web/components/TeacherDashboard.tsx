@@ -4247,7 +4247,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           <div className="bg-indigo-600 p-2 rounded-xl shadow-lg">
             <Settings2 size={24} />
           </div>
-          <h1 className="font-bold text-lg tracking-tight">教师管理后台</h1>
+          <h1 className="font-bold text-lg tracking-tight">系统管理后台</h1>
         </div>
 
         <nav className="flex-1 p-4 space-y-2 mt-4">
