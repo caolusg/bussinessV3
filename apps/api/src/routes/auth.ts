@@ -117,6 +117,7 @@ type MailUser = {
 };
 const GENERIC_PASSWORD_RESET_MESSAGE =
   '如果账号存在且邮箱已验证，系统会向注册邮箱发送用户名和重置密码链接';
+const STUDENT_PORTAL_ROLE_KEYS = ['student', 'test'];
 
 const getUserRoles = async (userId: string) => {
   const roles = await prisma.userRole.findMany({
@@ -125,6 +126,9 @@ const getUserRoles = async (userId: string) => {
   });
   return roles.map((r: { role: { key: string } }) => r.role.key);
 };
+
+const hasStudentPortalRole = (roles: string[]) =>
+  roles.some((role) => STUDENT_PORTAL_ROLE_KEYS.includes(role));
 
 const isStudentProfileComplete = (profile: {
   realName: string | null;
@@ -378,7 +382,7 @@ router.post('/student/register_or_login', async (req, res) => {
     }
 
     const roles = await getUserRoles(existing.id);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
@@ -491,7 +495,7 @@ router.post('/student/login', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
@@ -552,7 +556,7 @@ router.post('/student/rename-username', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
@@ -619,7 +623,7 @@ router.post('/student/complete-email', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
@@ -726,7 +730,7 @@ router.post('/resend-verification', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(200).json(ok({ sent: true }));
     }
 
@@ -755,7 +759,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const roles = await getUserRoles(user.id);
-    if (!roles.includes('student') || !user.email || !user.emailVerifiedAt) {
+    if (!hasStudentPortalRole(roles) || !user.email || !user.emailVerifiedAt) {
       return res.status(200).json(ok({ message: GENERIC_PASSWORD_RESET_MESSAGE }));
     }
 
@@ -890,7 +894,7 @@ router.get('/me', requireAuth, async (req, res) => {
 
     const roles = await getUserRoles(userId);
     let profileCompleted = true;
-    if (roles.includes('student')) {
+    if (hasStudentPortalRole(roles)) {
       const profile = await prisma.studentProfile.findUnique({
         where: { userId },
         select: {

@@ -778,8 +778,12 @@ const getRoleLabelFallback = (role: string) => {
   if (normalizedRole === 'admin') return '系统管理员';
   if (normalizedRole === 'teacher') return '教师';
   if (normalizedRole === 'student') return '学生';
+  if (normalizedRole === 'test') return '测试';
   return role;
 };
+
+const SYSTEM_ROLE_KEYS = ['admin', 'teacher', 'student', 'test'];
+const isProtectedRole = (role: ManagedRole) => role.isSystem || SYSTEM_ROLE_KEYS.includes(role.key.trim().toLowerCase());
 
 const formatCurrentUserRoles = (roles?: string[]) => {
   if (!roles?.length) return '未分配角色';
@@ -1647,7 +1651,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const deleteManagedRole = async (role: ManagedRole) => {
-    if (role.isSystem) return;
+    if (isProtectedRole(role)) return;
     if (!window.confirm(`确定删除角色 ${role.name}？`)) return;
 
     try {
@@ -1978,7 +1982,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                       {savingRoleId === role.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                       保存
                     </button>
-                    {!role.isSystem && (
+                    {!isProtectedRole(role) && (
                       <button
                         type="button"
                         onClick={() => deleteManagedRole(role)}
@@ -3594,7 +3598,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <button
                 onClick={() => void discoverResearchTopics()}
                 disabled={topicDiscoveryLoading || researchAiLoading}
-                title="基于数据表语义和聚合统计扫描，默认排除管理员、教师、停用账号和明显测试账号。通常需要 10-20 秒。"
+                title="基于数据表语义和聚合统计扫描，默认排除管理员、教师、测试角色、停用账号和明显测试账号。通常需要 10-20 秒。"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50"
               >
                 {topicDiscoveryLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
@@ -3664,7 +3668,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 <div>
                   <p className="text-sm font-black text-slate-900">正在扫描科研机会</p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    系统会先读取数据表说明，再执行聚合统计扫描。扫描默认排除管理员、教师、停用账号，以及用户名或邮箱中包含 test、demo、admin、teacher、测试等标记的账号。
+                    系统会先读取数据表说明，再执行聚合统计扫描。扫描默认排除管理员、教师、测试角色、停用账号，以及用户名或邮箱中包含 test、demo、admin、teacher、测试等标记的账号。
                   </p>
                 </div>
               </div>
@@ -3678,7 +3682,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   <h5 className="mt-1 text-lg font-black text-slate-900">自动科研机会扫描</h5>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{topicDiscovery.overview}</p>
                   <p className="mt-2 text-xs font-bold leading-5 text-slate-400">
-                    扫描口径：仅统计有效学生样本；默认排除管理员、教师、停用账号和明显测试账号。结果用于发现 topic，不直接证明因果关系。
+                    扫描口径：仅统计有效学生样本；默认排除管理员、教师、测试角色、停用账号和明显测试账号。结果用于发现 topic，不直接证明因果关系。
                   </p>
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">

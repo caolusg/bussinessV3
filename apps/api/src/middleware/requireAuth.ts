@@ -9,6 +9,10 @@ interface JwtPayload {
   role?: 'student' | 'teacher';
 }
 
+const STUDENT_PORTAL_ROLE_KEYS = ['student', 'test'];
+const hasStudentPortalRole = (roles: string[]) =>
+  roles.some((role) => STUDENT_PORTAL_ROLE_KEYS.includes(role));
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.header('Authorization');
   if (!header || !header.startsWith('Bearer ')) {
@@ -41,7 +45,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     const roles = user.roles.map((item) => item.role.key);
-    if (EMAIL_VERIFICATION_REQUIRED && roles.includes('student') && !user.emailVerifiedAt) {
+    if (EMAIL_VERIFICATION_REQUIRED && hasStudentPortalRole(roles) && !user.emailVerifiedAt) {
       return res.status(401).json({ error: 'EMAIL_NOT_VERIFIED' });
     }
 

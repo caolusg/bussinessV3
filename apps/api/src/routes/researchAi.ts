@@ -295,7 +295,7 @@ const DISCOVERY_SCANS = [
             SELECT 1
             FROM user_roles ur2
             INNER JOIN roles r2 ON r2.id = ur2.role_id
-            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
           )
           AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
           AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
@@ -324,7 +324,7 @@ const DISCOVERY_SCANS = [
           AND u.status = 'ACTIVE'
           AND NOT EXISTS (
             SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
-            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
           )
           AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
           AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
@@ -378,7 +378,7 @@ const DISCOVERY_SCANS = [
           AND u.status = 'ACTIVE'
           AND NOT EXISTS (
             SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
-            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
           )
           AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
           AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
@@ -404,7 +404,7 @@ const DISCOVERY_SCANS = [
           AND u.status = 'ACTIVE'
           AND NOT EXISTS (
             SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
-            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
           )
           AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
           AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
@@ -430,7 +430,7 @@ const DISCOVERY_SCANS = [
           AND u.status = 'ACTIVE'
           AND NOT EXISTS (
             SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
-            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+            WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
           )
           AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
           AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'
@@ -462,7 +462,7 @@ const DISCOVERY_SCANS = [
             AND u.status = 'ACTIVE'
             AND NOT EXISTS (
               SELECT 1 FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id
-              WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher')
+              WHERE ur2.user_id = u.id AND r2.key IN ('admin', 'teacher', 'researcher', 'test')
             )
             AND lower(u.username) !~ '(test|demo|admin|teacher|研究|测试)'
             AND lower(COALESCE(u.email, '')) !~ '(test|demo|example)'

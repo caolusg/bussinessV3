@@ -9,6 +9,10 @@ type AuthMe = {
   profileCompleted: boolean;
 };
 
+const STUDENT_PORTAL_ROLES = ['student', 'test'];
+const hasStudentPortalRole = (roles: string[]) =>
+  roles.some((role) => STUDENT_PORTAL_ROLES.includes(role));
+
 const RequireAuth: React.FC = () => {
   const location = useLocation();
   const token = getAuthToken({ touch: false });
@@ -72,7 +76,7 @@ const RequireAuth: React.FC = () => {
   }
 
   if (
-    roles.includes('student') &&
+    hasStudentPortalRole(roles) &&
     !profileCompleted &&
     !location.pathname.startsWith('/profile')
   ) {

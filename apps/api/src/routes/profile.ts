@@ -36,6 +36,7 @@ const passwordSchema = z
 
 const ok = <T>(data: T) => ({ ok: true, data });
 const fail = (code: string, error: string) => ({ ok: false, code, error });
+const STUDENT_PORTAL_ROLE_KEYS = ['student', 'test'];
 
 const getRoles = async (userId: string) => {
   const roles = await prisma.userRole.findMany({
@@ -44,6 +45,9 @@ const getRoles = async (userId: string) => {
   });
   return roles.map((r: { role: { key: string } }) => r.role.key);
 };
+
+const hasStudentPortalRole = (roles: string[]) =>
+  roles.some((role) => STUDENT_PORTAL_ROLE_KEYS.includes(role));
 
 router.get('/options', requireAuth, async (_req, res) => {
   try {
@@ -85,7 +89,7 @@ router.get('/student', requireAuth, async (req, res) => {
     }
 
     const roles = await getRoles(userId);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
@@ -120,7 +124,7 @@ router.post('/student', requireAuth, async (req, res) => {
     }
 
     const roles = await getRoles(userId);
-    if (!roles.includes('student')) {
+    if (!hasStudentPortalRole(roles)) {
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 

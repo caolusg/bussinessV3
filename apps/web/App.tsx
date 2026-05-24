@@ -45,6 +45,10 @@ const buildDefaultUser = (role: UserRole): UserProfile => ({
   classGroup: role === UserRole.STUDENT ? '其他' : ''
 });
 
+const STUDENT_PORTAL_ROLES = ['student', 'test'];
+const hasStudentPortalRole = (roles?: string[]) =>
+  Boolean(roles?.some((role) => STUDENT_PORTAL_ROLES.includes(role)));
+
 type ContentTask = {
   taskCode: string;
   title: string;
@@ -121,7 +125,7 @@ const loadAuthenticatedUser = async (token?: string | null) => {
   const me = await apiRequest<AuthMe>('/api/auth/me', requestOptions);
   let studentProfile: StudentProfileData | null = null;
 
-  if (me.roles.includes('student')) {
+  if (hasStudentPortalRole(me.roles)) {
     studentProfile = await apiRequest<StudentProfileData | null>('/api/profile/student', requestOptions);
   }
 
@@ -133,7 +137,7 @@ const loadAuthenticatedUser = async (token?: string | null) => {
 
 const getPostLoginPath = (me: AuthMe) => {
   if (me.roles.includes('teacher') || me.roles.includes('admin') || (me.panelPermissions ?? []).length > 0) return '/teacher';
-  if (me.roles.includes('student') && !me.profileCompleted) return '/profile';
+  if (hasStudentPortalRole(me.roles) && !me.profileCompleted) return '/profile';
   return '/';
 };
 

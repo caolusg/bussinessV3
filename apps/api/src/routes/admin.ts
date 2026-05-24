@@ -337,7 +337,7 @@ function formatRole(role: RoleWithPermissions) {
     id: role.id,
     key: role.key,
     name: role.name,
-    isSystem: ['admin', 'teacher', 'student'].includes(role.key),
+    isSystem: ['admin', 'teacher', 'student', 'test'].includes(role.key),
     permissions: normalizePanelKeys(
       role.panelPermissions.map((permission) => permission.panelKey),
       role.key
@@ -886,7 +886,7 @@ router.delete('/roles/:roleId', requirePanel('users'), async (req, res) => {
       include: { users: true }
     });
     if (!role) return res.status(404).json(fail('NOT_FOUND', 'Role not found'));
-    if (['admin', 'teacher', 'student'].includes(role.key)) {
+    if (['admin', 'teacher', 'student', 'test'].includes(role.key)) {
       return res.status(400).json(fail('SYSTEM_ROLE_LOCKED', 'System role cannot be deleted'));
     }
     if (role.users.length > 0) {

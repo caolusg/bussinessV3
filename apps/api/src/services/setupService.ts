@@ -42,6 +42,7 @@ async function runPackageScript(script: string, env: NodeJS.ProcessEnv = {}) {
 async function ensureBaseData(prisma: PrismaClient, teacherUsername: string, teacherPassword: string) {
   const roles = [
     { key: 'student', name: 'Student' },
+    { key: 'test', name: '测试' },
     { key: 'teacher', name: 'Teacher' },
     { key: 'admin', name: 'System Administrator' }
   ];
