@@ -126,6 +126,7 @@ const TeachingGroupManager: React.FC = () => {
   const availableStudents = useMemo(() => {
     const keyword = studentSearch.trim().toLowerCase();
     return (data?.students ?? [])
+      .filter((student) => student.status === 'ACTIVE')
       .filter((student) => !memberIds.has(student.id))
       .filter((student) => {
         if (!keyword) return true;

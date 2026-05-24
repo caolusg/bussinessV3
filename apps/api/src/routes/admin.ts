@@ -1318,6 +1318,7 @@ router.get('/research/students', requirePanel('student_research'), async (req, r
         }
       : {};
     const where: Prisma.UserWhereInput = {
+      status: 'ACTIVE',
       roles: { some: { role: { key: 'student' } } },
       ...searchWhere
     };
@@ -1466,7 +1467,7 @@ router.get('/research/students/:userId/activity', requirePanel('student_research
     const userId = params.data.userId;
 
     const user = await prisma.user.findFirst({
-      where: { id: userId, roles: { some: { role: { key: 'student' } } } },
+      where: { id: userId, status: 'ACTIVE', roles: { some: { role: { key: 'student' } } } },
       select: {
         id: true,
         username: true,
@@ -1954,7 +1955,7 @@ router.get('/groups/manager', async (_req, res) => {
         }
       }),
       prisma.user.findMany({
-        where: { roles: { some: { role: { key: 'student' } } } },
+        where: { status: 'ACTIVE', roles: { some: { role: { key: 'student' } } } },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -2067,6 +2068,17 @@ router.post('/groups/:groupId/members', async (req, res) => {
     const parsed = groupMembersPayloadSchema.safeParse(req.body);
     if (!params.success || !parsed.success) {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid group members payload'));
+    }
+
+    const activeStudentCount = await prisma.user.count({
+      where: {
+        id: { in: parsed.data.userIds },
+        status: 'ACTIVE',
+        roles: { some: { role: { key: 'student' } } }
+      }
+    });
+    if (activeStudentCount !== parsed.data.userIds.length) {
+      return res.status(400).json(fail('INVALID_GROUP_MEMBERS', '只能添加启用状态的学生账号'));
     }
 
     await prisma.teachingGroupMember.createMany({
