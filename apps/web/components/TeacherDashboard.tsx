@@ -2286,12 +2286,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         </td>
                         <td className="px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
                         <td className="px-3 py-4">
-                          <div className="flex flex-col items-stretch gap-2">
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => resetManagedUserPassword(item)}
                               disabled={savingUserId === item.id}
-                              className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                               title="重置密码"
                             >
                               重置
@@ -2300,7 +2300,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                               type="button"
                               onClick={() => saveManagedUser(item)}
                               disabled={savingUserId === item.id}
-                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white disabled:opacity-60"
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white disabled:opacity-60"
                             >
                               {savingUserId === item.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                               保存

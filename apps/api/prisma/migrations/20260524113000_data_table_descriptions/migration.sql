@@ -1,0 +1,57 @@
+CREATE TABLE "data_table_descriptions" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "table_key" TEXT NOT NULL,
+    "display_name" TEXT NOT NULL,
+    "group_name" TEXT NOT NULL,
+    "business_meaning" TEXT NOT NULL,
+    "data_grain" TEXT,
+    "key_columns" JSONB,
+    "relationships" JSONB,
+    "research_use_cases" JSONB,
+    "agent_guidance" TEXT,
+    "sensitivity_level" TEXT NOT NULL DEFAULT 'internal',
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "data_table_descriptions_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "data_table_descriptions_table_key_key" ON "data_table_descriptions"("table_key");
+CREATE INDEX "data_table_descriptions_group_active_idx" ON "data_table_descriptions"("group_name", "is_active");
+
+INSERT INTO "data_table_descriptions" (
+    "table_key",
+    "display_name",
+    "group_name",
+    "business_meaning",
+    "data_grain",
+    "key_columns",
+    "relationships",
+    "research_use_cases",
+    "agent_guidance",
+    "sensitivity_level"
+) VALUES
+('users', '用户', '用户与权限', '系统登录账号，包含学生、教师和管理员的基础账号状态。', '一行代表一个登录账号。', '["id", "username", "status", "created_at", "updated_at"]'::jsonb, '[{"from":"users.id","to":"student_profile.user_id","type":"one_to_one"},{"from":"users.id","to":"practice_events.user_id","type":"one_to_many"},{"from":"users.id","to":"ai_interaction_logs.user_id","type":"one_to_many"}]'::jsonb, '["按账号状态统计用户规模", "作为学生画像和行为数据的连接主表"]'::jsonb, '展示学生姓名时优先连接 student_profile，避免直接把 user_id 当作学生标签。不要查询 password_hash。', 'restricted'),
+('roles', '角色', '用户与权限', '系统角色定义，例如管理员、教师、学生。', '一行代表一个角色。', '["id", "key", "name"]'::jsonb, '[{"from":"roles.id","to":"user_roles.role_id","type":"one_to_many"},{"from":"roles.id","to":"role_panel_permissions.role_id","type":"one_to_many"}]'::jsonb, '["分析不同角色的权限覆盖范围"]'::jsonb, '角色本身不是学习行为数据，通常只用于权限解释。', 'internal'),
+('user_roles', '用户角色', '用户与权限', '用户和角色之间的多对多关系表。', '一行代表一个用户拥有一个角色。', '["user_id", "role_id"]'::jsonb, '[{"from":"user_roles.user_id","to":"users.id","type":"many_to_one"},{"from":"user_roles.role_id","to":"roles.id","type":"many_to_one"}]'::jsonb, '["筛选教师、学生或管理员账号"]'::jsonb, '用于区分账号身份，不直接代表学习表现。', 'internal'),
+('role_panel_permissions', '角色板块权限', '用户与权限', '记录每个角色可以访问哪些教师后台板块。', '一行代表一个角色对一个板块的访问权限。', '["role_id", "panel_key", "created_at"]'::jsonb, '[{"from":"role_panel_permissions.role_id","to":"roles.id","type":"many_to_one"}]'::jsonb, '["审计后台功能授权"]'::jsonb, '适合系统治理问题，不适合作为学生学习分析主表。', 'internal'),
+('student_auth', '学生登录身份', '学生档案', '学生注册或登录时使用的身份信息。', '一行代表一个学生账号的登录身份。', '["user_id", "id_or_name"]'::jsonb, '[{"from":"student_auth.user_id","to":"users.id","type":"one_to_one"}]'::jsonb, '["核对学生账号与身份输入是否完整"]'::jsonb, '身份字段可能包含姓名或学号，研究输出时谨慎展示。', 'restricted'),
+('student_profile', '学生资料', '学生档案', '学生学习画像，包括姓名、国籍、HSK、专业、班级等。', '一行代表一个学生账号的档案。', '["user_id", "real_name", "name", "nationality", "hsk_level", "major", "class_group", "completed_at"]'::jsonb, '[{"from":"student_profile.user_id","to":"users.id","type":"one_to_one"}]'::jsonb, '["按 HSK、专业、国籍或班级比较学习行为", "给行为日志补充学生显示名"]'::jsonb, '学生显示名使用 COALESCE(real_name, name, users.username)。不要在研究回答中暴露 student_no。', 'restricted'),
+('profile_options', '档案选项', '学生档案', '学生档案下拉选项配置，例如 HSK 等级和专业。', '一行代表一个可选项。', '["category", "value", "label", "sort_order", "is_active"]'::jsonb, '[]'::jsonb, '["解释学生画像字段的可选值"]'::jsonb, '这是配置表，不是学生实际选择记录；实际学生画像在 student_profile。', 'internal'),
+('teaching_groups', '教学分组', '教学组织', '教师维护的教学班级或研究分组。', '一行代表一个教学分组。', '["id", "name", "description", "color", "is_active"]'::jsonb, '[{"from":"teaching_groups.id","to":"teaching_group_members.group_id","type":"one_to_many"}]'::jsonb, '["按班级或分组比较活跃度、AI 求助、练习完成情况"]'::jsonb, '分组名称来自 name；不要假设存在 group_name 字段。', 'internal'),
+('teaching_group_members', '分组成员', '教学组织', '教学分组和学生之间的成员关系。', '一行代表一个学生属于一个教学分组。', '["group_id", "user_id", "assigned_by", "created_at"]'::jsonb, '[{"from":"teaching_group_members.group_id","to":"teaching_groups.id","type":"many_to_one"},{"from":"teaching_group_members.user_id","to":"users.id","type":"many_to_one"}]'::jsonb, '["按教学分组聚合学生行为", "限定某个班级的研究样本"]'::jsonb, '只有需要班级/分组维度时才连接该表；教师账号通常不是分组成员。', 'internal'),
+('business_stages', '业务阶段', '学习内容', '国际商务模拟的阶段定义，例如报价、谈判、合同等。', '一行代表一个业务学习阶段。', '["id", "key", "sort_order", "title_zh", "title_en", "is_active"]'::jsonb, '[{"from":"business_stages.id","to":"simulation_sessions.stage_id","type":"one_to_many"},{"from":"business_stages.id","to":"practice_events.stage_id","type":"one_to_many"},{"from":"business_stages.id","to":"ai_interaction_logs.stage_id","type":"one_to_many"}]'::jsonb, '["按业务阶段比较学生练习和 AI 求助差异"]'::jsonb, '展示阶段名称优先使用 title_zh。', 'internal'),
+('stage_tasks', '阶段任务', '学习内容', '每个业务阶段下的练习任务和目标。', '一行代表一个阶段任务。', '["id", "stage_id", "task_code", "title", "goal", "is_active"]'::jsonb, '[{"from":"stage_tasks.stage_id","to":"business_stages.id","type":"many_to_one"},{"from":"stage_tasks.id","to":"simulation_sessions.task_id","type":"one_to_many"}]'::jsonb, '["分析不同任务的练习参与度"]'::jsonb, '任务用于解释会话目标，不直接存放学生行为。', 'internal'),
+('learning_resources', '学习资源', '学习内容', '阶段相关的术语、知识点、案例或教学资源。', '一行代表一个学习资源条目。', '["id", "stage_id", "type", "term", "explanation", "sort_order", "is_active"]'::jsonb, '[{"from":"learning_resources.stage_id","to":"business_stages.id","type":"many_to_one"},{"from":"learning_resources.id","to":"practice_events.resource_id","type":"one_to_many"}]'::jsonb, '["分析资源查看行为与练习表现的关系"]'::jsonb, '资源查看事件主要在 practice_events，资源内容在本表。', 'internal'),
+('stage_ai_scenarios', 'AI 场景提示词', 'AI 与实训', '每个业务阶段的 AI 对手或教练场景配置。', '一行代表一个 AI 场景模板。', '["id", "stage_id", "name", "opponent_name", "difficulty", "prompt_version", "is_active"]'::jsonb, '[{"from":"stage_ai_scenarios.stage_id","to":"business_stages.id","type":"many_to_one"},{"from":"stage_ai_scenarios.id","to":"simulation_sessions.scenario_id","type":"one_to_many"}]'::jsonb, '["比较不同场景或难度下学生表现"]'::jsonb, '这是配置表；真实 AI 调用和学生互动在 simulation_messages 与 ai_interaction_logs。', 'internal'),
+('simulation_sessions', '实训会话', 'AI 与实训', '学生进入某个业务阶段后产生的模拟练习会话。', '一行代表一次练习会话。', '["id", "user_id", "stage_id", "task_id", "scenario_id", "stage", "attempt_no", "status", "created_at", "updated_at"]'::jsonb, '[{"from":"simulation_sessions.user_id","to":"users.id","type":"many_to_one"},{"from":"simulation_sessions.id","to":"simulation_messages.session_id","type":"one_to_many"},{"from":"simulation_sessions.id","to":"ai_interaction_logs.session_id","type":"one_to_many"},{"from":"simulation_sessions.id","to":"practice_events.session_id","type":"one_to_many"}]'::jsonb, '["统计练习次数、完成状态、重试次数", "串联消息、AI 调用和行为事件"]'::jsonb, '分析一次练习全过程时，以 session_id 连接消息、AI 调用和行为事件。', 'internal'),
+('simulation_messages', '实训消息', 'AI 与实训', '练习会话中的学生和 AI 对话消息。', '一行代表会话中的一轮消息。', '["id", "session_id", "role", "content", "turn_index", "created_at"]'::jsonb, '[{"from":"simulation_messages.session_id","to":"simulation_sessions.id","type":"many_to_one"},{"from":"simulation_messages.id","to":"ai_interaction_logs.message_id","type":"one_to_many"},{"from":"simulation_messages.id","to":"message_analysis_results.message_id","type":"one_to_many"}]'::jsonb, '["分析学生语言输出、轮次、对话内容和后续反馈"]'::jsonb, 'role 区分 student/assistant/system 等消息角色；输出样本时注意隐私。', 'restricted'),
+('ai_interaction_logs', 'AI 调用日志', 'AI 与实训', '服务端每次调用 AI 模型的输入、输出、模型、耗时和降级状态。', '一行代表一次 AI 模型调用。', '["id", "user_id", "session_id", "message_id", "stage_id", "provider", "model", "prompt_version", "output_text", "latency_ms", "degraded", "created_at"]'::jsonb, '[{"from":"ai_interaction_logs.user_id","to":"users.id","type":"many_to_one"},{"from":"ai_interaction_logs.session_id","to":"simulation_sessions.id","type":"many_to_one"},{"from":"ai_interaction_logs.message_id","to":"simulation_messages.id","type":"many_to_one"},{"from":"ai_interaction_logs.stage_id","to":"business_stages.id","type":"many_to_one"}]'::jsonb, '["研究学生何时求助 AI、AI 回复内容、模型降级、响应耗时", "比较 AI 教练和角色扮演 AI 的使用差异"]'::jsonb, 'prompt_version = coach-v1 表示显式 AI 教练求助；prompt_version = v1 通常是角色扮演对手回复。', 'restricted'),
+('message_analysis_results', '消息分析结果', 'AI 与实训', '对练习消息进行语言质量、商务策略、术语使用等结构化分析的结果。', '一行代表一条消息的一次分析结果。', '["id", "message_id", "user_id", "session_id", "stage_id", "analysis_version", "score_json", "created_at"]'::jsonb, '[{"from":"message_analysis_results.message_id","to":"simulation_messages.id","type":"many_to_one"},{"from":"message_analysis_results.user_id","to":"users.id","type":"many_to_one"}]'::jsonb, '["分析学生语言质量、商务策略得分和错误标签"]'::jsonb, 'JSON 字段中可能包含评分和标签，查询时先明确需要哪个维度。', 'restricted'),
+('practice_events', '练习事件', '行为记录', '学生在学习和练习界面产生的行为事件，包括点击流、页面浏览、资源查看和 AI 教练动作。', '一行代表一个行为事件。', '["id", "user_id", "stage_id", "session_id", "resource_id", "event_type", "metadata_json", "created_at"]'::jsonb, '[{"from":"practice_events.user_id","to":"users.id","type":"many_to_one"},{"from":"practice_events.session_id","to":"simulation_sessions.id","type":"many_to_one"},{"from":"practice_events.stage_id","to":"business_stages.id","type":"many_to_one"},{"from":"practice_events.resource_id","to":"learning_resources.id","type":"many_to_one"}]'::jsonb, '["点击流分析", "学习活动趋势", "AI 教练入口打开、提问、复制回答等行为研究"]'::jsonb, 'clickstream 对应 event_type IN (ui_click, page_view)。AI 教练相关行为包括 coach_context_opened、coach_question_asked、ai_coach_answer_copied。', 'restricted'),
+('student_learning_snapshots', '学习快照', '行为记录', '按学生汇总的学习状态快照。', '一行代表一个学生最新的学习摘要。', '["id", "user_id", "summary_json", "strengths_json", "weaknesses_json", "updated_at"]'::jsonb, '[{"from":"student_learning_snapshots.user_id","to":"users.id","type":"one_to_one"}]'::jsonb, '["查看学生长期学习画像和优势弱项"]'::jsonb, '这是聚合快照，不是原始行为明细；需要证据链时回到消息、事件和 AI 日志。', 'restricted'),
+('conversations', '旧版会话', '旧版兼容', '早期聊天功能的会话表。', '一行代表一个旧版会话。', '["id", "user_id", "title", "created_at", "updated_at"]'::jsonb, '[{"from":"conversations.user_id","to":"users.id","type":"many_to_one"},{"from":"conversations.id","to":"messages.conversation_id","type":"one_to_many"}]'::jsonb, '["兼容旧版聊天记录分析"]'::jsonb, '新实训数据优先使用 simulation_sessions。', 'internal'),
+('messages', '旧版消息', '旧版兼容', '早期聊天功能的消息表。', '一行代表一条旧版聊天消息。', '["id", "conversation_id", "role", "content", "created_at"]'::jsonb, '[{"from":"messages.conversation_id","to":"conversations.id","type":"many_to_one"}]'::jsonb, '["兼容旧版聊天内容分析"]'::jsonb, '新实训消息优先使用 simulation_messages。', 'restricted'),
+('email_verification_tokens', '邮箱验证令牌', '认证安全', '学生或用户邮箱验证流程中的一次性令牌记录。', '一行代表一个邮箱验证 token。', '["id", "user_id", "token_hash", "expires_at", "used_at", "created_at"]'::jsonb, '[{"from":"email_verification_tokens.user_id","to":"users.id","type":"many_to_one"}]'::jsonb, '["审计注册验证流程是否正常"]'::jsonb, '安全表，不应进入自动科研查询范围；不要展示 token_hash。', 'secret'),
+('password_reset_tokens', '密码重置令牌', '认证安全', '用户找回或重置密码流程中的一次性令牌记录。', '一行代表一个密码重置 token。', '["id", "user_id", "token_hash", "expires_at", "used_at", "created_at"]'::jsonb, '[{"from":"password_reset_tokens.user_id","to":"users.id","type":"many_to_one"}]'::jsonb, '["审计密码重置流程是否正常"]'::jsonb, '安全表，不应进入自动科研查询范围；不要展示 token_hash。', 'secret'),
+('data_table_descriptions', '数据表说明', '系统语义', '记录每张数据库表的实际含义、数据粒度、关键字段、表关系和科研分析提示，供管理员和研究 AI 理解底层数据逻辑。', '一行代表一张数据库表的数据字典说明。', '["table_key", "display_name", "group_name", "business_meaning", "data_grain", "key_columns", "relationships", "research_use_cases", "agent_guidance", "sensitivity_level"]'::jsonb, '[]'::jsonb, '["为自动科研 agent 提供数据库语义层", "维护表之间关系和可研究问题"]'::jsonb, '研究 AI 生成 SQL 前应优先读取本表作为数据字典；本表不存放学生原始行为。', 'internal');

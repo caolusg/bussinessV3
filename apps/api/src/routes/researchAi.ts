@@ -7,7 +7,8 @@ import { userHasPanelPermission } from '../services/panelPermissionService.js';
 import {
   buildResearchAnswerRulesPrompt,
   buildResearchDataDictionaryPrompt,
-  getResearchAllowedTables
+  getResearchAllowedTables,
+  type ResearchTableDescription
 } from '../research/dataDictionary.js';
 
 const router = Router();
@@ -22,10 +23,38 @@ const schema = z.object({
 const chartSuggestionSchema = z.enum(['line', 'bar', 'table']);
 
 const allowedTables = new Set(getResearchAllowedTables());
-const researchDataDictionaryPrompt = buildResearchDataDictionaryPrompt([...allowedTables]);
 const researchAnswerRulesPrompt = buildResearchAnswerRulesPrompt();
 
-function buildSqlPrompt(question: string, contextText: string, previous?: { sql: string; error: string }) {
+async function loadResearchDataDictionaryPrompt() {
+  try {
+    const descriptions = await prisma.$queryRawUnsafe<ResearchTableDescription[]>(`
+      SELECT
+        table_key AS "tableKey",
+        display_name AS "displayName",
+        group_name AS "groupName",
+        business_meaning AS "businessMeaning",
+        data_grain AS "dataGrain",
+        key_columns AS "keyColumns",
+        relationships,
+        research_use_cases AS "researchUseCases",
+        agent_guidance AS "agentGuidance",
+        sensitivity_level AS "sensitivityLevel"
+      FROM data_table_descriptions
+      WHERE is_active = true
+      ORDER BY group_name ASC, table_key ASC
+    `);
+    return buildResearchDataDictionaryPrompt([...allowedTables], descriptions);
+  } catch {
+    return buildResearchDataDictionaryPrompt([...allowedTables]);
+  }
+}
+
+function buildSqlPrompt(
+  question: string,
+  contextText: string,
+  researchDataDictionaryPrompt: string,
+  previous?: { sql: string; error: string }
+) {
   return [
     'Convert the user question into one PostgreSQL SELECT query.',
     'The current user question is the source of truth. Previous context is only for pronoun/reference resolution.',
@@ -248,9 +277,10 @@ router.post('/query', requireAuth, async (req, res) => {
     const contextText = context.length
       ? `\nPrevious follow-up context:\n${context.map((item, idx) => `${idx + 1}. Q:${maskUserIdsInText(item.question)}\nA:${maskUserIdsInText(item.answer)}`).join('\n')}`
       : '';
+    const researchDataDictionaryPrompt = await loadResearchDataDictionaryPrompt();
     const sqlCompletion = await generateCoachingReply({
       stage: 'quotation',
-      question: buildSqlPrompt(question, contextText),
+      question: buildSqlPrompt(question, contextText, researchDataDictionaryPrompt),
       messages: []
     });
 
@@ -266,7 +296,7 @@ router.post('/query', requireAuth, async (req, res) => {
 
       const retryCompletion = await generateCoachingReply({
         stage: 'quotation',
-        question: buildSqlPrompt(question, contextText, { sql, error: getErrorMessage(error) }),
+        question: buildSqlPrompt(question, contextText, researchDataDictionaryPrompt, { sql, error: getErrorMessage(error) }),
         messages: []
       });
       if (retryCompletion.degraded) throw error;
@@ -286,7 +316,7 @@ router.post('/query', requireAuth, async (req, res) => {
 
       const retryCompletion = await generateCoachingReply({
         stage: 'quotation',
-        question: buildSqlPrompt(question, contextText, { sql, error: getErrorMessage(error) }),
+        question: buildSqlPrompt(question, contextText, researchDataDictionaryPrompt, { sql, error: getErrorMessage(error) }),
         messages: []
       });
       if (retryCompletion.degraded) throw error;

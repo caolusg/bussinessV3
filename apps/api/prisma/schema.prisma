@@ -195,6 +195,26 @@ model RolePanelPermission {
   @@map("role_panel_permissions")
 }
 
+model DataTableDescription {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tableKey          String   @unique @map("table_key")
+  displayName       String   @map("display_name")
+  groupName         String   @map("group_name")
+  businessMeaning   String   @map("business_meaning")
+  dataGrain         String?  @map("data_grain")
+  keyColumns        Json?    @map("key_columns")
+  relationships     Json?
+  researchUseCases  Json?    @map("research_use_cases")
+  agentGuidance     String?  @map("agent_guidance")
+  sensitivityLevel  String   @default("internal") @map("sensitivity_level")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([groupName, isActive], map: "data_table_descriptions_group_active_idx")
+  @@map("data_table_descriptions")
+}
+
 model StudentAuth {
   userId   String @id @map("user_id") @db.Uuid
   idOrName String @map("id_or_name")

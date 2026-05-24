@@ -1,4 +1,5 @@
 export const DEFAULT_RESEARCH_ALLOWED_TABLES = [
+  'data_table_descriptions',
   'teaching_groups',
   'teaching_group_members',
   'users',
@@ -14,14 +15,58 @@ export function getResearchAllowedTables() {
     .filter(Boolean);
 }
 
-export function buildResearchDataDictionaryPrompt(allowedTables: string[]) {
+export type ResearchTableDescription = {
+  tableKey: string;
+  displayName: string;
+  groupName: string;
+  businessMeaning: string;
+  dataGrain: string | null;
+  keyColumns: unknown;
+  relationships: unknown;
+  researchUseCases: unknown;
+  agentGuidance: string | null;
+  sensitivityLevel: string;
+};
+
+function listJsonValues(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('; ')
+    : '';
+}
+
+function buildTableDescriptionSection(descriptions: ResearchTableDescription[]) {
+  if (!descriptions.length) return '';
+  return `
+Database semantic registry from data_table_descriptions:
+${descriptions.map((item) => [
+  `- ${item.tableKey} (${item.displayName}, ${item.groupName})`,
+  `  Meaning: ${item.businessMeaning}`,
+  item.dataGrain ? `  Grain: ${item.dataGrain}` : '',
+  `  Key columns: ${listJsonValues(item.keyColumns)}`,
+  `  Relationships: ${listJsonValues(item.relationships)}`,
+  `  Research use cases: ${listJsonValues(item.researchUseCases)}`,
+  item.agentGuidance ? `  Agent guidance: ${item.agentGuidance}` : '',
+  `  Sensitivity: ${item.sensitivityLevel}`
+].filter(Boolean).join('\n')).join('\n')}
+`.trim();
+}
+
+export function buildResearchDataDictionaryPrompt(allowedTables: string[], descriptions: ResearchTableDescription[] = []) {
+  const dynamicSection = buildTableDescriptionSection(
+    descriptions.filter((item) => allowedTables.includes(item.tableKey))
+  );
+
   return `
 Research data dictionary and business semantics
 
 Allowed tables for this request:
 ${allowedTables.map((table) => `- ${table}`).join('\n')}
 
+${dynamicSection ? `${dynamicSection}\n` : ''}
+
 Tables and columns:
+- data_table_descriptions: table_key, display_name, group_name, business_meaning, data_grain, key_columns, relationships, research_use_cases, agent_guidance, sensitivity_level, is_active
+  Meaning: semantic registry for every database table. Use it to understand table meanings and relationships before proposing research topics or writing exploratory queries.
 - teaching_groups: id, name, description, color, is_active, created_at, updated_at
   Meaning: teacher-managed teaching groups/classes. The group display name is teaching_groups.name.
 - teaching_group_members: group_id, user_id, assigned_by, created_at
