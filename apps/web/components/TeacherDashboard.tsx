@@ -4489,7 +4489,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           ))}
         </nav>
 
-        <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-10">
+        <div className="mx-auto w-full max-w-[96rem] p-4 sm:p-6 lg:px-5 lg:py-8 xl:px-6">
           {activeTab === 'USERS' && renderUserManagement()}
           {canAccessPanel('prompt') && activeTab === 'PROMPT' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
