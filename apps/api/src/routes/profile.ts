@@ -131,7 +131,11 @@ router.post('/student', requireAuth, async (req, res) => {
 
     const { realName, studentNo, nationality, age, gender, hskLevel, major, classGroup } = parsed.data;
     const normalizedAge = age && age > 0 ? age : null;
-    const [hskOption, majorOption, classGroupMatch] = await Promise.all([
+    const [existingProfile, hskOption, majorOption, classGroupMatch] = await Promise.all([
+      prisma.studentProfile.findUnique({
+        where: { userId },
+        select: { hskLevel: true, major: true, classGroup: true }
+      }),
       prisma.profileOption.findFirst({
         where: { category: 'hsk_level', value: hskLevel, isActive: true },
         select: { id: true }
@@ -145,14 +149,17 @@ router.post('/student', requireAuth, async (req, res) => {
         select: { id: true }
       })
     ]);
+    const keepsExistingHsk = existingProfile?.hskLevel === hskLevel;
+    const keepsExistingMajor = existingProfile?.major === major;
+    const keepsExistingClassGroup = existingProfile?.classGroup === classGroup;
 
-    if (!hskOption) {
+    if (!hskOption && !keepsExistingHsk) {
       return res.status(400).json(fail('INVALID_HSK_LEVEL', '请选择系统允许的 HSK 等级'));
     }
-    if (!majorOption) {
+    if (!majorOption && !keepsExistingMajor) {
       return res.status(400).json(fail('INVALID_MAJOR', '请选择系统允许的专业方向'));
     }
-    if (!classGroupMatch) {
+    if (!classGroupMatch && !keepsExistingClassGroup) {
       return res.status(400).json(fail('INVALID_CLASS_GROUP', '请选择系统允许的班级/组'));
     }
 

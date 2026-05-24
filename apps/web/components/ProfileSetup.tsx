@@ -93,19 +93,19 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   const selectableMajorOptions = useMemo(() => {
     const currentMajor = profile.major?.trim();
     if (!currentMajor || majorOptions.some((option) => option.value === currentMajor)) return majorOptions;
-    return [{ id: `current-${currentMajor}`, value: currentMajor, label: `${currentMajor}（当前值）` }, ...majorOptions];
+    return [{ id: `current-${currentMajor}`, value: currentMajor, label: `${currentMajor}（已停用，当前值）` }, ...majorOptions];
   }, [majorOptions, profile.major]);
 
   const selectableHskOptions = useMemo(() => {
     const currentHsk = profile.hskLevel?.trim();
     if (!currentHsk || hskOptions.some((option) => option.value === currentHsk)) return hskOptions;
-    return [{ id: `current-${currentHsk}`, value: currentHsk, label: `${currentHsk}（当前值）` }, ...hskOptions];
+    return [{ id: `current-${currentHsk}`, value: currentHsk, label: `${currentHsk}（已停用，当前值）` }, ...hskOptions];
   }, [hskOptions, profile.hskLevel]);
 
   const selectableClassGroupOptions = useMemo(() => {
     const currentClassGroup = profile.classGroup?.trim();
     if (!currentClassGroup || classGroupOptions.some((option) => option.value === currentClassGroup)) return classGroupOptions;
-    return [{ id: `current-${currentClassGroup}`, value: currentClassGroup, label: `${currentClassGroup}（当前值）` }, ...classGroupOptions];
+    return [{ id: `current-${currentClassGroup}`, value: currentClassGroup, label: `${currentClassGroup}（已停用，当前值）` }, ...classGroupOptions];
   }, [classGroupOptions, profile.classGroup]);
 
   const handleSubmit = (e: React.FormEvent) => {
