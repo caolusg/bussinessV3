@@ -120,7 +120,7 @@ const teacherPasswordSchema = z.object({
 });
 
 const profileOptionSchema = z.object({
-  category: z.enum(['major', 'class_group']).default('major'),
+  category: z.enum(['hsk_level', 'major']).default('major'),
   value: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(120),
   sortOrder: z.coerce.number().int().min(0).default(0),
@@ -656,6 +656,7 @@ router.post('/teacher-password', requirePanel('system_admin'), async (req, res) 
 router.get('/profile-options', requirePanel('users'), async (_req, res) => {
   try {
     const options = await prisma.profileOption.findMany({
+      where: { category: { in: ['hsk_level', 'major'] } },
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
     });
     return res.status(200).json(ok({ options }));
@@ -725,7 +726,7 @@ router.delete('/profile-options/:optionId', requirePanel('users'), async (req, r
 
 router.get('/users/manager', requirePanel('users'), async (req, res) => {
   try {
-    const [users, roles] = await Promise.all([
+    const [users, roles, groups] = await Promise.all([
       prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
         select: {
@@ -748,6 +749,17 @@ router.get('/users/manager', requirePanel('users'), async (req, res) => {
       prisma.role.findMany({
         orderBy: { key: 'asc' },
         include: { panelPermissions: true }
+      }),
+      prisma.teachingGroup.findMany({
+        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          color: true,
+          isActive: true,
+          members: { select: { userId: true } }
+        }
       })
     ]);
 
@@ -768,6 +780,14 @@ router.get('/users/manager', requirePanel('users'), async (req, res) => {
       users: rows,
       roles: roles.map((role) => formatRole(role)),
       panels: PANEL_PERMISSIONS,
+      groups: groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        color: group.color,
+        isActive: group.isActive,
+        memberCount: group.members.length
+      })),
       currentUserId: req.user?.id ?? null,
       totals: {
         userCount: rows.length,

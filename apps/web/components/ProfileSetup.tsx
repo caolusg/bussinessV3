@@ -55,15 +55,17 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [hskOptions, setHskOptions] = useState<ProfileOption[]>([]);
   const [majorOptions, setMajorOptions] = useState<ProfileOption[]>([]);
   const [classGroupOptions, setClassGroupOptions] = useState<ProfileOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest<{ majorOptions: ProfileOption[]; classGroupOptions: ProfileOption[] }>('/api/profile/options')
+    apiRequest<{ hskOptions: ProfileOption[]; majorOptions: ProfileOption[]; classGroupOptions: ProfileOption[] }>('/api/profile/options')
       .then((payload) => {
         if (!cancelled) {
+          setHskOptions(payload.hskOptions);
           setMajorOptions(payload.majorOptions);
           setClassGroupOptions(payload.classGroupOptions);
           const defaultClassGroup = payload.classGroupOptions.find((option) => option.value === '其他') ?? payload.classGroupOptions[0];
@@ -74,6 +76,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
       })
       .catch(() => {
         if (!cancelled) {
+          setHskOptions([]);
           setMajorOptions([]);
           setClassGroupOptions([]);
         }
@@ -92,6 +95,12 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
     if (!currentMajor || majorOptions.some((option) => option.value === currentMajor)) return majorOptions;
     return [{ id: `current-${currentMajor}`, value: currentMajor, label: `${currentMajor}（当前值）` }, ...majorOptions];
   }, [majorOptions, profile.major]);
+
+  const selectableHskOptions = useMemo(() => {
+    const currentHsk = profile.hskLevel?.trim();
+    if (!currentHsk || hskOptions.some((option) => option.value === currentHsk)) return hskOptions;
+    return [{ id: `current-${currentHsk}`, value: currentHsk, label: `${currentHsk}（当前值）` }, ...hskOptions];
+  }, [hskOptions, profile.hskLevel]);
 
   const selectableClassGroupOptions = useMemo(() => {
     const currentClassGroup = profile.classGroup?.trim();
@@ -275,18 +284,18 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
             value={profile.hskLevel || ''}
             onChange={(e) => setProfile({ ...profile, hskLevel: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+            disabled={loadingOptions || selectableHskOptions.length === 0}
           >
-            <option value="">请选择等级</option>
-            <option value="HSK1">HSK 1</option>
-            <option value="HSK2">HSK 2</option>
-            <option value="HSK3">HSK 3</option>
-            <option value="HSK4">HSK 4</option>
-            <option value="HSK5">HSK 5</option>
-            <option value="HSK6">HSK 6</option>
-            <option value="HSK7">HSK 7</option>
-            <option value="HSK8">HSK 8</option>
-            <option value="HSK9">HSK 9</option>
+            <option value="">{loadingOptions ? '正在加载 HSK 等级...' : '请选择等级'}</option>
+            {selectableHskOptions.map((option) => (
+              <option key={option.id} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
+          {!loadingOptions && selectableHskOptions.length === 0 && (
+            <p className="text-xs font-semibold text-red-600">管理员尚未配置 HSK 等级，请先联系管理员。</p>
+          )}
         </div>
 
         <div className="space-y-1">

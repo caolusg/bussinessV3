@@ -47,20 +47,30 @@ const getRoles = async (userId: string) => {
 
 router.get('/options', requireAuth, async (_req, res) => {
   try {
-    const [majorOptions, classGroupOptions] = await Promise.all([
+    const [hskOptions, majorOptions, groups] = await Promise.all([
+      prisma.profileOption.findMany({
+        where: { category: 'hsk_level', isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+        select: { id: true, value: true, label: true }
+      }),
       prisma.profileOption.findMany({
         where: { category: 'major', isActive: true },
         orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
         select: { id: true, value: true, label: true }
       }),
-      prisma.profileOption.findMany({
-        where: { category: 'class_group', isActive: true },
-        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
-        select: { id: true, value: true, label: true }
+      prisma.teachingGroup.findMany({
+        where: { isActive: true },
+        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+        select: { id: true, name: true }
       })
     ]);
 
-    return res.status(200).json(ok({ majorOptions, classGroupOptions }));
+    const classGroupOptions = [
+      { id: 'class-group-other', value: '其他', label: '其他' },
+      ...groups.map((group) => ({ id: group.id, value: group.name, label: group.name }))
+    ];
+
+    return res.status(200).json(ok({ hskOptions, majorOptions, classGroupOptions }));
   } catch (error) {
     console.error('Get profile options failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
@@ -121,21 +131,28 @@ router.post('/student', requireAuth, async (req, res) => {
 
     const { realName, studentNo, nationality, age, gender, hskLevel, major, classGroup } = parsed.data;
     const normalizedAge = age && age > 0 ? age : null;
-    const [majorOption, classGroupOption] = await Promise.all([
+    const [hskOption, majorOption, classGroupMatch] = await Promise.all([
+      prisma.profileOption.findFirst({
+        where: { category: 'hsk_level', value: hskLevel, isActive: true },
+        select: { id: true }
+      }),
       prisma.profileOption.findFirst({
         where: { category: 'major', value: major, isActive: true },
         select: { id: true }
       }),
-      prisma.profileOption.findFirst({
-        where: { category: 'class_group', value: classGroup, isActive: true },
+      classGroup === '其他' ? Promise.resolve({ id: 'class-group-other' }) : prisma.teachingGroup.findFirst({
+        where: { name: classGroup, isActive: true },
         select: { id: true }
       })
     ]);
 
+    if (!hskOption) {
+      return res.status(400).json(fail('INVALID_HSK_LEVEL', '请选择系统允许的 HSK 等级'));
+    }
     if (!majorOption) {
       return res.status(400).json(fail('INVALID_MAJOR', '请选择系统允许的专业方向'));
     }
-    if (!classGroupOption) {
+    if (!classGroupMatch) {
       return res.status(400).json(fail('INVALID_CLASS_GROUP', '请选择系统允许的班级/组'));
     }
 

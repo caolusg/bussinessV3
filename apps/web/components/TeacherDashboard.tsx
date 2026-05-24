@@ -48,7 +48,7 @@ type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' 
 
 type ProfileOption = {
   id: string;
-  category: 'major' | 'class_group';
+  category: 'hsk_level' | 'major';
   value: string;
   label: string;
   sortOrder: number;
@@ -57,7 +57,7 @@ type ProfileOption = {
 
 type ProfileOptionForm = {
   id?: string;
-  category: 'major' | 'class_group';
+  category: 'hsk_level' | 'major';
   value: string;
   label: string;
   sortOrder: number;
@@ -452,10 +452,20 @@ type ManagedUser = {
   studentProfile?: Record<string, unknown> | null;
 };
 
+type ManagedTeachingGroup = {
+  id: string;
+  name: string;
+  description?: string | null;
+  color: string;
+  isActive: boolean;
+  memberCount: number;
+};
+
 type UserManagerResponse = {
   users: ManagedUser[];
   roles: ManagedRole[];
   panels: PanelPermission[];
+  groups: ManagedTeachingGroup[];
   currentUserId: string | null;
   totals: {
     userCount: number;
@@ -487,11 +497,6 @@ const emptyProfileOptionForm: ProfileOptionForm = {
   label: '',
   sortOrder: 0,
   isActive: true
-};
-
-const profileOptionCategoryLabels: Record<ProfileOption['category'], string> = {
-  major: '专业方向',
-  class_group: '班级/组'
 };
 
 const formatValue = (value: unknown) => {
@@ -1770,6 +1775,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const filteredUsers = normalizedUserSearch
       ? users.filter((item) => getManagedUserSearchText(item).includes(normalizedUserSearch))
       : users;
+    const hskProfileOptions = profileOptions.filter((option) => option.category === 'hsk_level');
+    const majorProfileOptions = profileOptions.filter((option) => option.category === 'major');
+    const managedGroups = userManager?.groups ?? [];
 
     return (
       <div className="space-y-6">
@@ -1966,8 +1974,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">学生档案选项</h3>
-              <p className="text-sm text-slate-500">这里维护专业方向和班级/组选项。学生端只能从启用选项中选择。</p>
+              <h3 className="text-lg font-black text-slate-900">学生档案属性</h3>
+              <p className="text-sm text-slate-500">这里维护 HSK 等级和专业方向；班级/组直接使用分组管理中的现有分组。</p>
             </div>
             <GraduationCap className="text-indigo-500" size={22} />
           </div>
@@ -1980,8 +1988,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 disabled={Boolean(profileOptionForm.id)}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:bg-slate-100 disabled:text-slate-500"
               >
+                <option value="hsk_level">HSK 等级</option>
                 <option value="major">专业方向</option>
-                <option value="class_group">班级/组</option>
               </select>
               <input
                 value={profileOptionForm.label}
@@ -1993,7 +2001,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     value: current.id ? current.value : label
                   }));
                 }}
-                placeholder={profileOptionForm.category === 'major' ? '专业方向名称，如 商务汉语' : '班级/组名称，如 其他'}
+                placeholder={profileOptionForm.category === 'major' ? '专业方向名称，如 商务汉语' : 'HSK 等级名称，如 HSK 6'}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
               />
               <input
@@ -2032,43 +2040,77 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {profileOptions.map((option) => (
-              <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4">
-                <button
-                  type="button"
-                  onClick={() => setProfileOptionForm({
-                    id: option.id,
-                    category: option.category,
-                    value: option.value,
-                    label: option.label,
-                    sortOrder: option.sortOrder,
-                    isActive: option.isActive
-                  })}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-400">
-                    {profileOptionCategoryLabels[option.category]} · {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
-                  </p>
-                </button>
-                {option.isActive && (
-                  <button
-                    type="button"
-                    onClick={() => void disableProfileOption(option)}
-                    className="rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
-                    title="停用"
-                  >
-                    <X size={15} />
-                  </button>
-                )}
+          <div className="mt-5 grid gap-4 xl:grid-cols-3">
+            {[
+              ['HSK 等级', hskProfileOptions],
+              ['专业方向', majorProfileOptions]
+            ].map(([title, options]) => (
+              <div key={String(title)} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <h4 className="text-sm font-black text-slate-900">{String(title)}</h4>
+                <div className="mt-3 space-y-2">
+                  {(options as ProfileOption[]).map((option) => (
+                    <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3">
+                      <button
+                        type="button"
+                        onClick={() => setProfileOptionForm({
+                          id: option.id,
+                          category: option.category,
+                          value: option.value,
+                          label: option.label,
+                          sortOrder: option.sortOrder,
+                          isActive: option.isActive
+                        })}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-400">
+                          {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
+                        </p>
+                      </button>
+                      {option.isActive && (
+                        <button
+                          type="button"
+                          onClick={() => void disableProfileOption(option)}
+                          className="rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
+                          title="停用"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {(options as ProfileOption[]).length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-xs font-semibold text-slate-400">
+                      暂无选项。
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
-            {profileOptions.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm font-semibold text-slate-400">
-                暂无专业方向选项。
+
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <h4 className="text-sm font-black text-slate-900">班级/组</h4>
+              <p className="mt-1 text-xs font-semibold text-slate-400">来自分组管理，不在这里重复新建。</p>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                  <p className="text-sm font-black text-slate-900">其他</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">默认选项</p>
+                </div>
+                {managedGroups.map((group) => (
+                  <div key={group.id} className="rounded-2xl border border-slate-100 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="truncate text-sm font-black text-slate-900">{group.name}</p>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-500">
+                        {group.memberCount}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs font-bold text-slate-400">
+                      {group.isActive ? '启用' : '已停用'} · {group.description || '无说明'}
+                    </p>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </section>
 
