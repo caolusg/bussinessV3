@@ -44,6 +44,7 @@ type TableConfig = {
   label: string;
   group: string;
   delegate: string;
+  include?: Record<string, unknown>;
   idField?: string;
   searchableFields?: string[];
   summaryColumns?: string[];
@@ -56,12 +57,12 @@ type TableConfig = {
 const tableConfigs: TableConfig[] = [
   { key: 'users', label: '用户', group: '用户与权限', delegate: 'user', idField: 'id', searchableFields: ['username', 'status'], summaryColumns: ['username', 'status', 'createdAt', 'updatedAt'], statusFields: ['status'], dateFields: ['createdAt', 'updatedAt'], hiddenFields: ['passwordHash'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'roles', label: '角色', group: '用户与权限', delegate: 'role', idField: 'id', searchableFields: ['key', 'name'], summaryColumns: ['key', 'name'] },
-  { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', summaryColumns: ['userId', 'roleId'] },
-  { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', searchableFields: ['panelKey'], summaryColumns: ['roleId', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
-  { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['userId', 'idOrName'] },
-  { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
+  { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', include: { user: { select: { username: true, email: true } }, role: { select: { key: true, name: true } } }, summaryColumns: ['username', 'roleName', 'roleKey'] },
+  { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', include: { role: { select: { key: true, name: true } } }, searchableFields: ['panelKey'], summaryColumns: ['roleName', 'roleKey', 'panelLabel', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['username', 'idOrName'] },
+  { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'completedAt'], dateFields: ['completedAt'] },
   { key: 'teaching_groups', label: '教学分组', group: '教学组织', delegate: 'teachingGroup', idField: 'id', searchableFields: ['name', 'description', 'color'], summaryColumns: ['name', 'description', 'color', 'isActive', 'updatedAt'], statusFields: ['isActive', 'color'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
-  { key: 'teaching_group_members', label: '分组成员', group: '教学组织', delegate: 'teachingGroupMember', searchableFields: [], summaryColumns: ['groupId', 'userId', 'assignedBy', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'teaching_group_members', label: '分组成员', group: '教学组织', delegate: 'teachingGroupMember', include: { group: { select: { name: true, color: true } }, user: { select: { username: true, email: true } }, assigner: { select: { username: true } } }, searchableFields: [], summaryColumns: ['groupName', 'username', 'assignedByUsername', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'business_stages', label: '业务阶段', group: '学习内容', delegate: 'businessStage', idField: 'id', searchableFields: ['titleZh', 'titleEn', 'description'], summaryColumns: ['sortOrder', 'key', 'titleZh', 'titleEn', 'isActive', 'updatedAt'], statusFields: ['isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
   { key: 'stage_tasks', label: '阶段任务', group: '学习内容', delegate: 'stageTask', idField: 'id', searchableFields: ['taskCode', 'title', 'goal', 'subGoal', 'tipTitle', 'tipContent'], summaryColumns: ['taskCode', 'title', 'isDefault', 'isActive', 'updatedAt'], statusFields: ['isDefault', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'learning_resources', label: '学习资源', group: '学习内容', delegate: 'learningResource', idField: 'id', searchableFields: ['type', 'term', 'explanation', 'example'], summaryColumns: ['type', 'term', 'explanation', 'sortOrder', 'isActive'], statusFields: ['type', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { sortOrder: 'asc' } },
@@ -70,8 +71,8 @@ const tableConfigs: TableConfig[] = [
   { key: 'simulation_messages', label: '实训消息', group: 'AI 与实训', delegate: 'simulationMessage', idField: 'id', searchableFields: ['role', 'content', 'coachNote'], summaryColumns: ['role', 'content', 'coachNote', 'turnIndex', 'createdAt'], statusFields: ['role'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'ai_interaction_logs', label: 'AI 调用日志', group: 'AI 与实训', delegate: 'aiInteractionLog', idField: 'id', searchableFields: ['provider', 'model', 'promptVersion', 'systemPrompt', 'outputText', 'errorCode', 'errorMessage'], summaryColumns: ['provider', 'model', 'degraded', 'errorCode', 'latencyMs', 'createdAt'], statusFields: ['provider', 'degraded', 'errorCode'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'message_analysis_results', label: '消息分析结果', group: 'AI 与实训', delegate: 'messageAnalysisResult', idField: 'id', searchableFields: ['analysisVersion'], summaryColumns: ['analysisVersion', 'createdAt', 'messageId', 'userId', 'stageId'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
-  { key: 'practice_events', label: '练习事件', group: '行为记录', delegate: 'practiceEvent', idField: 'id', searchableFields: ['eventType'], summaryColumns: ['eventType', 'userId', 'stageId', 'sessionId', 'resourceId', 'createdAt'], statusFields: ['eventType'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
-  { key: 'student_learning_snapshots', label: '学习快照', group: '行为记录', delegate: 'studentLearningSnapshot', idField: 'id', summaryColumns: ['userId', 'updatedAt'], dateFields: ['updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
+  { key: 'practice_events', label: '练习事件', group: '行为记录', delegate: 'practiceEvent', include: { user: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', searchableFields: ['eventType'], summaryColumns: ['eventType', 'displayName', 'username', 'stageId', 'sessionId', 'createdAt'], statusFields: ['eventType'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'student_learning_snapshots', label: '学习快照', group: '行为记录', delegate: 'studentLearningSnapshot', include: { user: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', summaryColumns: ['displayName', 'username', 'updatedAt'], dateFields: ['updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
   { key: 'conversations', label: '旧版会话', group: '旧版兼容', delegate: 'conversation', idField: 'id', searchableFields: ['title'], summaryColumns: ['title', 'userId', 'createdAt', 'updatedAt'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { updatedAt: 'desc' } },
   { key: 'messages', label: '旧版消息', group: '旧版兼容', delegate: 'message', idField: 'id', searchableFields: ['role', 'content'], summaryColumns: ['role', 'content', 'createdAt'], statusFields: ['role'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } }
 ];
@@ -501,6 +502,45 @@ function sanitizeRow(row: Record<string, unknown>, hiddenFields: string[] = []) 
     sanitized[key] = value;
   }
   return sanitized;
+}
+
+function nestedRecord(value: unknown) {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function getDisplayNameFromUser(user: Record<string, unknown>) {
+  const profile = nestedRecord(user.studentProfile);
+  return (
+    profile.realName ||
+    profile.name ||
+    user.username ||
+    user.email ||
+    ''
+  );
+}
+
+function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
+  const enhanced = sanitizeRow(row, tableByKey.get(tableKey)?.hiddenFields);
+  const user = nestedRecord(row.user);
+  const role = nestedRecord(row.role);
+  const group = nestedRecord(row.group);
+  const assigner = nestedRecord(row.assigner);
+
+  if (user.username) enhanced.username = user.username;
+  if (user.email) enhanced.userEmail = user.email;
+  const displayName = getDisplayNameFromUser(user);
+  if (displayName) enhanced.displayName = displayName;
+  if (role.name) enhanced.roleName = role.name;
+  if (role.key) enhanced.roleKey = role.key;
+  if (group.name) enhanced.groupName = group.name;
+  if (assigner.username) enhanced.assignedByUsername = assigner.username;
+
+  if (tableKey === 'role_panel_permissions') {
+    const panel = PANEL_PERMISSIONS.find((item) => item.key === row.panelKey);
+    enhanced.panelLabel = panel?.label ?? row.panelKey;
+  }
+
+  return enhanced;
 }
 
 router.use(requireAuth);
@@ -2364,12 +2404,13 @@ router.get('/tables/:tableKey', async (req, res) => {
       delegate.findMany({
         where,
         orderBy: config.defaultOrderBy,
+        ...(config.include ? { include: config.include } : {}),
         skip: (page - 1) * pageSize,
         take: pageSize
       })
     ]);
 
-    const rows = rawRows.map((row) => sanitizeRow(row, config.hiddenFields));
+    const rows = rawRows.map((row) => enhanceDisplayRow(config.key, row));
     const columns = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
 
     return res.status(200).json(ok({

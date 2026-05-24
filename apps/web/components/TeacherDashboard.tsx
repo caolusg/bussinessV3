@@ -914,7 +914,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, researchDateRange, researchRefreshKey]);
 
   useEffect(() => {
-    if (activeTab !== 'RECORDS') return;
+    if (activeTab !== 'STUDENT_RESEARCH') return;
 
     let ignore = false;
     setIsLoadingResearchStudents(true);
@@ -1999,7 +1999,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           {row.eventType}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-xs font-mono">{formatValue(row.userId) || '-'}</td>
+                      <td className="px-5 py-4 text-xs font-bold text-slate-600">
+                        <div>{formatValue(row.displayName ?? row.username) || '-'}</div>
+                        {row.username && row.displayName !== row.username ? (
+                          <div className="mt-1 text-[10px] font-mono font-normal text-slate-400">{formatValue(row.username)}</div>
+                        ) : null}
+                      </td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.page) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.label) || '-'}</td>
                       <td className="px-5 py-4 text-xs">{formatValue(metadata.target) || '-'}</td>
