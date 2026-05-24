@@ -1935,14 +1935,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 placeholder="角色名称"
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
               />
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
                 {(availablePanels.length ? availablePanels : FALLBACK_PANELS).map((panel) => (
-                  <label key={panel.key} className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">
+                  <label key={panel.key} className="flex h-9 min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600">
                     <input
                       type="checkbox"
                       checked={newRoleForm.permissions.includes(panel.key)}
                       onChange={(e) => setNewRolePermission(panel.key, e.target.checked)}
-                      className="h-4 w-4 shrink-0 accent-indigo-600"
+                      className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
                     />
                     <span className="truncate">{panel.label}</span>
                   </label>
