@@ -902,7 +902,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                   ))}
                 </div>
               )}
-              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end sm:gap-3">
+              <div>
                 <div className="flex min-h-[150px] flex-1 flex-col gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[168px] sm:px-4 sm:py-4">
                   <div className="flex flex-1 items-stretch gap-3">
                     <button
@@ -942,42 +942,44 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                       <Send size={18} />
                     </button>
                   </div>
-                  <div
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:py-2 ${
-                      uploadingContext
-                        ? 'border-blue-100 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 bg-white text-slate-500'
-                    }`}
-                  >
-                    {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
-                    <span className="truncate">
-                      {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
-                    </span>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div
+                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:py-2 ${
+                        uploadingContext
+                          ? 'border-blue-100 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 bg-white text-slate-500'
+                      }`}
+                    >
+                      {uploadingContext ? <Loader2 className="animate-spin" size={14} /> : <Paperclip size={14} />}
+                      <span className="truncate">
+                        {uploadingContextStatus || '可上传 PDF、Word 或截图作为对话资料'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => void handleRestart()}
+                        disabled={restarting || endingSession || sending || loadingSession}
+                        aria-label="开始新的练习"
+                        title="开始新的练习"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <RotateCcw size={14} />
+                        {restarting ? '创建中...' : '新的练习'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleEndAndExit()}
+                        disabled={endingSession || restarting || sending || loadingSession}
+                        aria-label="结束本轮对话"
+                        title="结束本轮对话"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ArrowLeft size={14} />
+                        {endingSession ? '结束中...' : '结束对话'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:w-36 sm:shrink-0 sm:flex-col">
-                  <button
-                    type="button"
-                    onClick={() => void handleRestart()}
-                    disabled={restarting || endingSession || sending || loadingSession}
-                    aria-label="开始新的练习"
-                    title="开始新的练习"
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RotateCcw size={14} />
-                    {restarting ? '创建中...' : '新的练习'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleEndAndExit()}
-                    disabled={endingSession || restarting || sending || loadingSession}
-                    aria-label="结束本轮对话"
-                    title="结束本轮对话"
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <ArrowLeft size={14} />
-                    {endingSession ? '结束中...' : '结束对话'}
-                  </button>
                 </div>
               </div>
             </div>

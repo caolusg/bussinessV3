@@ -118,7 +118,10 @@ export class CompatibleSimulationProvider implements SimulationProvider {
   async generateReply(
     input: SimulationOrchestratorInput
   ): Promise<SimulationOrchestratorResult> {
-    const productCatalogContext = input.productCatalogContext?.trim();
+    const rawProductCatalogContext = input.productCatalogContext?.trim();
+    const productCatalogContext = rawProductCatalogContext
+      ? rawProductCatalogContext.slice(0, 6000)
+      : '';
     const systemPrompt = [
       input.scenario?.systemPrompt,
       buildStageBoundaryPrompt(input.stage),

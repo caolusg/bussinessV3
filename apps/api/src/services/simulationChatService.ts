@@ -263,6 +263,10 @@ function isDegradedTrace(traceJson: JsonValue | null) {
   return (traceJson as { degraded?: unknown }).degraded === true;
 }
 
+function trimAiHistoryContent(content: string) {
+  return content.length > 1200 ? `${content.slice(0, 1200)}...` : content;
+}
+
 function shouldIncludeInAiHistory(message: {
   role: string;
   content: string;
@@ -299,7 +303,7 @@ export async function appendStudentAndOpponent(
       const recent = await tx.simulationMessage.findMany({
         where: { sessionId },
         orderBy: { turnIndex: 'desc' },
-        take: 20
+        take: 12
       });
 
       const history: SimulationHistoryMessage[] = [...recent]
@@ -307,7 +311,7 @@ export async function appendStudentAndOpponent(
         .filter(shouldIncludeInAiHistory)
         .map((message) => ({
           role: message.role === 'student' ? 'student' : 'coach',
-          content: message.content
+          content: trimAiHistoryContent(message.content)
         }));
 
       const session = await tx.simulationSession.findUnique({

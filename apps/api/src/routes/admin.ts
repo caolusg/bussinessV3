@@ -1033,7 +1033,7 @@ router.get('/overview', requirePanel('system_data'), async (_req, res) => {
       prisma.aiInteractionLog.findMany({
         where: { OR: [{ degraded: true }, { errorCode: { not: null } }, { errorMessage: { not: null } }] },
         orderBy: { createdAt: 'desc' },
-        take: 3,
+        take: 6,
         select: {
           id: true,
           provider: true,
@@ -1041,7 +1041,18 @@ router.get('/overview', requirePanel('system_data'), async (_req, res) => {
           degraded: true,
           errorCode: true,
           errorMessage: true,
-          createdAt: true
+          createdAt: true,
+          user: {
+            select: {
+              username: true,
+              studentProfile: true
+            }
+          },
+          session: {
+            select: {
+              stage: true
+            }
+          }
         }
       })
     ]);

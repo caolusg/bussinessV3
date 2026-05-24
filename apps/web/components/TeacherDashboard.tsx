@@ -789,6 +789,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [userManagerError, setUserManagerError] = useState('');
   const [userManagerMessage, setUserManagerMessage] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | ManagedUser['status']>('all');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
   const [newUserForm, setNewUserForm] = useState<ManagedUserForm>({
@@ -1772,9 +1774,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
     const users = userManager?.users ?? [];
     const normalizedUserSearch = userSearchTerm.trim().toLowerCase();
-    const filteredUsers = normalizedUserSearch
-      ? users.filter((item) => getManagedUserSearchText(item).includes(normalizedUserSearch))
-      : users;
+    const filteredUsers = users.filter((item) => {
+      const matchesSearch = normalizedUserSearch
+        ? getManagedUserSearchText(item).includes(normalizedUserSearch)
+        : true;
+      const matchesStatus = userStatusFilter === 'all' || item.status === userStatusFilter;
+      const matchesRole = userRoleFilter === 'all' || item.roles.includes(userRoleFilter);
+      return matchesSearch && matchesStatus && matchesRole;
+    });
     const hskProfileOptions = profileOptions.filter((option) => option.category === 'hsk_level' && option.isActive);
     const majorProfileOptions = profileOptions.filter((option) => option.category === 'major' && option.isActive);
     const managedGroups = (userManager?.groups ?? []).filter((group) => group.isActive);
@@ -2051,9 +2058,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     </div>
                   </div>
                 )}
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   {(options as ProfileOption[]).map((option) => (
-                    <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3">
+                    <div key={option.id} className="flex min-w-[140px] flex-1 items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2">
                       <button
                         type="button"
                         onClick={() => setProfileOptionForm({
@@ -2067,7 +2074,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         className="min-w-0 flex-1 text-left"
                       >
                         <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
-                        <p className="mt-1 text-xs font-bold text-slate-400">
+                        <p className="mt-0.5 text-xs font-bold text-slate-400">
                           {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
                         </p>
                       </button>
@@ -2075,7 +2082,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         <button
                           type="button"
                           onClick={() => void disableProfileOption(option)}
-                          className="rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
+                          className="shrink-0 rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
                           title="停用"
                         >
                           <X size={15} />
@@ -2096,20 +2103,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <h4 className="text-sm font-black text-slate-900">班级/组</h4>
               <p className="mt-1 text-xs font-semibold text-slate-400">来自分组管理，不在这里重复新建。</p>
-              <div className="mt-3 space-y-2">
-                <div className="rounded-2xl border border-slate-100 bg-white p-3">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <div className="min-w-[140px] flex-1 rounded-2xl border border-slate-100 bg-white px-3 py-2">
                   <p className="text-sm font-black text-slate-900">其他</p>
-                  <p className="mt-1 text-xs font-bold text-slate-400">默认选项</p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-400">默认选项</p>
                 </div>
                 {managedGroups.map((group) => (
-                  <div key={group.id} className="rounded-2xl border border-slate-100 bg-white p-3">
+                  <div key={group.id} className="min-w-[160px] flex-1 rounded-2xl border border-slate-100 bg-white px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
                       <p className="truncate text-sm font-black text-slate-900">{group.name}</p>
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-500">
                         {group.memberCount}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs font-bold text-slate-400">
+                    <p className="mt-0.5 truncate text-xs font-bold text-slate-400">
                       {group.isActive ? '启用' : '已停用'} · {group.description || '无说明'}
                     </p>
                   </div>
@@ -2128,6 +2135,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               </p>
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+              <select
+                value={userStatusFilter}
+                onChange={(event) => setUserStatusFilter(event.target.value as 'all' | ManagedUser['status'])}
+                className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                aria-label="按用户状态过滤"
+              >
+                <option value="all">全部状态</option>
+                {USER_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <select
+                value={userRoleFilter}
+                onChange={(event) => setUserRoleFilter(event.target.value)}
+                className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                aria-label="按用户角色过滤"
+              >
+                <option value="all">全部角色</option>
+                {availableRoles.map((role) => (
+                  <option key={role.key} value={role.key}>{role.name}</option>
+                ))}
+              </select>
               <div className="relative min-w-[260px] flex-1 lg:w-80 lg:flex-none">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input

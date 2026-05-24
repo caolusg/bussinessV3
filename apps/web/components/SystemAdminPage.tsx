@@ -73,6 +73,16 @@ type AdminOverview = {
     errorCode?: string | null;
     errorMessage?: string | null;
     createdAt: string;
+    user?: {
+      username?: string | null;
+      studentProfile?: {
+        realName?: string | null;
+        name?: string | null;
+      } | null;
+    } | null;
+    session?: {
+      stage?: string | null;
+    } | null;
   }>;
 };
 
@@ -88,6 +98,12 @@ const defaultConfig: SystemConfigForm = {
 };
 
 const formatNumber = (value: number) => new Intl.NumberFormat('zh-CN').format(value);
+
+const formatAiErrorUser = (item: AdminOverview['recentAiErrors'][number]) =>
+  item.user?.studentProfile?.realName?.trim() ||
+  item.user?.studentProfile?.name?.trim() ||
+  item.user?.username?.trim() ||
+  '未知用户';
 
 const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPasswordChange }) => {
   const navigate = useNavigate();
@@ -474,6 +490,9 @@ const SystemAdminPage: React.FC<SystemAdminPageProps> = ({ user, onLogout, onPas
                         </div>
                         <p className="mt-2 text-xs text-slate-300">
                           {item.errorMessage || '暂无错误详情'} · {new Date(item.createdAt).toLocaleString()}
+                        </p>
+                        <p className="mt-2 text-[11px] font-bold text-slate-400">
+                          {formatAiErrorUser(item)}{item.session?.stage ? ` · ${item.session.stage}` : ''}
                         </p>
                       </div>
                     ))
