@@ -563,6 +563,11 @@ const getManagedUserSearchText = (user: ManagedUser) => {
   ].map(formatValue).join(' ').toLowerCase();
 };
 
+const getManagedUserRealName = (user: ManagedUser) => {
+  const profile = user.studentProfile ?? {};
+  return formatValue(profile.realName ?? profile.name);
+};
+
 const buildResearchChartData = (rows: Record<string, unknown>[]) => {
   if (!rows.length) return [];
   const columns = Object.keys(rows[0]);
@@ -2242,25 +2247,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <table className="w-full min-w-[1280px] table-fixed border-separate border-spacing-0 text-left text-sm">
                 <colgroup>
                   <col className="w-[180px]" />
+                  <col className="w-[180px]" />
                   <col className="w-[240px]" />
                   <col className="w-[120px]" />
                   <col className="w-[500px]" />
-                  <col className="w-[150px]" />
                   <col className="w-[190px]" />
                 </colgroup>
                 <thead className="text-xs font-black uppercase tracking-widest text-slate-400">
                   <tr>
-                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">用户</th>
-                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">邮箱</th>
-                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">状态</th>
-                    <th className="border-b border-r border-slate-200 bg-indigo-50/70 px-3 py-4">角色</th>
-                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4">创建时间</th>
-                    <th className="border-b border-slate-200 bg-slate-50 px-3 py-4 text-right">操作</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4 text-center">账户</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4 text-center">姓名</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4 text-center">邮箱</th>
+                    <th className="border-b border-r border-slate-200 bg-slate-50 px-3 py-4 text-center">状态</th>
+                    <th className="border-b border-r border-slate-200 bg-indigo-50/70 px-3 py-4 text-center">角色</th>
+                    <th className="border-b border-slate-200 bg-slate-50 px-3 py-4 text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((item) => {
-                    const isSelf = item.id === userManager?.currentUserId;
                     return (
                       <tr key={item.id} className="align-top">
                         <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
@@ -2269,7 +2273,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             onChange={(e) => updateManagedUserDraft(item.id, { username: e.target.value })}
                             className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
                           />
-                          {isSelf && <p className="mt-1 text-xs font-bold text-indigo-600">当前账号</p>}
+                        </td>
+                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
+                          <div className="flex h-11 items-center rounded-xl border border-slate-100 bg-slate-50 px-3 text-sm font-bold text-slate-700">
+                            <span className="truncate">{getManagedUserRealName(item) || '-'}</span>
+                          </div>
                         </td>
                         <td className="border-b border-r border-slate-100 bg-white px-3 py-4">
                           <input
@@ -2316,7 +2324,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                             })}
                           </div>
                         </td>
-                        <td className="border-b border-r border-slate-100 bg-white px-3 py-4 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString()}</td>
                         <td className="min-w-[180px] border-b border-slate-100 bg-slate-50 px-3 py-4">
                           <div className="flex flex-nowrap items-center justify-end gap-2">
                             <button
