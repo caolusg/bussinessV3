@@ -59,6 +59,7 @@ const tableConfigs: TableConfig[] = [
   { key: 'roles', label: '角色', group: '用户与权限', delegate: 'role', idField: 'id', searchableFields: ['key', 'name'], summaryColumns: ['key', 'name'] },
   { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', include: { user: { select: { username: true, email: true } }, role: { select: { key: true, name: true } } }, summaryColumns: ['username', 'roleName', 'roleKey'] },
   { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', include: { role: { select: { key: true, name: true } } }, searchableFields: ['panelKey'], summaryColumns: ['roleName', 'roleKey', 'panelLabel', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'user_data_export_audits', label: '用户数据下载审计', group: '用户与权限', delegate: 'userDataExportAudit', include: { actor: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', searchableFields: ['exportType', 'sourcePanel', 'fileName'], summaryColumns: ['actorName', 'actorUsername', 'exportTypeLabel', 'sourcePanel', 'studentCount', 'rowCount', 'fileName', 'createdAt'], statusFields: ['exportType', 'sourcePanel'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'data_table_descriptions', label: '数据表说明', group: '系统语义', delegate: 'dataTableDescription', idField: 'id', searchableFields: ['tableKey', 'displayName', 'groupName', 'businessMeaning', 'dataGrain', 'agentGuidance', 'sensitivityLevel'], summaryColumns: ['tableKey', 'displayName', 'groupName', 'businessMeaning', 'sensitivityLevel', 'updatedAt'], statusFields: ['groupName', 'sensitivityLevel', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { groupName: 'asc' } },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['username', 'idOrName'] },
   { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major', 'classGroup'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'classGroup', 'completedAt'], dateFields: ['completedAt'] },
@@ -148,6 +149,30 @@ const clickFlowQuerySchema = z.object({
   eventType: z.enum(['all', 'ui_click', 'page_view']).optional().default('all'),
   userId: z.union([z.string().uuid(), z.literal('')]).optional().default(''),
   pageSize: z.coerce.number().int().min(1).max(200).default(80)
+});
+
+const auditQuerySchema = z.object({
+  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+  search: z.string().trim().max(120).optional().default(''),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25)
+});
+
+const dataExportAuditPayloadSchema = z.object({
+  exportType: z.enum(['student_research_selected', 'student_research_all', 'research_ai_result']),
+  sourcePanel: z.string().trim().min(1).max(80).default('student_research'),
+  fileName: z.string().trim().min(1).max(240),
+  rowCount: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  studentCount: z.coerce.number().int().min(0).max(100_000).default(0),
+  targetStudents: z.array(z.object({
+    userId: z.string().uuid(),
+    displayName: z.string().trim().max(160).optional().nullable().default(null),
+    username: z.string().trim().max(120).optional().nullable().default(null),
+    studentNo: z.string().trim().max(120).optional().nullable().default(null),
+    anonymousUserCode: z.string().trim().max(120).optional().nullable().default(null)
+  })).max(10_000).default([]),
+  filters: z.record(z.unknown()).optional().default({}),
+  metadata: z.record(z.unknown()).optional().default({})
 });
 
 const resourcePayloadSchema = z.object({
@@ -284,6 +309,9 @@ function requirePanel(panelKey: PanelPermissionKey) {
 
 async function ensureTableAccess(req: Request, res: Response, tableKey: string) {
   if (tableKey === 'practice_events' && await userHasPanelPermission(req.user?.id, 'click_flow')) {
+    return true;
+  }
+  if (tableKey === 'user_data_export_audits' && await userHasPanelPermission(req.user?.id, 'user_audit')) {
     return true;
   }
   return ensurePanelAccess(req, res, 'system_data');
@@ -540,9 +568,17 @@ function getDisplayNameFromUser(user: Record<string, unknown>) {
   );
 }
 
+function getExportTypeLabel(exportType: unknown) {
+  if (exportType === 'student_research_selected') return '下载选中学生 CSV';
+  if (exportType === 'student_research_all') return '下载全部学生 CSV';
+  if (exportType === 'research_ai_result') return '自然语言分析结果 CSV';
+  return String(exportType ?? '');
+}
+
 function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   const enhanced = sanitizeRow(row, tableByKey.get(tableKey)?.hiddenFields);
   const user = nestedRecord(row.user);
+  const actor = nestedRecord(row.actor);
   const role = nestedRecord(row.role);
   const group = nestedRecord(row.group);
   const assigner = nestedRecord(row.assigner);
@@ -555,10 +591,17 @@ function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   if (role.key) enhanced.roleKey = role.key;
   if (group.name) enhanced.groupName = group.name;
   if (assigner.username) enhanced.assignedByUsername = assigner.username;
+  if (actor.username) enhanced.actorUsername = actor.username;
+  if (actor.email) enhanced.actorEmail = actor.email;
+  const actorName = getDisplayNameFromUser(actor);
+  if (actorName) enhanced.actorName = actorName;
 
   if (tableKey === 'role_panel_permissions') {
     const panel = PANEL_PERMISSIONS.find((item) => item.key === row.panelKey);
     enhanced.panelLabel = panel?.label ?? row.panelKey;
+  }
+  if (tableKey === 'user_data_export_audits') {
+    enhanced.exportTypeLabel = getExportTypeLabel(row.exportType);
   }
 
   return enhanced;
@@ -1616,6 +1659,94 @@ router.get('/research/students/:userId/activity', requirePanel('student_research
     }));
   } catch (error) {
     console.error('Get research student activity failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/audit/data-downloads', requirePanel('user_audit'), async (req, res) => {
+  try {
+    const parsed = auditQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+
+    const { dateRange, search, page, pageSize } = parsed.data;
+    const dateFilter = buildCreatedAtWhere(dateRange);
+    const where: Prisma.UserDataExportAuditWhereInput = {
+      ...(dateFilter ?? {}),
+      ...(search
+        ? {
+            OR: [
+              { exportType: { contains: search, mode: 'insensitive' } },
+              { sourcePanel: { contains: search, mode: 'insensitive' } },
+              { fileName: { contains: search, mode: 'insensitive' } },
+              { actor: { username: { contains: search, mode: 'insensitive' } } },
+              { actor: { email: { contains: search, mode: 'insensitive' } } },
+              { actor: { studentProfile: { realName: { contains: search, mode: 'insensitive' } } } },
+              { actor: { studentProfile: { name: { contains: search, mode: 'insensitive' } } } }
+            ]
+          }
+        : {})
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.userDataExportAudit.count({ where }),
+      prisma.userDataExportAudit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { actor: { select: { username: true, email: true, studentProfile: true } } }
+      })
+    ]);
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      search,
+      total,
+      page,
+      pageSize,
+      rows: rows.map((row) => enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>))
+    }));
+  } catch (error) {
+    console.error('Load data download audits failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/audit/data-downloads', async (req, res) => {
+  try {
+    const parsed = dataExportAuditPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid audit payload'));
+    }
+
+    const payload = parsed.data;
+    const requiredPanel: PanelPermissionKey = payload.exportType === 'research_ai_result'
+      ? 'research_ai'
+      : 'student_research';
+    if (!await ensurePanelAccess(req, res, requiredPanel)) return;
+
+    const audit = await prisma.userDataExportAudit.create({
+      data: {
+        actorUserId: req.user?.id ?? null,
+        exportType: payload.exportType,
+        sourcePanel: payload.sourcePanel,
+        fileName: payload.fileName,
+        rowCount: payload.rowCount,
+        studentCount: payload.studentCount || payload.targetStudents.length,
+        targetStudents: payload.targetStudents as Prisma.InputJsonValue,
+        filtersJson: payload.filters as Prisma.InputJsonValue,
+        metadataJson: payload.metadata as Prisma.InputJsonValue,
+        ipAddress: req.ip,
+        userAgent: req.header('user-agent') ?? null
+      }
+    });
+
+    return res.status(201).json(ok({ id: audit.id, createdAt: audit.createdAt }));
+  } catch (error) {
+    console.error('Create data download audit failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

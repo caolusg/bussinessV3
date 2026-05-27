@@ -7,6 +7,7 @@ export const PANEL_PERMISSIONS = [
   { key: 'student_research', label: '学生数据研究', description: '查看学生聊天记录、AI 调用和行为事件' },
   { key: 'research_ai', label: '自然语言数据分析', description: '使用自然语言查询研究数据' },
   { key: 'click_flow', label: '点击流分区', description: '查看点击流和页面访问记录' },
+  { key: 'user_audit', label: '用户行为审计', description: '查看学生数据下载和后台敏感操作记录' },
   { key: 'prompt', label: '提示词工程管理', description: '管理 AI 场景提示词模板' },
   { key: 'system_data', label: '系统数据', description: '查看底层数据表、会话和 AI 调用记录' },
   { key: 'system_admin', label: '系统管理', description: '维护运行配置、AI 设置和系统级参数' }

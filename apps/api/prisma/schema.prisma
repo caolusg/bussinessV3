@@ -42,6 +42,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   teachingGroupMemberships TeachingGroupMember[] @relation("TeachingGroupMemberStudent")
   assignedTeachingGroupMemberships TeachingGroupMember[] @relation("TeachingGroupMemberAssigner")
+  dataExportAudits UserDataExportAudit[] @relation("UserDataExportAuditActor")
 
   @@map("users")
 }
@@ -213,6 +214,28 @@ model DataTableDescription {
 
   @@index([groupName, isActive], map: "data_table_descriptions_group_active_idx")
   @@map("data_table_descriptions")
+}
+
+model UserDataExportAudit {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId     String?  @map("actor_user_id") @db.Uuid
+  exportType      String   @map("export_type")
+  sourcePanel     String   @map("source_panel")
+  fileName        String?  @map("file_name")
+  rowCount        Int      @default(0) @map("row_count")
+  studentCount    Int      @default(0) @map("student_count")
+  targetStudents  Json?    @map("target_students")
+  filtersJson     Json?    @map("filters_json")
+  metadataJson    Json?    @map("metadata_json")
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("UserDataExportAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([actorUserId, createdAt], map: "user_data_export_audits_actor_created_idx")
+  @@index([exportType, createdAt], map: "user_data_export_audits_type_created_idx")
+  @@map("user_data_export_audits")
 }
 
 model StudentAuth {

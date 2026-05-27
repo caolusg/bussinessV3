@@ -4,6 +4,7 @@ import {
   AlertCircle,
   BarChart3,
   BookOpen,
+  ClipboardList,
   Code2,
   Copy,
   Database,
@@ -43,8 +44,8 @@ type PasswordChangePayload = {
   confirmPassword: string;
 };
 
-type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
-type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' | 'research_ai' | 'click_flow' | 'prompt' | 'system_data' | 'system_admin';
+type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'USER_AUDIT' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
+type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' | 'research_ai' | 'click_flow' | 'user_audit' | 'prompt' | 'system_data' | 'system_admin';
 
 type ProfileOption = {
   id: string;
@@ -319,6 +320,45 @@ type ClickFlowSummary = {
     resource?: Record<string, unknown> | null;
     createdAt: string;
   }>;
+};
+
+type DataExportAuditRow = Record<string, unknown> & {
+  id: string;
+  actorName?: string | null;
+  actorUsername?: string | null;
+  exportType: string;
+  exportTypeLabel?: string;
+  sourcePanel: string;
+  fileName?: string | null;
+  rowCount: number;
+  studentCount: number;
+  targetStudents?: Array<{
+    userId: string;
+    displayName?: string | null;
+    username?: string | null;
+    studentNo?: string | null;
+    anonymousUserCode?: string | null;
+  }> | null;
+  filtersJson?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+type DataExportAuditResponse = {
+  generatedAt: string;
+  dateRange: 'today' | '7d' | '30d' | 'all';
+  search: string;
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: DataExportAuditRow[];
+};
+
+type DataExportAuditTarget = {
+  userId: string;
+  displayName?: string | null;
+  username?: string | null;
+  studentNo?: string | null;
+  anonymousUserCode?: string | null;
 };
 
 type ResearchAiResult = {
@@ -716,6 +756,25 @@ const toCsv = (rows: Record<string, unknown>[]) => {
   return `\uFEFF${header}\n${body}`;
 };
 
+const getResearchStudentDisplayName = (user: ResearchStudentRow['user']) => {
+  const profile = (user.studentProfile ?? {}) as Record<string, unknown>;
+  return String(profile.realName || profile.name || user.username || user.email || user.anonymousUserCode || user.id);
+};
+
+const getResearchStudentNo = (user: ResearchStudentRow['user']) => {
+  const profile = (user.studentProfile ?? {}) as Record<string, unknown>;
+  const auth = (user.studentAuth ?? {}) as Record<string, unknown>;
+  return String(profile.studentNo || auth.idOrName || '');
+};
+
+const getResearchStudentAuditTarget = (user: ResearchStudentRow['user']): DataExportAuditTarget => ({
+  userId: user.id,
+  displayName: getResearchStudentDisplayName(user),
+  username: user.username,
+  studentNo: getResearchStudentNo(user) || null,
+  anonymousUserCode: user.anonymousUserCode
+});
+
 const DATE_RANGES = [
   { value: 'all', label: '全部时间' },
   { value: 'today', label: '今天' },
@@ -729,7 +788,7 @@ const USER_STATUS_OPTIONS = [
   { value: 'DISABLED', label: '停用' }
 ] as const;
 
-const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'student_research', 'research_ai', 'click_flow', 'prompt', 'system_data', 'system_admin'];
+const ALL_PANEL_KEYS: PanelPermissionKey[] = ['users', 'resources', 'groups', 'student_research', 'research_ai', 'click_flow', 'user_audit', 'prompt', 'system_data', 'system_admin'];
 
 const FALLBACK_PANELS: PanelPermission[] = [
   { key: 'users', label: '用户管理', description: '创建用户、分配角色、重置密码' },
@@ -738,6 +797,7 @@ const FALLBACK_PANELS: PanelPermission[] = [
   { key: 'student_research', label: '学生数据研究', description: '查看学生聊天记录、AI 调用和行为事件' },
   { key: 'research_ai', label: '自然语言数据分析', description: '使用自然语言查询研究数据' },
   { key: 'click_flow', label: '点击流分区', description: '查看点击流和页面访问记录' },
+  { key: 'user_audit', label: '用户行为审计', description: '查看学生数据下载和后台敏感操作记录' },
   { key: 'prompt', label: '提示词工程管理', description: '管理 AI 场景提示词模板' },
   { key: 'system_data', label: '系统数据', description: '查看底层数据表、会话和 AI 调用记录' },
   { key: 'system_admin', label: '系统管理', description: '维护运行配置、AI 设置和系统级参数' }
@@ -750,6 +810,7 @@ const TAB_PERMISSIONS: Partial<Record<TeacherTab, PanelPermissionKey>> = {
   STUDENT_RESEARCH: 'student_research',
   RECORDS: 'research_ai',
   CLICK_FLOW: 'click_flow',
+  USER_AUDIT: 'user_audit',
   PROMPT: 'prompt',
   SYSTEM_DATA: 'system_data'
 };
@@ -761,6 +822,7 @@ const NAV_ITEMS: Array<{ tab: TeacherTab; label: string; mobileLabel: string; ic
   { tab: 'STUDENT_RESEARCH', label: '学生数据研究', mobileLabel: '学生数据', icon: <Users size={18} />, permission: 'student_research' },
   { tab: 'RECORDS', label: '自然语言数据分析', mobileLabel: 'AI 分析', icon: <BarChart3 size={18} />, permission: 'research_ai' },
   { tab: 'CLICK_FLOW', label: '点击流分区', mobileLabel: '点击流', icon: <MousePointerClick size={18} />, permission: 'click_flow' },
+  { tab: 'USER_AUDIT', label: '用户行为审计', mobileLabel: '审计', icon: <ClipboardList size={18} />, permission: 'user_audit' },
   { tab: 'PROMPT', label: '提示词工程管理', mobileLabel: 'Prompt', icon: <Code2 size={18} />, permission: 'prompt' },
   { tab: 'SYSTEM_DATA', label: '系统数据', mobileLabel: '数据', icon: <Database size={18} />, permission: 'system_data' },
   { tab: 'ACCOUNT', label: '账户设置', mobileLabel: '账户', icon: <Users size={18} /> }
@@ -773,6 +835,7 @@ const PAGE_TITLES: Record<TeacherTab, string> = {
   STUDENT_RESEARCH: '学生数据研究',
   RECORDS: '自然语言数据分析',
   CLICK_FLOW: '点击流分区',
+  USER_AUDIT: '用户行为审计',
   PROMPT: '提示词工程管理',
   SYSTEM_DATA: '系统数据查看',
   ACCOUNT: '账户设置'
@@ -888,6 +951,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [studentSummary, setStudentSummary] = useState<StudentSummary | null>(null);
   const [aiLogSummary, setAiLogSummary] = useState<AiLogSummary | null>(null);
   const [clickFlowSummary, setClickFlowSummary] = useState<ClickFlowSummary | null>(null);
+  const [dataExportAudits, setDataExportAudits] = useState<DataExportAuditResponse | null>(null);
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [tablePage, setTablePage] = useState(1);
   const [searchDraft, setSearchDraft] = useState('');
@@ -909,6 +973,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
   const [isLoadingClickFlow, setIsLoadingClickFlow] = useState(false);
+  const [isLoadingDataExportAudits, setIsLoadingDataExportAudits] = useState(false);
   const [rowsRefreshKey, setRowsRefreshKey] = useState(0);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [researchRefreshKey, setResearchRefreshKey] = useState(0);
@@ -916,6 +981,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [clickFlowDateRange, setClickFlowDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('7d');
   const [clickFlowEventType, setClickFlowEventType] = useState<'all' | 'ui_click' | 'page_view'>('all');
   const [clickFlowStudentId, setClickFlowStudentId] = useState('all');
+  const [auditDateRange, setAuditDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('30d');
+  const [auditSearchDraft, setAuditSearchDraft] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const [researchStudentSearchDraft, setResearchStudentSearchDraft] = useState('');
   const [researchStudentSearch, setResearchStudentSearch] = useState('');
 
@@ -1238,6 +1308,48 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       ignore = true;
     };
   }, [activeTab, clickFlowDateRange, clickFlowEventType, clickFlowStudentId]);
+
+  useEffect(() => {
+    if (activeTab !== 'USER_AUDIT' || !canAccessPanel('user_audit')) return;
+
+    let ignore = false;
+    setIsLoadingDataExportAudits(true);
+    setAdminError('');
+
+    const params = new URLSearchParams({
+      dateRange: auditDateRange,
+      search: auditSearch,
+      page: String(auditPage),
+      pageSize: '25'
+    });
+
+    apiRequest<DataExportAuditResponse>(`/api/admin/audit/data-downloads?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) setDataExportAudits(data);
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '用户行为审计加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingDataExportAudits(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, isAdmin, user.panelPermissions, auditDateRange, auditSearch, auditPage, auditRefreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'USER_AUDIT') return;
+    const timer = window.setTimeout(() => {
+      setAuditSearch(auditSearchDraft.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, auditSearchDraft]);
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditDateRange, auditSearch]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data') || !selectedTable) return;
@@ -3239,20 +3351,93 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       };
     });
 
+  const createCsvDownload = (csv: string, fileName: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const recordDataExportAudit = async (payload: {
+    exportType: 'student_research_selected' | 'student_research_all' | 'research_ai_result';
+    sourcePanel?: 'student_research' | 'research_ai';
+    fileName: string;
+    rowCount: number;
+    targets: DataExportAuditTarget[];
+    filters?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) => {
+    await apiRequest('/api/admin/audit/data-downloads', {
+      method: 'POST',
+      body: JSON.stringify({
+        exportType: payload.exportType,
+        sourcePanel: payload.sourcePanel ?? 'student_research',
+        fileName: payload.fileName,
+        rowCount: payload.rowCount,
+        studentCount: payload.targets.length,
+        targetStudents: payload.targets,
+        filters: payload.filters ?? {
+          dateRange: researchDateRange,
+          search: researchStudentSearch
+        },
+        metadata: payload.metadata ?? {}
+      })
+    });
+    setAuditRefreshKey((value) => value + 1);
+  };
+
+  const downloadResearchAiResultCsv = async () => {
+    if (!researchAiResult?.rows?.length) return;
+    try {
+      const csv = toCsv(researchAiResult.rows);
+      const fileName = `research-ai-${Date.now()}.csv`;
+      await recordDataExportAudit({
+        exportType: 'research_ai_result',
+        sourcePanel: 'research_ai',
+        fileName,
+        rowCount: researchAiResult.rows.length,
+        targets: [],
+        filters: {
+          question: researchAiResult.question,
+          sql: researchAiResult.sql
+        },
+        metadata: {
+          chartSuggestion: researchAiResult.chartSuggestion,
+          sqlRisk: researchAiResult.sqlRisk
+        }
+      });
+      createCsvDownload(csv, fileName);
+    } catch (error) {
+      setResearchAiError(error instanceof Error ? error.message : '分析结果下载审计记录失败，已取消下载');
+    }
+  };
+
   const downloadResearchStudentCsv = async () => {
     if (!selectedResearchStudentIds.length) return;
     setIsDownloadingResearchStudents(true);
     try {
       const activities = await Promise.all(selectedResearchStudentIds.map((id) => fetchResearchStudentActivity(id)));
-      const csv = toCsv(activities.flatMap((activity) => buildResearchStudentExportRows(activity)));
+      const exportRows = activities.flatMap((activity) => buildResearchStudentExportRows(activity));
+      const csv = toCsv(exportRows);
       if (!csv) return;
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `student-research-selected-${selectedResearchStudentIds.length}-${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = `student-research-selected-${selectedResearchStudentIds.length}-${Date.now()}.csv`;
+      await recordDataExportAudit({
+        exportType: 'student_research_selected',
+        fileName,
+        rowCount: exportRows.length,
+        targets: activities.map((activity) => getResearchStudentAuditTarget(activity.user)),
+        metadata: {
+          messageRows: activities.reduce((sum, activity) => sum + activity.messages.length, 0),
+          aiLogRows: activities.reduce((sum, activity) => sum + activity.aiLogs.length, 0),
+          practiceEventRows: activities.reduce((sum, activity) => sum + activity.practiceEvents.length, 0)
+        }
+      });
+      createCsvDownload(csv, fileName);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : '学生数据下载审计记录失败，已取消下载');
     } finally {
       setIsDownloadingResearchStudents(false);
     }
@@ -3277,7 +3462,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         if (data.rows.length === 0) break;
         page += 1;
       }
-      const csv = toCsv(buildResearchStudentDirectoryExportRows({
+      const exportRows = buildResearchStudentDirectoryExportRows({
         generatedAt: new Date().toISOString(),
         dateRange: researchDateRange,
         search: researchStudentSearch,
@@ -3285,18 +3470,167 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         page: 1,
         pageSize: rows.length,
         rows
-      }));
+      });
+      const csv = toCsv(exportRows);
       if (!csv) return;
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
+      await recordDataExportAudit({
+        exportType: 'student_research_all',
+        fileName,
+        rowCount: exportRows.length,
+        targets: rows.map((row) => getResearchStudentAuditTarget(row.user)),
+        metadata: {
+          directoryTotal: rows.length
+        }
+      });
+      createCsvDownload(csv, fileName);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : '学生数据下载审计记录失败，已取消下载');
     } finally {
       setIsDownloadingResearchStudents(false);
     }
+  };
+
+  const renderUserAudit = () => {
+    const rows = dataExportAudits?.rows ?? [];
+    const totalPages = dataExportAudits ? Math.max(1, Math.ceil(dataExportAudits.total / dataExportAudits.pageSize)) : 1;
+
+    return (
+      <div className="space-y-6">
+        <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">User Behavior Audit</p>
+                <h3 className="mt-1 text-xl font-black text-slate-900">用户行为审计</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  记录后台用户下载学生数据的行为，包括操作者、下载时间、下载范围、学生清单和筛选条件。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditRefreshKey((value) => value + 1)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50"
+              >
+                <RefreshCw size={15} />
+                刷新
+              </button>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 lg:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                <input
+                  value={auditSearchDraft}
+                  onChange={(event) => setAuditSearchDraft(event.target.value)}
+                  placeholder="搜索操作者、文件名、导出类型"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DATE_RANGES.map((range) => (
+                  <button
+                    key={range.value}
+                    type="button"
+                    onClick={() => setAuditDateRange(range.value)}
+                    className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                      auditDateRange === range.value
+                        ? 'bg-indigo-600 text-white'
+                        : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-black text-slate-500">
+                下载审计 {dataExportAudits ? `(${dataExportAudits.total})` : ''}
+              </p>
+              {isLoadingDataExportAudits && <Loader2 className="animate-spin text-indigo-500" size={16} />}
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-100">
+              <table className="min-w-[980px] w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-black">下载时间</th>
+                    <th className="px-4 py-3 font-black">操作者</th>
+                    <th className="px-4 py-3 font-black">下载类型</th>
+                    <th className="px-4 py-3 font-black">学生数</th>
+                    <th className="px-4 py-3 font-black">数据行数</th>
+                    <th className="px-4 py-3 font-black">学生数据范围</th>
+                    <th className="px-4 py-3 font-black">文件名</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((row) => {
+                    const targets = Array.isArray(row.targetStudents) ? row.targetStudents : [];
+                    const targetText = targets
+                      .slice(0, 4)
+                      .map((target) => target.displayName || target.username || target.anonymousUserCode || target.userId)
+                      .filter(Boolean)
+                      .join(' / ');
+                    return (
+                      <tr key={row.id} className="align-top hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-slate-500">{formatValue(row.createdAt)}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-black text-slate-800">{row.actorName || row.actorUsername || '未知用户'}</div>
+                          <div className="mt-1 font-mono text-[11px] text-slate-400">{row.actorUsername || '-'}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-black text-indigo-600">
+                            {row.exportTypeLabel || row.exportType}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-black text-slate-700">{row.studentCount}</td>
+                        <td className="px-4 py-3 font-black text-slate-700">{row.rowCount}</td>
+                        <td className="max-w-sm px-4 py-3 leading-5 text-slate-600">
+                          {targetText || '-'}
+                          {targets.length > 4 ? ` 等 ${targets.length} 人` : ''}
+                          {row.filtersJson ? (
+                            <div className="mt-1 text-[11px] text-slate-400">筛选：{formatCell(row.filtersJson)}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">{row.fileName || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                  {!rows.length && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                        暂无下载审计记录
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                type="button"
+                disabled={auditPage <= 1}
+                onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span className="text-xs font-black text-slate-500">第 {auditPage} / {totalPages} 页</span>
+              <button
+                type="button"
+                disabled={auditPage >= totalPages}
+                onClick={() => setAuditPage((page) => Math.min(totalPages, page + 1))}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
   };
 
   const renderStudentResearchData = () => {
@@ -3626,16 +3960,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               ) : null}
               {researchAiResult?.rows?.length ? (
                 <button
-                  onClick={() => {
-                    const csv = toCsv(researchAiResult.rows);
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `research-ai-${Date.now()}.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
+                  onClick={() => void downloadResearchAiResultCsv()}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-600 hover:bg-slate-50"
                 >
                   导出 CSV
@@ -3925,16 +4250,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </button>
             {researchAiResult?.rows?.length ? (
               <button
-                onClick={() => {
-                  const csv = toCsv(researchAiResult.rows);
-                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `research-ai-${Date.now()}.csv`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={() => void downloadResearchAiResultCsv()}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
               >
                 导出 CSV
@@ -4703,6 +5019,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           {canAccessPanel('student_research') && activeTab === 'STUDENT_RESEARCH' && renderStudentResearchData()}
           {canAccessPanel('research_ai') && activeTab === 'RECORDS' && renderResearchLab()}
           {canAccessPanel('click_flow') && activeTab === 'CLICK_FLOW' && renderClickFlow()}
+          {canAccessPanel('user_audit') && activeTab === 'USER_AUDIT' && renderUserAudit()}
           {canAccessPanel('system_data') && activeTab === 'SYSTEM_DATA' && renderSystemData()}
           {activeTab === 'ACCOUNT' && renderAccountSettings()}
 
