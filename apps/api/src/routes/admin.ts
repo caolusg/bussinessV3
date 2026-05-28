@@ -133,6 +133,32 @@ const profileOptionParamsSchema = z.object({
   optionId: z.string().uuid()
 });
 
+const PROTECTED_HSK_OPTION_VALUES = new Set([
+  'HSK0',
+  'HSK1',
+  'HSK2',
+  'HSK3',
+  'HSK4',
+  'HSK5',
+  'HSK6',
+  'HSK7',
+  'HSK8',
+  'HSK9',
+  '其他'
+]);
+
+function isProtectedProfileOption(option: { category: string; value: string; label: string }) {
+  if (option.category !== 'hsk_level') return false;
+  const normalizedValue = option.value.trim().toUpperCase().replace(/\s+/g, '');
+  const normalizedLabel = option.label.trim().toUpperCase().replace(/\s+/g, '');
+  return (
+    PROTECTED_HSK_OPTION_VALUES.has(option.value.trim()) ||
+    PROTECTED_HSK_OPTION_VALUES.has(option.label.trim()) ||
+    /^HSK[0-9]$/.test(normalizedValue) ||
+    /^HSK[0-9]$/.test(normalizedLabel)
+  );
+}
+
 const researchQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d')
 });
@@ -743,6 +769,12 @@ router.put('/profile-options/:optionId', requirePanel('users'), async (req, res)
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
     }
 
+    const current = await prisma.profileOption.findUnique({ where: { id: params.data.optionId } });
+    if (!current) return res.status(404).json(fail('NOT_FOUND', 'Option not found'));
+    if (isProtectedProfileOption(current)) {
+      return res.status(400).json(fail('PROFILE_OPTION_LOCKED', '系统内置 HSK 选项只能查看，不能编辑或停用'));
+    }
+
     const option = await prisma.profileOption.update({
       where: { id: params.data.optionId },
       data: parsed.data
@@ -762,6 +794,12 @@ router.delete('/profile-options/:optionId', requirePanel('users'), async (req, r
     const params = profileOptionParamsSchema.safeParse(req.params);
     if (!params.success) {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
+    }
+
+    const current = await prisma.profileOption.findUnique({ where: { id: params.data.optionId } });
+    if (!current) return res.status(404).json(fail('NOT_FOUND', 'Option not found'));
+    if (isProtectedProfileOption(current)) {
+      return res.status(400).json(fail('PROFILE_OPTION_LOCKED', '系统内置 HSK 选项只能查看，不能编辑或停用'));
     }
 
     const option = await prisma.profileOption.update({

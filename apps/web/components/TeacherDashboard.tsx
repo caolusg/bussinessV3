@@ -775,6 +775,18 @@ const getResearchStudentAuditTarget = (user: ResearchStudentRow['user']): DataEx
   anonymousUserCode: user.anonymousUserCode
 });
 
+const isProtectedProfileOption = (option: ProfileOption) => {
+  if (option.category !== 'hsk_level') return false;
+  const normalizedValue = option.value.trim().toUpperCase().replace(/\s+/g, '');
+  const normalizedLabel = option.label.trim().toUpperCase().replace(/\s+/g, '');
+  return (
+    option.value.trim() === '其他' ||
+    option.label.trim() === '其他' ||
+    /^HSK[0-9]$/.test(normalizedValue) ||
+    /^HSK[0-9]$/.test(normalizedLabel)
+  );
+};
+
 const DATE_RANGES = [
   { value: 'all', label: '全部时间' },
   { value: 'today', label: '今天' },
@@ -1819,6 +1831,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   };
 
   const disableProfileOption = async (option: ProfileOption) => {
+    if (isProtectedProfileOption(option)) {
+      setUserManagerError('系统内置 HSK 选项只能查看，不能编辑或停用');
+      return;
+    }
     setUserManagerError('');
     setUserManagerMessage('');
     try {
@@ -2222,37 +2238,49 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(options as ProfileOption[]).map((option) => (
-                    <div key={option.id} className="flex min-w-[140px] flex-1 items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setProfileOptionForm({
-                          id: option.id,
-                          category: option.category,
-                          value: option.value,
-                          label: option.label,
-                          sortOrder: option.sortOrder,
-                          isActive: option.isActive
-                        })}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
-                        <p className="mt-0.5 text-xs font-bold text-slate-400">
-                          {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
-                        </p>
-                      </button>
-                      {option.isActive && (
+                  {(options as ProfileOption[]).map((option) => {
+                    const protectedOption = isProtectedProfileOption(option);
+                    return (
+                      <div key={option.id} className="flex min-w-[140px] flex-1 items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2">
                         <button
                           type="button"
-                          onClick={() => void disableProfileOption(option)}
-                          className="shrink-0 rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
-                          title="停用"
+                          disabled={protectedOption}
+                          onClick={() => {
+                            if (protectedOption) return;
+                            setProfileOptionForm({
+                              id: option.id,
+                              category: option.category,
+                              value: option.value,
+                              label: option.label,
+                              sortOrder: option.sortOrder,
+                              isActive: option.isActive
+                            });
+                          }}
+                          className={`min-w-0 flex-1 text-left ${protectedOption ? 'cursor-default' : ''}`}
+                          title={protectedOption ? '系统内置选项，只能查看' : '编辑选项'}
                         >
-                          <X size={15} />
+                          <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
+                          <p className="mt-0.5 text-xs font-bold text-slate-400">
+                            {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
+                          </p>
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        {protectedOption ? (
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-400">
+                            内置
+                          </span>
+                        ) : option.isActive ? (
+                          <button
+                            type="button"
+                            onClick={() => void disableProfileOption(option)}
+                            className="shrink-0 rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
+                            title="停用"
+                          >
+                            <X size={15} />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                   {(options as ProfileOption[]).length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-xs font-semibold text-slate-400">
                       暂无选项。
