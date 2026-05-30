@@ -133,7 +133,7 @@ npm run prisma:migrate -- --name init
 npm run db:seed
 ```
 
-Note: the active Prisma schema is under `apps/api/prisma`. The root-level `prisma/` directory is legacy and should not be used for current backend changes.
+Note: the active Prisma schema is under `apps/api/prisma`. The root-level `prisma/` directory only contains legacy migration artifacts and should not be used for current backend changes.
 
 ## Deployment Flow
 

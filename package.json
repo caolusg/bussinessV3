@@ -1,4 +1,7 @@
 {
+  "prisma": {
+    "schema": "apps/api/prisma/schema.prisma"
+  },
   "scripts": {
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",

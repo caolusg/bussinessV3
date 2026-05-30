@@ -30,8 +30,8 @@ const features = [
   },
   {
     icon: <BarChart3 size={20} />,
-    title: '科研数据沉淀',
-    detail: '记录聊天、AI 调用和学习行为，支持教师后续开展学习分析与教学研究。'
+    title: '练习过程回顾',
+    detail: '保留学生的对话、反馈和练习进度，方便教师了解学习状态并调整课堂支持。'
   }
 ];
 
@@ -40,7 +40,7 @@ const workflows = [
   '进入模拟谈判',
   '获得 AI 对手回复',
   '查看教练反馈',
-  '积累研究数据'
+  '持续改进表达'
 ];
 
 const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
@@ -52,7 +52,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           <nav className="hidden items-center gap-7 text-sm font-bold text-slate-600 md:flex">
             <a href="#features" className="hover:text-slate-950">功能</a>
             <a href="#workflow" className="hover:text-slate-950">流程</a>
-            <a href="#research" className="hover:text-slate-950">教学研究</a>
+            <a href="#teacher-support" className="hover:text-slate-950">教师支持</a>
           </nav>
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
@@ -99,7 +99,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                 商通中文
               </h1>
               <p className="mt-5 max-w-xl text-lg font-semibold leading-8 text-slate-700">
-                面向国际贸易场景的商务中文自由练习平台，让学生在 AI 客户对话中练表达、懂业务、积累可研究的学习数据。
+                面向国际贸易场景的商务中文自由练习平台，让学生在 AI 客户对话中练表达、懂业务、提升真实沟通能力。
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
@@ -128,7 +128,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                 </div>
                 <div className="rounded-2xl border border-white/70 bg-white/70 p-3 backdrop-blur">
                   <div className="text-2xl font-black text-slate-950">Data</div>
-                  <div className="mt-1 text-xs text-slate-500">教学研究记录</div>
+                  <div className="mt-1 text-xs text-slate-500">练习过程记录</div>
                 </div>
               </div>
             </div>
@@ -177,13 +177,13 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           </div>
         </section>
 
-        <section id="research" className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+        <section id="teacher-support" className="bg-white px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-2 lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.28em] text-red-700">For Teachers</p>
               <h2 className="mt-3 text-3xl font-black text-slate-950">教师可以看见学习过程，而不只是结果</h2>
               <p className="mt-5 text-base font-semibold leading-8 text-slate-600">
-                后台支持学生数据研究、自然语言数据分析、用户行为审计、教学资源管理和分组管理。注册以后，学生的练习过程会沉淀为可追踪、可分析、可改进的教学数据。
+                后台支持查看学生练习进度、对话记录、AI 反馈、教学资源管理和分组管理。注册以后，学生可以持续完成商务中文情境练习，教师也能及时了解班级学习情况。
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 {['学生画像', '聊天记录', 'AI 调用', '学习事件', '下载审计'].map((item) => (
@@ -199,7 +199,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
                   <Users className="text-red-700" size={24} />
                   <div className="mt-4 text-2xl font-black text-slate-950">分组管理</div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">按班级、研究组或教学任务组织学生样本。</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">按班级或教学任务组织学生练习。</p>
                 </div>
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
                   <GraduationCap className="text-red-700" size={24} />
@@ -208,8 +208,8 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                 </div>
                 <div className="rounded-2xl bg-white p-5 shadow-sm sm:col-span-2">
                   <BarChart3 className="text-red-700" size={24} />
-                  <div className="mt-4 text-2xl font-black text-slate-950">研究分析工作台</div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">用自然语言查询数据，并通过科研 Topic Agent 发现可研究的问题。</p>
+                  <div className="mt-4 text-2xl font-black text-slate-950">练习反馈看板</div>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">查看练习记录、反馈情况和学习进度，帮助教师安排后续教学。</p>
                 </div>
               </div>
             </div>
