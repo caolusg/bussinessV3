@@ -10,6 +10,7 @@ import CoachingReview from './components/CoachingReview';
 import GroupDiscussionRoom from './components/GroupDiscussionRoom';
 import LoginView from './components/LoginView';
 import type { LoginActionPayload, LoginActionResult } from './components/LoginView';
+import HomePage from './components/HomePage';
 import ProfileSetup from './components/ProfileSetup';
 import TeacherDashboard from './components/TeacherDashboard';
 import SystemAdminPage from './components/SystemAdminPage';
@@ -643,7 +644,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<HomePage isAuthenticated={Boolean(currentUser)} />} />
       <Route path="/setup" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Navigate to="/login/student" replace />} />
       <Route path="/login/student" element={<LoginView onLogin={handleLogin} initialRole="student" />} />

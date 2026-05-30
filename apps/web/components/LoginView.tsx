@@ -254,6 +254,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans sm:p-6">
+      <Link
+        to="/"
+        className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-100"
+      >
+        返回首页
+      </Link>
       <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 overflow-hidden animate-in fade-in duration-300">
         <div className="bg-slate-900 p-8 text-white">
           <BrandLogo inverse />
