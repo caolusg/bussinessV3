@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Lock, Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck, User, UserPlus, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
 import BrandLogo from './BrandLogo';
@@ -64,9 +64,11 @@ export type LoginActionResult =
 interface LoginViewProps {
   onLogin: (role: UserRole, payload: LoginActionPayload) => Promise<LoginActionResult>;
   initialRole: 'student' | 'teacher';
+  displayMode?: 'page' | 'modal';
+  onClose?: () => void;
 }
 
-const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
+const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode = 'page', onClose }) => {
   const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<UserRole>(
@@ -252,20 +254,23 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
   const isStudentRegister = activeTab === UserRole.STUDENT && studentMode === 'register';
   const showEmailInput = isStudentRegister || emailSetupRequired;
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans sm:p-6">
-      <Link
-        to="/"
-        className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-100"
-      >
-        返回首页
-      </Link>
-      <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 overflow-hidden animate-in fade-in duration-300">
+  const card = (
+      <div className="relative max-h-[88vh] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in duration-300">
+        {displayMode === 'modal' && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+            aria-label="关闭登录"
+          >
+            <X size={16} />
+          </button>
+        )}
         <div className="bg-slate-900 p-8 text-white">
           <BrandLogo inverse />
         </div>
 
-        <div className="p-8">
+        <div className="max-h-[calc(88vh-112px)] overflow-y-auto p-8">
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200">
             <button
               type="button"
@@ -451,6 +456,19 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole }) => {
           </div>
         </div>
       </div>
+  );
+
+  if (displayMode === 'modal') return card;
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans sm:p-6">
+      <Link
+        to="/"
+        className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-100"
+      >
+        返回首页
+      </Link>
+      {card}
     </div>
   );
 };

@@ -179,7 +179,44 @@ function buildDocumentContextPrompt(contexts: DocumentContext[]) {
 }
 
 function countStudentTurns(messages: ChatMessage[]) {
-  return messages.filter((message) => message.sender === 'USER').length;
+  return messages.filter((message) => message.sender === 'USER' && !message.attachment).length;
+}
+
+function getDocumentKindLabel(kind: DocumentContext['kind']) {
+  const labels: Record<DocumentContext['kind'], string> = {
+    pdf: 'PDF',
+    word: 'Word',
+    image: '图片',
+    text: '文本'
+  };
+  return labels[kind];
+}
+
+function insertAttachmentsBeforeLatestUserMessage(
+  serverMessages: ChatMessage[],
+  attachmentMessages: ChatMessage[]
+) {
+  if (attachmentMessages.length === 0) return serverMessages;
+
+  const merged = [...serverMessages];
+  for (const attachment of attachmentMessages) {
+    if (merged.some((message) => message.id === attachment.id)) continue;
+
+    const targetTurn = attachment.turnIndex ?? Number.MAX_SAFE_INTEGER;
+    let insertAt = merged.findIndex(
+      (message) =>
+        message.sender === 'USER' &&
+        !message.attachment &&
+        (message.turnIndex ?? Number.MAX_SAFE_INTEGER) >= targetTurn
+    );
+    if (insertAt < 0) {
+      insertAt = merged.length;
+    }
+
+    merged.splice(insertAt, 0, attachment);
+  }
+
+  return merged;
 }
 
 function readSessionCache(stage: SimulationStage): SessionCache | null {
@@ -250,11 +287,13 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
   const [documentContexts, setDocumentContexts] = useState<DocumentContext[]>([]);
   const [uploadingContext, setUploadingContext] = useState(false);
   const [uploadingContextStatus, setUploadingContextStatus] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState<NonNullable<ChatMessage['attachment']> | null>(null);
   const [currentStage, setCurrentStage] = useState<SimulationStage>(
     stageKeyMap[task.stageId] ?? 'acquisition'
   );
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
   const cachedSession = useRef<SessionCache | null>(null);
   const [hydratedStage, setHydratedStage] = useState<SimulationStage | null>(null);
 
@@ -477,7 +516,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     const optimisticText = inputValue.trim();
     const productCatalogContext = buildDocumentContextPrompt(documentContexts);
     const visibleMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
-    const nextTurn = (visibleMessages[visibleMessages.length - 1]?.turnIndex ?? 0) + 1;
+    const localAttachmentMessages = visibleMessages.filter((message) => message.attachment);
+    const visibleConversationMessages = visibleMessages.filter((message) => !message.attachment);
+    const nextTurn = (visibleConversationMessages[visibleConversationMessages.length - 1]?.turnIndex ?? 0) + 1;
     const optimistic: ChatMessage = {
       id: optimisticId,
       sender: 'USER',
@@ -526,7 +567,10 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         setCurrentSessionId(data.sessionId);
       }
       if (returnedMessages.length > 0) {
-        const nextMessages = returnedMessages.map(toChatMessage);
+        const nextMessages = insertAttachmentsBeforeLatestUserMessage(
+          returnedMessages.map(toChatMessage),
+          localAttachmentMessages
+        );
         setMessages(nextMessages);
         setSessionEnded(
           data?.sessionEnded === true ||
@@ -558,9 +602,11 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
     setUploadingContextStatus(`正在读取：${file.name}`);
     try {
       let text = '';
+      let previewDataUrl: string | undefined;
       const kind = detectDocumentKind(file);
       if (kind === 'image') {
         setUploadingContextStatus(`正在识别图片：${file.name}`);
+        previewDataUrl = await readFileAsDataUrl(file);
         const result = await Tesseract.recognize(file, 'chi_sim+eng');
         text = result.data.text.trim();
       } else {
@@ -587,16 +633,37 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
         return;
       }
 
-      setDocumentContexts((current) => [
-        ...current,
-        {
-          id: `${Date.now()}-${file.name}`,
+      const contextId = `context-${Date.now()}-${file.name}`;
+      const visibleMessages = messages.length > 0 ? messages : INITIAL_CHAT_MESSAGES;
+      const visibleConversationMessages = visibleMessages.filter((message) => !message.attachment);
+      const attachmentTurnIndex =
+        (visibleConversationMessages[visibleConversationMessages.length - 1]?.turnIndex ?? 0) + 1;
+      const nextContext: DocumentContext = {
+        id: contextId,
+        fileName: file.name,
+        kind,
+        text: text.slice(0, 6000)
+      };
+      const attachmentMessage: ChatMessage = {
+        id: contextId,
+        sender: 'USER',
+        text: '',
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        turnIndex: attachmentTurnIndex,
+        attachment: {
           fileName: file.name,
           kind,
-          text: text.slice(0, 6000)
+          previewText: text.slice(0, 6000),
+          dataUrl: previewDataUrl
         }
-      ].slice(-4));
-      setUploadingContextStatus(`已加入资料：${file.name}`);
+      };
+
+      setDocumentContexts((current) => [...current, nextContext].slice(-4));
+      setMessages((current) => [...(current.length > 0 ? current : INITIAL_CHAT_MESSAGES), attachmentMessage]);
+      setUploadingContextStatus('');
     } catch (error) {
       setUploadingContextStatus('资料读取失败');
       alert(error instanceof Error ? error.message : '资料读取失败，请换一个文件试试。');
@@ -817,6 +884,7 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               const isMe = msg.sender === 'USER';
               const isSystem = msg.sender === 'SYSTEM';
               const isAiFailure = !isMe && msg.trace?.degraded === true;
+              const isAttachment = Boolean(msg.attachment);
               const aiFailureText = [
                 'AI 调用未成功，已暂停生成新的客户回复。',
                 '请稍后重试，或联系管理员在“系统管理 > 最近异常”查看原因。'
@@ -856,7 +924,9 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                       </div>
                       <div
                         className={`rounded-2xl px-3 py-2.5 text-sm leading-relaxed shadow-sm sm:px-4 sm:py-3 ${
-                          isMe
+                          isAttachment
+                            ? 'rounded-tr-sm border border-blue-100 bg-white text-slate-800'
+                            : isMe
                             ? 'rounded-tr-sm bg-blue-600 text-white'
                             : isAiFailure
                               ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-800'
@@ -865,7 +935,26 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                               : 'rounded-tl-sm border border-gray-200 bg-white text-slate-700'
                         }`}
                       >
-                        {isAiFailure ? aiFailureText : msg.text}
+                        {isAttachment && msg.attachment ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewAttachment(msg.attachment ?? null)}
+                            className="flex min-w-0 items-center gap-3 text-left"
+                            title="查看上传资料"
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                              <FileText size={18} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="max-w-72 truncate text-sm font-bold text-slate-800">
+                                {msg.attachment.fileName}
+                              </div>
+                              <div className="mt-0.5 text-xs font-bold text-blue-500">
+                                {getDocumentKindLabel(msg.attachment.kind)} 资料已上传 · 点击查看
+                              </div>
+                            </div>
+                          </button>
+                        ) : isAiFailure ? aiFailureText : msg.text}
                       </div>
                       {isAiFailure && (
                         <div className="mt-2 max-w-full rounded-xl border border-rose-100 bg-white px-3 py-2 text-xs leading-5 text-rose-700 shadow-sm">
@@ -917,35 +1006,6 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
               className="hidden"
             />
             <div className="mx-auto w-full max-w-6xl space-y-3">
-              {documentContexts.length > 0 && (
-                <div className="flex max-h-16 flex-wrap gap-2 overflow-y-auto pr-1">
-                  {documentContexts.map((context) => (
-                    <div
-                      key={context.id}
-                      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800"
-                      title={context.fileName}
-                    >
-                      <FileText size={14} />
-                      <span className="max-w-56 truncate">{context.fileName}</span>
-                      <span className="text-[10px] font-bold uppercase text-blue-400">
-                        {context.kind}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDocumentContexts((current) =>
-                            current.filter((item) => item.id !== context.id)
-                          )
-                        }
-                        className="rounded-full p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
-                        aria-label={`移除 ${context.fileName}`}
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
               <div>
                 <div className="flex min-h-[150px] flex-1 flex-col gap-3 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-3 transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:min-h-[168px] sm:px-4 sm:py-4">
                   {hasReachedTurnLimit && (
@@ -971,7 +1031,24 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
                     <textarea
                       value={inputValue}
                       onChange={(event) => setInputValue(event.target.value)}
+                      onCompositionStart={() => {
+                        isComposingRef.current = true;
+                      }}
+                      onCompositionEnd={() => {
+                        isComposingRef.current = false;
+                      }}
                       onKeyDown={(event) => {
+                        const nativeEvent = event.nativeEvent as KeyboardEvent & {
+                          isComposing?: boolean;
+                          keyCode?: number;
+                        };
+                        if (
+                          isComposingRef.current ||
+                          nativeEvent.isComposing ||
+                          nativeEvent.keyCode === 229
+                        ) {
+                          return;
+                        }
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
                           void handleSend();
@@ -1196,6 +1273,58 @@ const SimulationInterface: React.FC<SimulationInterfaceProps> = ({
           </div>
         </aside>
       </div>
+
+      {previewAttachment && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 px-4 py-6">
+          <div className="flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                  {getDocumentKindLabel(previewAttachment.kind)} 资料
+                </p>
+                <h3 className="mt-1 truncate text-base font-black text-slate-900">
+                  {previewAttachment.fileName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewAttachment(null)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+                aria-label="关闭资料预览"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {previewAttachment.kind === 'image' && previewAttachment.dataUrl && (
+                <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <img
+                    src={previewAttachment.dataUrl}
+                    alt={previewAttachment.fileName}
+                    className="max-h-[42vh] w-full object-contain"
+                  />
+                </div>
+              )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-black text-slate-700">已解析文本</p>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(previewAttachment.previewText ?? '')}
+                    disabled={!previewAttachment.previewText}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    复制
+                  </button>
+                </div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
+                  {previewAttachment.previewText || '该资料没有可预览的解析文本。'}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

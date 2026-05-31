@@ -1610,7 +1610,7 @@ router.get('/research/students/:userId/activity', requirePanel('student_research
       }),
       prisma.simulationMessage.findMany({
         where: { session: { userId }, ...dateScopedWhere },
-        orderBy: [{ createdAt: 'desc' }, { turnIndex: 'desc' }],
+        orderBy: [{ createdAt: 'asc' }, { turnIndex: 'asc' }],
         take: 150,
         select: {
           id: true,

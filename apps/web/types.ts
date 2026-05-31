@@ -75,6 +75,12 @@ export interface ChatMessage {
   sender: 'USER' | 'OPPONENT' | 'SYSTEM';
   text: string;
   timestamp: string;
+  attachment?: {
+    fileName: string;
+    kind: 'pdf' | 'word' | 'image' | 'text';
+    previewText?: string;
+    dataUrl?: string;
+  };
   isError?: boolean;
   turnIndex?: number;
   coachNote?: string;

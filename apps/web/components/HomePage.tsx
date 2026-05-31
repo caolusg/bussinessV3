@@ -2,13 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
-  BarChart3,
   BookOpen,
   Bot,
-  CheckCircle2,
-  GraduationCap,
-  ShieldCheck,
-  Users
+  MessageCircle
 } from 'lucide-react';
 import BrandLogo from './BrandLogo';
 import heroImage from '../assets/home-hero-business-chinese.webp';
@@ -29,9 +25,9 @@ const features = [
     detail: '每个业务环节配套词汇、句式和外贸常识，学生可以边查边练。'
   },
   {
-    icon: <BarChart3 size={20} />,
-    title: '练习过程回顾',
-    detail: '保留学生的对话、反馈和练习进度，方便教师了解学习状态并调整课堂支持。'
+    icon: <MessageCircle size={20} />,
+    title: '即时表达反馈',
+    detail: '在模拟沟通后获得表达建议，帮助学生调整措辞、语气和业务说明。'
   }
 ];
 
@@ -52,7 +48,6 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           <nav className="hidden items-center gap-7 text-sm font-bold text-slate-600 md:flex">
             <a href="#features" className="hover:text-slate-950">功能</a>
             <a href="#workflow" className="hover:text-slate-950">流程</a>
-            <a href="#teacher-support" className="hover:text-slate-950">教师支持</a>
           </nav>
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
@@ -65,12 +60,6 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
               </Link>
             ) : (
               <>
-                <Link
-                  to="/login/teacher"
-                  className="hidden rounded-full border border-slate-200 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 sm:inline-flex"
-                >
-                  教师登录
-                </Link>
                 <Link
                   to="/login/student"
                   className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800"
@@ -109,13 +98,6 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                   开始学生练习
                   <ArrowRight size={17} />
                 </Link>
-                <Link
-                  to="/login/teacher"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/80 px-6 py-3 text-sm font-black text-slate-800 backdrop-blur hover:bg-white"
-                >
-                  教师后台入口
-                  <ShieldCheck size={17} />
-                </Link>
               </div>
               <div className="mt-8 grid max-w-xl grid-cols-3 gap-3 text-sm font-bold text-slate-700">
                 <div className="rounded-2xl border border-white/70 bg-white/70 p-3 backdrop-blur">
@@ -127,8 +109,8 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                   <div className="mt-1 text-xs text-slate-500">客户与教练反馈</div>
                 </div>
                 <div className="rounded-2xl border border-white/70 bg-white/70 p-3 backdrop-blur">
-                  <div className="text-2xl font-black text-slate-950">Data</div>
-                  <div className="mt-1 text-xs text-slate-500">练习过程记录</div>
+                  <div className="text-2xl font-black text-slate-950">Task</div>
+                  <div className="mt-1 text-xs text-slate-500">情境任务练习</div>
                 </div>
               </div>
             </div>
@@ -177,44 +159,6 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           </div>
         </section>
 
-        <section id="teacher-support" className="bg-white px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-2 lg:items-center">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.28em] text-red-700">For Teachers</p>
-              <h2 className="mt-3 text-3xl font-black text-slate-950">教师可以看见学习过程，而不只是结果</h2>
-              <p className="mt-5 text-base font-semibold leading-8 text-slate-600">
-                后台支持查看学生练习进度、对话记录、AI 反馈、教学资源管理和分组管理。注册以后，学生可以持续完成商务中文情境练习，教师也能及时了解班级学习情况。
-              </p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                {['学生画像', '聊天记录', 'AI 调用', '学习事件', '下载审计'].map((item) => (
-                  <span key={item} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
-                    <CheckCircle2 size={15} className="text-red-700" />
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <Users className="text-red-700" size={24} />
-                  <div className="mt-4 text-2xl font-black text-slate-950">分组管理</div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">按班级或教学任务组织学生练习。</p>
-                </div>
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <GraduationCap className="text-red-700" size={24} />
-                  <div className="mt-4 text-2xl font-black text-slate-950">画像选项</div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">维护 HSK、专业方向和学习背景变量。</p>
-                </div>
-                <div className="rounded-2xl bg-white p-5 shadow-sm sm:col-span-2">
-                  <BarChart3 className="text-red-700" size={24} />
-                  <div className="mt-4 text-2xl font-black text-slate-950">练习反馈看板</div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">查看练习记录、反馈情况和学习进度，帮助教师安排后续教学。</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
       <footer className="border-t border-slate-200 bg-white px-4 py-8 sm:px-6 lg:px-8">
@@ -222,7 +166,6 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           <BrandLogo compact />
           <div className="flex flex-wrap gap-4">
             <Link to="/login/student" className="hover:text-slate-950">学生入口</Link>
-            <Link to="/login/teacher" className="hover:text-slate-950">教师入口</Link>
             <Link to="/forgot-password" className="hover:text-slate-950">找回密码</Link>
           </div>
         </div>

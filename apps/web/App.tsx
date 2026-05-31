@@ -602,6 +602,25 @@ const AppRoutes: React.FC = () => {
     navigate('/login', { replace: true });
   };
 
+  const renderLoginOverlay = (initialRole: 'student' | 'teacher') => (
+    <>
+      <HomePage isAuthenticated={Boolean(currentUser)} />
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm"
+        onClick={() => navigate('/', { replace: true })}
+      >
+        <div onClick={(event) => event.stopPropagation()} className="w-full max-w-md">
+          <LoginView
+            onLogin={handleLogin}
+            initialRole={initialRole}
+            displayMode="modal"
+            onClose={() => navigate('/', { replace: true })}
+          />
+        </div>
+      </div>
+    </>
+  );
+
   const handleTriggerGroupDiscussion = () => navigate('/discussion');
   const handleGoToCoachingFromDiscussion = () => navigate('/coach');
 
@@ -647,8 +666,8 @@ const AppRoutes: React.FC = () => {
       <Route path="/" element={<HomePage isAuthenticated={Boolean(currentUser)} />} />
       <Route path="/setup" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Navigate to="/login/student" replace />} />
-      <Route path="/login/student" element={<LoginView onLogin={handleLogin} initialRole="student" />} />
-      <Route path="/login/teacher" element={<LoginView onLogin={handleLogin} initialRole="teacher" />} />
+      <Route path="/login/student" element={renderLoginOverlay('student')} />
+      <Route path="/login/teacher" element={renderLoginOverlay('teacher')} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />

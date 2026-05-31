@@ -213,6 +213,15 @@ type ResearchStudentActivity = {
     content: string;
     turnIndex: number;
     createdAt: string;
+    session?: {
+      stage?: string | null;
+      businessStage?: {
+        key?: string | null;
+        titleZh?: string | null;
+        titleEn?: string | null;
+        sortOrder?: number | null;
+      } | null;
+    } | null;
   }>;
   aiLogs: ResearchStudentRow['recentAiLogs'];
   practiceEvents: Array<Record<string, unknown>>;
@@ -675,6 +684,54 @@ const asRecord = (value: unknown) => (value && typeof value === 'object' ? value
 const formatStageName = (value: unknown) => {
   const key = formatValue(value);
   return STAGE_LABELS[key] ? `${STAGE_LABELS[key]}阶段` : key;
+};
+
+type ResearchStudentMessage = ResearchStudentActivity['messages'][number];
+
+const getResearchMessageRoleLabel = (role: string) => {
+  if (role === 'student' || role === 'user') return '学生';
+  if (role === 'opponent' || role === 'assistant') return 'AI 客户';
+  if (role === 'system' || role === 'coach') return 'AI 教练';
+  return role || '未知角色';
+};
+
+const groupResearchMessagesByStage = (messages: ResearchStudentMessage[]) => {
+  const groups = new Map<string, {
+    key: string;
+    title: string;
+    sortOrder: number;
+    messages: ResearchStudentMessage[];
+  }>();
+
+  for (const message of messages) {
+    const session = message.session ?? {};
+    const stage = session.businessStage ?? null;
+    const stageKey = stage?.key ?? session.stage ?? 'unknown';
+    const key = String(stageKey || 'unknown');
+    const title = stage?.titleZh || formatStageName(key) || '未分阶段';
+    const sortOrder = Number.isFinite(Number(stage?.sortOrder)) ? Number(stage?.sortOrder) : 999;
+
+    if (!groups.has(key)) {
+      groups.set(key, { key, title, sortOrder, messages: [] });
+    }
+    groups.get(key)?.messages.push(message);
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      messages: [...group.messages].sort((a, b) => {
+        const timeDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return Number(a.turnIndex ?? 0) - Number(b.turnIndex ?? 0);
+      })
+    }))
+    .sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      const aFirst = a.messages[0]?.createdAt ? new Date(a.messages[0].createdAt).getTime() : 0;
+      const bFirst = b.messages[0]?.createdAt ? new Date(b.messages[0].createdAt).getTime() : 0;
+      return aFirst - bFirst;
+    });
 };
 
 const formatPageName = (value: unknown) => {
@@ -3669,6 +3726,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     const visibleResearchIds = visibleResearchRows.map((row) => row.user.id);
     const selectedVisibleCount = visibleResearchIds.filter((id) => selectedResearchStudentIds.includes(id)).length;
     const allVisibleSelected = visibleResearchIds.length > 0 && selectedVisibleCount === visibleResearchIds.length;
+    const researchMessageGroups = researchStudentActivity
+      ? groupResearchMessagesByStage(researchStudentActivity.messages)
+      : [];
 
     return (
     <div className="space-y-6">
@@ -3857,25 +3917,43 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
                 <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
                   <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">最近聊天记录</p>
-                    <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-                      {researchStudentActivity.messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`rounded-2xl p-4 ${
-                            message.role === 'student'
-                              ? 'bg-indigo-600 text-white'
-                              : 'border border-slate-100 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest opacity-70">
-                            <span>{message.role} · turn {message.turnIndex}</span>
-                            <span>{new Date(message.createdAt).toLocaleString()}</span>
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">聊天记录</p>
+                    <p className="mb-3 text-xs font-bold text-slate-500">按业务环节分组；每个环节内从最早消息开始展示。</p>
+                    <div className="max-h-[520px] space-y-4 overflow-y-auto pr-1">
+                      {researchMessageGroups.map((group) => (
+                        <section key={group.key} className="rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <h5 className="text-sm font-black text-slate-900">{group.title}</h5>
+                              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                {group.key} · {group.messages.length} 条消息
+                              </p>
+                            </div>
+                            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500">
+                              正序
+                            </span>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.content}</p>
-                        </div>
+                          <div className="space-y-3">
+                            {group.messages.map((message) => (
+                              <div
+                                key={message.id}
+                                className={`rounded-2xl p-4 ${
+                                  message.role === 'student'
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'border border-slate-100 bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest opacity-70">
+                                  <span>{getResearchMessageRoleLabel(message.role)} · turn {message.turnIndex}</span>
+                                  <span>{new Date(message.createdAt).toLocaleString()}</span>
+                                </div>
+                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
                       ))}
-                      {researchStudentActivity.messages.length === 0 && (
+                      {researchMessageGroups.length === 0 && (
                         <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs text-slate-400">当前范围暂无聊天记录</p>
                       )}
                     </div>
