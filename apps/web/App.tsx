@@ -139,6 +139,7 @@ const loadAuthenticatedUser = async (token?: string | null) => {
 const getPostLoginPath = (me: AuthMe) => {
   if (me.roles.includes('teacher') || me.roles.includes('admin') || (me.panelPermissions ?? []).length > 0) return '/teacher';
   if (hasStudentPortalRole(me.roles) && !me.profileCompleted) return '/profile';
+  if (hasStudentPortalRole(me.roles)) return '/dashboard';
   return '/';
 };
 
