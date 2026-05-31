@@ -70,6 +70,7 @@ interface LoginViewProps {
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode = 'page', onClose }) => {
   const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
+  const registrationEnabled = false;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<UserRole>(
     initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT
@@ -90,6 +91,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
 
   useEffect(() => {
     setActiveTab(initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT);
+    setStudentMode('login');
     setEmailSetupRequired(false);
     setUsernameChangeRequired(false);
     setPendingIdentifier('');
@@ -419,7 +421,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
               <ArrowRight size={18} />
             </button>
 
-            {activeTab === UserRole.STUDENT && !usernameChangeRequired && (
+            {registrationEnabled && activeTab === UserRole.STUDENT && !usernameChangeRequired && (
               <div className="text-center text-xs text-slate-500">
                 {isStudentRegister ? '已有账号？' : '还没有账号？'}
                 <button
