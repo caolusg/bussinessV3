@@ -1,21 +1,30 @@
 import React from 'react';
-import { ArrowRight, CheckCircle2, Circle, Map } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Circle, FileText, Globe, Map, MessageSquare } from 'lucide-react';
 import { STAGES } from '../constants';
-import type { Stage } from '../types';
+import type { Stage, SubResource } from '../types';
 
 interface WorkflowMapProps {
   stages?: Stage[];
   currentStageId: number;
   onStageSelect: (id: number) => void;
+  selectedResource?: SubResource | null;
+  onResourceSelect?: (stageId: number, resource: SubResource) => void;
 }
 
 const WorkflowMap: React.FC<WorkflowMapProps> = ({
   stages = STAGES,
   currentStageId,
-  onStageSelect
+  onStageSelect,
+  selectedResource,
+  onResourceSelect
 }) => {
   const currentStage = stages.find((stage) => stage.id === currentStageId) ?? stages[0];
   const nextStage = stages.find((stage) => stage.id === currentStageId + 1);
+  const resourceIcons = {
+    vocabulary: FileText,
+    phrases: MessageSquare,
+    knowledge: Globe
+  } as const;
   const formatStageTitle = (title: string) => title.split(' ')[0];
   const formatStageSubtitle = (title: string) => {
     const match = title.match(/\((.*?)\)/);
@@ -53,6 +62,37 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               )}
             </div>
           </div>
+
+          {currentStage?.subResources?.length ? (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="text-[11px] font-black uppercase tracking-widest text-slate-300">当前环节资源</div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                {currentStage.subResources.map((resource) => {
+                  const Icon = resourceIcons[resource.type];
+                  const active = selectedResource?.id === resource.id;
+
+                  return (
+                    <button
+                      key={resource.id}
+                      type="button"
+                      onClick={() => onResourceSelect?.(currentStage.id, resource)}
+                      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                        active
+                          ? 'border-blue-200 bg-white text-slate-950'
+                          : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Icon size={15} className={active ? 'text-blue-600' : 'text-blue-200'} />
+                        <span className="truncate text-xs font-black">{resource.title}</span>
+                      </span>
+                      <ArrowRight size={14} className={active ? 'text-blue-600' : 'text-slate-500'} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="p-4 sm:p-6">
