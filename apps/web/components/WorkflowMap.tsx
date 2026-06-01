@@ -68,27 +68,6 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               )}
             </div>
           </div>
-
-          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-[11px] font-black uppercase tracking-widest text-slate-300">操作顺序</div>
-            <div className="mt-2 space-y-1.5">
-              {[
-                ['1', '选择环节', '确认当前要练的业务场景'],
-                ['2', '查看资源', '补充词汇、句式和常识'],
-                ['3', '进入任务', '开始模拟沟通练习']
-              ].map(([step, title, detail]) => (
-                <div key={step} className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-black text-blue-100">
-                    {step}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-white">{title}</div>
-                    <div className="truncate text-[10px] font-semibold text-slate-400">{detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </section>
 
         <section className="grid gap-3 border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
