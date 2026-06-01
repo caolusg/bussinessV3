@@ -70,7 +70,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-3 border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
+        <section className="grid content-start gap-3 border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -178,7 +178,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                 <span className="text-xs font-black text-blue-600">{formatStageTitle(currentStage?.title ?? '')}</span>
               </div>
 
-              <div className="max-h-[25rem] space-y-2 overflow-y-auto p-3">
+              <div className="max-h-[18rem] space-y-2 overflow-y-auto p-3">
                 {displayedEntries.length ? (
                   displayedEntries.map((entry) => (
                     <article key={entry.term} className="rounded-lg border border-slate-100 bg-white px-3 py-2.5">
