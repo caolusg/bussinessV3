@@ -1,13 +1,14 @@
 import React from 'react';
 import { ArrowRight, CheckCircle2, Circle, FileText, Globe, Map, MessageSquare } from 'lucide-react';
-import { STAGES } from '../constants';
-import type { Stage, SubResource } from '../types';
+import { STAGE_RESOURCES, STAGES } from '../constants';
+import type { ResourceEntry, Stage, StageResourceSet, SubResource } from '../types';
 
 interface WorkflowMapProps {
   stages?: Stage[];
   currentStageId: number;
   onStageSelect: (id: number) => void;
   selectedResource?: SubResource | null;
+  resourceEntries?: StageResourceSet;
   onResourceSelect?: (stageId: number, resource: SubResource) => void;
 }
 
@@ -16,10 +17,15 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
   currentStageId,
   onStageSelect,
   selectedResource,
+  resourceEntries,
   onResourceSelect
 }) => {
   const currentStage = stages.find((stage) => stage.id === currentStageId) ?? stages[0];
   const nextStage = stages.find((stage) => stage.id === currentStageId + 1);
+  const displayedResource = selectedResource ?? currentStage?.subResources?.[0] ?? null;
+  const displayedEntries: ResourceEntry[] = displayedResource
+    ? resourceEntries?.[displayedResource.type] ?? STAGE_RESOURCES[currentStageId]?.[displayedResource.type] ?? []
+    : [];
   const resourceIcons = {
     vocabulary: FileText,
     phrases: MessageSquare,
@@ -33,7 +39,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
 
   return (
     <div className="mb-6 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-0 lg:grid-cols-[0.72fr_1.55fr]">
+      <div className="grid gap-0 xl:grid-cols-[0.66fr_1.18fr_0.92fr]">
         <section className="border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-200">
             <Map size={15} />
@@ -85,7 +91,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-5 p-4 sm:p-6">
+        <section className="grid gap-5 border-b border-slate-100 p-4 sm:p-6 xl:border-b-0 xl:border-r">
           <div>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
@@ -95,7 +101,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               <ArrowRight className="hidden text-slate-300 sm:block" size={20} />
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2">
               {stages.map((stage) => {
                 const isSelected = stage.id === currentStageId;
 
@@ -145,7 +151,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                 </div>
                 <p className="text-xs font-black text-blue-600">{formatStageTitle(currentStage.title)}</p>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
                 {currentStage.subResources.map((resource) => {
                   const Icon = resourceIcons[resource.type];
                   const active = selectedResource?.id === resource.id;
@@ -176,6 +182,40 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="bg-white p-4 sm:p-6">
+          {displayedResource ? (
+            <div className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">资源详情</div>
+                  <h3 className="mt-1 text-base font-black text-slate-900">{displayedResource.title}</h3>
+                </div>
+                <span className="text-xs font-black text-blue-600">{formatStageTitle(currentStage?.title ?? '')}</span>
+              </div>
+
+              <div className="max-h-[25rem] space-y-2 overflow-y-auto p-3">
+                {displayedEntries.length ? (
+                  displayedEntries.map((entry) => (
+                    <article key={entry.term} className="rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+                      <div className="text-sm font-black text-blue-700">{entry.term}</div>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{entry.explanation}</p>
+                      {entry.example && (
+                        <p className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-[11px] leading-5 text-slate-500">
+                          示例：{entry.example}
+                        </p>
+                      )}
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-8 text-center text-xs font-semibold text-slate-400">
+                    暂无资源内容
+                  </div>
+                )}
               </div>
             </div>
           ) : null}

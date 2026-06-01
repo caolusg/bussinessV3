@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import WorkflowMap from './components/WorkflowMap';
 import TaskCard from './components/TaskCard';
-import ResourcePanel from './components/ResourcePanel';
 import SimulationInterface from './components/SimulationInterface';
 import CoachingReview from './components/CoachingReview';
 import GroupDiscussionRoom from './components/GroupDiscussionRoom';
@@ -226,10 +225,6 @@ const AppRoutes: React.FC = () => {
   const [contentLoadError, setContentLoadError] = useState<string | null>(null);
 
   const currentTaskDetail = contentTasks[selectedStageId] || SCENARIO_DB[selectedStageId] || SCENARIO_DB[1];
-  const selectedResourceEntries = useMemo(() => {
-    if (!selectedResource) return undefined;
-    return contentResources[selectedResource.stageId]?.[selectedResource.resource.type];
-  }, [contentResources, selectedResource]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -764,27 +759,19 @@ const AppRoutes: React.FC = () => {
                 onManageProfile={() => navigate('/profile')}
               />
               <div className="pt-16">
-                <main className="min-h-[calc(100dvh-64px)] w-full px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
-                  <div className="mx-auto max-w-[90rem] space-y-6">
+                <main className="min-h-[calc(100dvh-64px)] w-full px-3 py-5 sm:px-5 lg:px-6 xl:px-8">
+                  <div className="mx-auto max-w-[108rem] space-y-6">
                     <WorkflowMap
                       stages={contentStages}
                       currentStageId={selectedStageId}
                       selectedResource={selectedResource?.stageId === selectedStageId ? selectedResource.resource : null}
+                      resourceEntries={contentResources[selectedStageId]}
                       onStageSelect={(stageId) => {
                         setSelectedStageId(stageId);
                         setSelectedResource(null);
                       }}
                       onResourceSelect={handleResourceClick}
                     />
-                    {selectedResource && (
-                      <ResourcePanel
-                        stageId={selectedResource.stageId}
-                        resource={selectedResource.resource}
-                        entries={selectedResourceEntries}
-                        stageTitle={contentStages.find((stage) => stage.id === selectedResource.stageId)?.title}
-                        onClose={() => setSelectedResource(null)}
-                      />
-                    )}
                     {contentLoadError && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                         学习内容接口暂时不可用，当前使用本地备用内容。
