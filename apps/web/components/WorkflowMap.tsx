@@ -80,7 +80,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               <ArrowRight className="hidden text-slate-300 sm:block" size={20} />
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2.5 sm:grid-cols-4">
               {stages.map((stage) => {
                 const isSelected = stage.id === currentStageId;
 
@@ -89,7 +89,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                     key={stage.id}
                     type="button"
                     onClick={() => onStageSelect(stage.id)}
-                    className={`min-h-12 rounded-xl border px-3 py-2 text-left transition-all ${
+                    className={`min-h-16 rounded-xl border px-3.5 py-3 text-left transition-all ${
                       isSelected
                         ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-blue-50'
@@ -97,17 +97,17 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                   >
                     <div className="flex items-center gap-2">
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black ${
                           isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-blue-600'
                         }`}
                       >
                         {stage.id}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className={`truncate text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
+                        <div className={`truncate text-base font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
                           {formatStageTitle(stage.title)}
                         </div>
-                        <div className="truncate text-[11px] font-semibold text-slate-400">
+                        <div className="mt-0.5 truncate text-xs font-semibold text-slate-400">
                           {formatStageSubtitle(stage.title)}
                         </div>
                       </div>
