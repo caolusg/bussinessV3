@@ -22,12 +22,12 @@ const features = [
   {
     icon: <BookOpen size={20} />,
     title: '阶段化学习资源',
-    detail: '每个业务环节配套词汇、句式和外贸常识，学生可以边查边练。'
+    detail: '每个业务环节配套词汇、句式和外贸常识，可以边查边练。'
   },
   {
     icon: <MessageCircle size={20} />,
     title: '即时表达反馈',
-    detail: '在模拟沟通后获得表达建议，帮助学生调整措辞、语气和业务说明。'
+    detail: '在模拟沟通后获得表达建议，帮助练习者调整措辞、语气和业务说明。'
   }
 ];
 
@@ -77,7 +77,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
         <section className="relative min-h-[88vh] overflow-hidden pt-20">
           <img
             src={heroImage}
-            alt="国际学生在商务中文 AI 实训课堂中进行外贸沟通练习"
+            alt="国际学习者在商务中文 AI 实训课堂中进行外贸沟通练习"
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.90)_28%,rgba(255,255,255,0.42)_52%,rgba(255,255,255,0.04)_100%)]" />
@@ -88,7 +88,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                 商通中文
               </h1>
               <p className="mt-5 max-w-xl text-lg font-semibold leading-8 text-slate-700">
-                面向国际贸易场景的商务中文自由练习平台，让学生在 AI 客户对话中练表达、懂业务、提升真实沟通能力。
+                面向国际贸易场景的商务中文自由练习平台，在 AI 客户对话中练表达、懂业务、提升真实沟通能力。
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
@@ -141,9 +141,9 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
           <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.28em] text-red-300">Learning Flow</p>
-              <h2 className="mt-3 text-3xl font-black">学生进入后看到的是练习，不是说明书</h2>
+              <h2 className="mt-3 text-3xl font-black">进入后看到的是练习，不是说明书</h2>
               <p className="mt-5 text-base font-semibold leading-8 text-slate-300">
-                平台把学习资源、任务目标、模拟谈判和教练反馈放在同一个工作流里，降低学生从“知道词语”到“完成商务沟通”的距离。
+                平台把学习资源、任务目标、模拟谈判和教练反馈放在同一个工作流里，降低从“知道词语”到“完成商务沟通”的距离。
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-5">
@@ -165,7 +165,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm font-semibold text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <BrandLogo compact />
           <div className="flex flex-wrap gap-4">
-            <Link to="/login/student" className="hover:text-slate-950">学生入口</Link>
+            <Link to="/login/student" className="hover:text-slate-950">登录入口</Link>
             <Link to="/forgot-password" className="hover:text-slate-950">找回密码</Link>
           </div>
         </div>

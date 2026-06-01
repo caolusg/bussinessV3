@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Lock, Mail, ShieldCheck, User, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Lock, Mail, UserPlus, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
 import BrandLogo from './BrandLogo';
@@ -70,7 +70,6 @@ interface LoginViewProps {
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode = 'page', onClose }) => {
   const usernamePattern = /^[A-Za-z][A-Za-z0-9]*$/;
-  const registrationEnabled = false;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<UserRole>(
     initialRole === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT
@@ -273,29 +272,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
         </div>
 
         <div className="max-h-[calc(88vh-112px)] overflow-y-auto p-8">
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200">
-            <button
-              type="button"
-              onClick={() => {
-                resetEmailSetup();
-                navigate('/login/student');
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 border border-slate-200' : 'text-slate-500 hover:text-slate-700 border border-transparent'}`}
-            >
-              <User size={16} />
-              登录
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                resetEmailSetup();
-                navigate('/login/teacher');
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === UserRole.TEACHER ? 'bg-white text-indigo-600 border border-slate-200' : 'text-slate-500 hover:text-slate-700 border border-transparent'}`}
-            >
-              <ShieldCheck size={16} />
-              教师/管理员
-            </button>
+          <div className="mb-8">
+            <h2 className="text-xl font-black text-slate-950">登录</h2>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -414,29 +392,11 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
                 : emailSetupRequired
                 ? '发送验证邮件'
                 : isStudentRegister
-                  ? '创建学生账号'
-                  : activeTab === UserRole.STUDENT
-                    ? '登录'
-                    : '管理员安全登录'}
+                  ? '创建账号'
+                  : '登录'}
               <ArrowRight size={18} />
             </button>
 
-            {registrationEnabled && activeTab === UserRole.STUDENT && !usernameChangeRequired && (
-              <div className="text-center text-xs text-slate-500">
-                {isStudentRegister ? '已有账号？' : '还没有账号？'}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStudentMode(isStudentRegister ? 'login' : 'register');
-                    resetEmailSetup();
-                    clearNotice();
-                  }}
-                  className="ml-1 font-bold text-blue-600 hover:text-blue-700"
-                >
-                  {isStudentRegister ? '登录已有账号' : '注册新账号'}
-                </button>
-              </div>
-            )}
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
@@ -451,9 +411,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
                 >
                   忘记密码
                 </Link>
-              ) : (
-                <span className="text-[10px] text-slate-400 font-bold">教师入口不支持邮件找回</span>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

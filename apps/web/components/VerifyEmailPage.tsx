@@ -55,7 +55,7 @@ const VerifyEmailPage: React.FC = () => {
 
   const handleResend = async () => {
     if (!identifier) {
-      setResendMessage('缺少用户名或邮箱，请返回登录页重新注册或输入邮箱。');
+      setResendMessage('缺少用户名或邮箱，请返回登录页重新输入邮箱。');
       return;
     }
 
@@ -107,8 +107,8 @@ const VerifyEmailPage: React.FC = () => {
 
         {!token && (
           <div className="rounded-2xl bg-blue-50 border border-blue-100 px-4 py-4 text-sm text-blue-900">
-            <p>注册成功后，系统已向你的邮箱发送验证邮件。</p>
-            {state.email && <p className="mt-2">注册邮箱：{state.email}</p>}
+            <p>提交后，系统已向你的邮箱发送验证邮件。</p>
+            {state.email && <p className="mt-2">邮箱：{state.email}</p>}
             {state.previewUrl && (
               <p className="mt-2 break-all">
                 开发预览链接：
@@ -151,7 +151,7 @@ const VerifyEmailPage: React.FC = () => {
 
         <div className="mt-8 flex items-center justify-between text-sm">
           <Link to="/login/student" className="text-slate-500 hover:text-slate-900">
-            返回学生登录
+            返回登录
           </Link>
           {status === 'success' && (
             <button

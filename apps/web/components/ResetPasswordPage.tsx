@@ -49,7 +49,7 @@ const ResetPasswordPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
       <div className="max-w-lg w-full rounded-3xl border border-slate-100 bg-white p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-slate-900">重置密码</h1>
-        <p className="mt-2 text-sm text-slate-500">通过邮件里的链接设置新的学生账号密码。</p>
+        <p className="mt-2 text-sm text-slate-500">通过邮件里的链接设置新的账号密码。</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <input
@@ -99,7 +99,7 @@ const ResetPasswordPage: React.FC = () => {
 
         <div className="mt-6 text-sm">
           <Link to="/login/student" className="text-slate-500 hover:text-slate-900">
-            返回学生登录
+            返回登录
           </Link>
         </div>
       </div>

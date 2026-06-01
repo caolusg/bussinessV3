@@ -44,7 +44,7 @@ const ForgotPasswordPage: React.FC = () => {
       <div className="max-w-lg w-full rounded-3xl border border-slate-100 bg-white p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-slate-900">找回密码</h1>
         <p className="mt-2 text-sm text-slate-500">
-          输入注册时使用的用户名或邮箱，系统会把用户名和重置密码链接发送到注册邮箱。
+          输入用户名或邮箱，系统会把用户名和重置密码链接发送到绑定邮箱。
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -81,7 +81,7 @@ const ForgotPasswordPage: React.FC = () => {
 
         <div className="mt-6 text-sm">
           <Link to="/login/student" className="text-slate-500 hover:text-slate-900">
-            返回学生登录
+            返回登录
           </Link>
         </div>
       </div>
