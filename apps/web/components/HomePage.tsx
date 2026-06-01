@@ -95,7 +95,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                   to="/login/student"
                   className="inline-flex items-center gap-2 rounded-full bg-red-700 px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-900/15 hover:bg-red-800"
                 >
-                  开始学生练习
+                  开始练习
                   <ArrowRight size={17} />
                 </Link>
               </div>
