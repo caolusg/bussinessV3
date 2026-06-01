@@ -34,7 +34,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
   return (
     <div className="mb-6 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="grid gap-0 lg:grid-cols-[0.72fr_1.55fr]">
-        <section className="flex flex-col justify-between border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
+        <section className="border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-200">
             <Map size={15} />
             练习流程
@@ -61,10 +61,6 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold leading-6 text-slate-300">
-            先选业务环节，再从右侧查看对应资源或直接进入任务。
           </div>
         </section>
 
