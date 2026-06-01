@@ -72,16 +72,18 @@ const ResourcePanel: React.FC<ResourcePanelProps> = ({
         </button>
       </div>
 
-      <div className="grid gap-4 p-6 md:grid-cols-2">
+      <div className="grid gap-2 p-4 sm:p-5 lg:grid-cols-2">
         {entries.map((entry) => (
           <article
             key={entry.term}
-            className="rounded-xl border border-slate-100 bg-slate-50/60 p-5 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+            className="rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3 transition-all hover:bg-white hover:shadow-sm"
           >
-            <div className={`text-base font-bold ${config.accent}`}>{entry.term}</div>
-            <p className="mt-2 text-sm leading-6 text-slate-700">{entry.explanation}</p>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
+              <div className={`shrink-0 text-sm font-black sm:w-32 ${config.accent}`}>{entry.term}</div>
+              <p className="min-w-0 text-sm leading-6 text-slate-700">{entry.explanation}</p>
+            </div>
             {entry.example && (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-500">
+              <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-500">
                 示例：{entry.example}
               </div>
             )}
