@@ -764,8 +764,8 @@ const AppRoutes: React.FC = () => {
                 onManageProfile={() => navigate('/profile')}
               />
               <div className="pt-16">
-                <main className="min-h-[calc(100dvh-64px)] w-full px-4 py-5 sm:px-6 lg:p-8">
-                  <div className="mx-auto max-w-6xl space-y-6">
+                <main className="min-h-[calc(100dvh-64px)] w-full px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
+                  <div className="mx-auto max-w-[90rem] space-y-6">
                     <WorkflowMap
                       stages={contentStages}
                       currentStageId={selectedStageId}
