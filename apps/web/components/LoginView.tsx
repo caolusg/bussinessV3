@@ -283,7 +283,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === UserRole.STUDENT ? 'bg-white text-blue-600 border border-slate-200' : 'text-slate-500 hover:text-slate-700 border border-transparent'}`}
             >
               <User size={16} />
-              学生注册登录
+              登录
             </button>
             <button
               type="button"
@@ -329,7 +329,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
                   usernameChangeRequired
                     ? '请输入新用户名'
                     : activeTab === UserRole.STUDENT && !isStudentRegister
-                    ? '请输入用户名或注册邮箱'
+                    ? '请输入用户名或邮箱'
                     : '请输入用户名'
                 }
               />
