@@ -64,7 +64,7 @@ const HomePage: React.FC<HomePageProps> = ({ isAuthenticated }) => {
                   to="/login/student"
                   className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800"
                 >
-                  学生注册/登录
+                  学生登录
                   <ArrowRight size={16} />
                 </Link>
               </>
