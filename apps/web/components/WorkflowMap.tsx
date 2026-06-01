@@ -80,7 +80,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               <ArrowRight className="hidden text-slate-300 sm:block" size={20} />
             </div>
 
-            <div className="grid gap-2.5 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-4">
               {stages.map((stage) => {
                 const isSelected = stage.id === currentStageId;
 
@@ -89,25 +89,25 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                     key={stage.id}
                     type="button"
                     onClick={() => onStageSelect(stage.id)}
-                    className={`min-h-16 rounded-xl border px-3.5 py-3 text-left transition-all ${
+                    className={`min-h-20 rounded-xl border px-4 py-3.5 text-left transition-all ${
                       isSelected
                         ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-blue-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
                           isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-blue-600'
                         }`}
                       >
                         {stage.id}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className={`truncate text-base font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
+                        <div className={`truncate text-lg font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
                           {formatStageTitle(stage.title)}
                         </div>
-                        <div className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+                        <div className="mt-1 truncate text-sm font-semibold text-slate-400">
                           {formatStageSubtitle(stage.title)}
                         </div>
                       </div>
@@ -117,6 +117,12 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                         <Circle className="shrink-0 text-slate-300" size={14} />
                       )}
                     </div>
+                    {isSelected && (
+                      <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black text-emerald-700">
+                        下方查看本环节资源
+                        <span aria-hidden="true">↓</span>
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -124,13 +130,16 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
 
           {currentStage?.subResources?.length ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div
+              key={currentStage.id}
+              className="rounded-xl border border-emerald-200 bg-emerald-50/35 p-3 shadow-sm ring-1 ring-emerald-100 animate-in fade-in slide-in-from-top-1 duration-200"
+            >
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">当前环节资源</h3>
-                  <p className="mt-1 text-xs font-semibold text-slate-400">先补充资料，再进入练习会更顺。</p>
+                  <h3 className="text-sm font-black text-slate-900">{formatStageTitle(currentStage.title)}配套资源</h3>
+                  <p className="mt-1 text-xs font-semibold text-emerald-700">点击上方环节后，这里的商务词汇、常用句式、外贸常识会同步切换。</p>
                 </div>
-                <p className="text-xs font-black text-blue-600">{formatStageTitle(currentStage.title)}</p>
+                <p className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-emerald-700">{formatStageTitle(currentStage.title)}</p>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 {currentStage.subResources.map((resource) => {
