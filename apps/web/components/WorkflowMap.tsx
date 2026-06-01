@@ -39,29 +39,29 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
 
   return (
     <div className="mb-6 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-0 xl:grid-cols-[0.6fr_1.45fr_0.9fr]">
-        <section className="border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
+      <div className="grid gap-0 xl:grid-cols-[0.46fr_1.5fr_0.92fr]">
+        <section className="border-b border-slate-100 bg-slate-950 p-4 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-200">
             <Map size={15} />
             练习流程
           </div>
-          <h2 className="mt-4 text-2xl font-black">先选环节，再进入任务</h2>
-          <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+          <h2 className="mt-3 text-xl font-black leading-7">先选环节，再进入任务</h2>
+          <p className="mt-2 text-xs font-semibold leading-5 text-slate-300">
             每个环节都对应一个真实外贸沟通场景。先确认当前业务节点，再看任务目标和提示。
           </p>
 
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/10 p-4">
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/10 p-3">
             <div className="text-[11px] font-black uppercase tracking-widest text-slate-300">当前环节</div>
-            <div className="mt-3 flex items-center justify-between gap-4">
+            <div className="mt-2 flex items-center justify-between gap-3">
               <div>
-                <p className="text-3xl font-black">{currentStage?.id ?? currentStageId}</p>
-                <p className="mt-1 text-lg font-black">{formatStageTitle(currentStage?.title ?? '')}</p>
+                <p className="text-2xl font-black">{currentStage?.id ?? currentStageId}</p>
+                <p className="mt-0.5 text-base font-black">{formatStageTitle(currentStage?.title ?? '')}</p>
                 <p className="mt-1 text-xs font-semibold text-slate-300">
                   {formatStageSubtitle(currentStage?.title ?? '')}
                 </p>
               </div>
               {nextStage && (
-                <div className="hidden rounded-lg bg-white/10 px-3 py-2 text-right sm:block">
+                <div className="hidden rounded-lg bg-white/10 px-2.5 py-2 text-right sm:block">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-300">下一环节</div>
                   <div className="mt-1 text-sm font-black">{nextStage.id}. {formatStageTitle(nextStage.title)}</div>
                 </div>
@@ -69,21 +69,21 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="text-[11px] font-black uppercase tracking-widest text-slate-300">操作顺序</div>
-            <div className="mt-3 space-y-2">
+            <div className="mt-2 space-y-1.5">
               {[
                 ['1', '选择环节', '确认当前要练的业务场景'],
                 ['2', '查看资源', '补充词汇、句式和常识'],
                 ['3', '进入任务', '开始模拟沟通练习']
               ].map(([step, title, detail]) => (
-                <div key={step} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-black text-blue-100">
+                <div key={step} className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-black text-blue-100">
                     {step}
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-black text-white">{title}</div>
-                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{detail}</div>
+                    <div className="truncate text-[10px] font-semibold text-slate-400">{detail}</div>
                   </div>
                 </div>
               ))}
@@ -91,7 +91,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-3 border-b border-slate-100 p-4 sm:p-5 xl:border-b-0 xl:border-r">
+        <section className="grid gap-3 border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -187,7 +187,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           ) : null}
         </section>
 
-        <section className="bg-white p-4 sm:p-5">
+        <section className="bg-white p-4">
           {displayedResource ? (
             <div className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
