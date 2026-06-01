@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Lock, Mail, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck, User, UserPlus, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
 import BrandLogo from './BrandLogo';
@@ -272,8 +272,45 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
         </div>
 
         <div className="max-h-[calc(88vh-112px)] overflow-y-auto p-8">
-          <div className="mb-8">
+          <div className="mb-5">
             <h2 className="text-xl font-black text-slate-950">登录</h2>
+          </div>
+
+          <div className="mb-8 flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                resetEmailSetup();
+                navigate('/login/student');
+              }}
+              className={`flex-1 rounded-lg px-3 py-3 text-sm font-bold transition-colors ${
+                activeTab === UserRole.STUDENT
+                  ? 'border border-slate-200 bg-white text-blue-600'
+                  : 'border border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <User size={16} />
+                学习入口
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                resetEmailSetup();
+                navigate('/login/teacher');
+              }}
+              className={`flex-1 rounded-lg px-3 py-3 text-sm font-bold transition-colors ${
+                activeTab === UserRole.TEACHER
+                  ? 'border border-slate-200 bg-white text-indigo-600'
+                  : 'border border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <ShieldCheck size={16} />
+                管理入口
+              </span>
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -393,7 +430,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
                 ? '发送验证邮件'
                 : isStudentRegister
                   ? '创建账号'
-                  : '登录'}
+                  : activeTab === UserRole.TEACHER
+                    ? '进入管理端'
+                    : '登录'}
               <ArrowRight size={18} />
             </button>
 
@@ -411,7 +450,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, initialRole, displayMode
                 >
                   忘记密码
                 </Link>
-              ) : null}
+              ) : (
+                <span className="text-[10px] text-slate-400 font-bold">管理入口不支持邮件找回</span>
+              )}
             </div>
           </div>
         </div>
