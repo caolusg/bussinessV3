@@ -39,7 +39,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
 
   return (
     <div className="mb-6 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-0 xl:grid-cols-[0.66fr_1.18fr_0.92fr]">
+      <div className="grid gap-0 xl:grid-cols-[0.6fr_1.45fr_0.9fr]">
         <section className="border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-200">
             <Map size={15} />
@@ -91,9 +91,9 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-5 border-b border-slate-100 p-4 sm:p-6 xl:border-b-0 xl:border-r">
+        <section className="grid gap-3 border-b border-slate-100 p-4 sm:p-5 xl:border-b-0 xl:border-r">
           <div>
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-black text-slate-900">选择练习环节</h3>
                 <p className="mt-1 text-xs font-semibold text-slate-400">按业务发生顺序排列，可随时切换。</p>
@@ -101,7 +101,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
               <ArrowRight className="hidden text-slate-300 sm:block" size={20} />
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-4">
               {stages.map((stage) => {
                 const isSelected = stage.id === currentStageId;
 
@@ -110,27 +110,27 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                     key={stage.id}
                     type="button"
                     onClick={() => onStageSelect(stage.id)}
-                    className={`min-h-24 rounded-xl border p-3 text-left transition-all ${
+                    className={`min-h-16 rounded-xl border px-3 py-2.5 text-left transition-all ${
                       isSelected
                         ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-blue-50'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                           isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-blue-600'
                         }`}
                       >
                         {stage.id}
                       </span>
                       {isSelected ? (
-                        <CheckCircle2 className="text-emerald-600" size={18} />
+                        <CheckCircle2 className="text-emerald-600" size={16} />
                       ) : (
-                        <Circle className="text-slate-300" size={16} />
+                        <Circle className="text-slate-300" size={15} />
                       )}
                     </div>
-                    <div className={`mt-3 text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
+                    <div className={`mt-2 text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
                       {formatStageTitle(stage.title)}
                     </div>
                     <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">
@@ -143,7 +143,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           </div>
 
           {currentStage?.subResources?.length ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h3 className="text-sm font-black text-slate-900">当前环节资源</h3>
@@ -151,7 +151,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                 </div>
                 <p className="text-xs font-black text-blue-600">{formatStageTitle(currentStage.title)}</p>
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 {currentStage.subResources.map((resource) => {
                   const Icon = resourceIcons[resource.type];
                   const active = selectedResource?.id === resource.id;
@@ -161,21 +161,21 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                       key={resource.id}
                       type="button"
                       onClick={() => onResourceSelect?.(currentStage.id, resource)}
-                      className={`flex min-h-20 items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left transition-all ${
+                      className={`flex min-h-14 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2 text-left transition-all ${
                         active
                           ? 'border-blue-300 shadow-sm ring-2 ring-blue-100'
                           : 'border-slate-200 hover:border-blue-200 hover:shadow-sm'
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                           active ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
                         }`}>
-                          <Icon size={18} />
+                          <Icon size={16} />
                         </span>
                         <span>
                           <span className="block text-sm font-black text-slate-900">{resource.title}</span>
-                          <span className="mt-1 block text-xs font-semibold text-slate-400">点击查看</span>
+                          <span className="block text-[11px] font-semibold text-slate-400">点击查看</span>
                         </span>
                       </span>
                       <ArrowRight size={16} className={active ? 'text-blue-600' : 'text-slate-300'} />
@@ -187,7 +187,7 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
           ) : null}
         </section>
 
-        <section className="bg-white p-4 sm:p-6">
+        <section className="bg-white p-4 sm:p-5">
           {displayedResource ? (
             <div className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
