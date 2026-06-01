@@ -110,31 +110,33 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                     key={stage.id}
                     type="button"
                     onClick={() => onStageSelect(stage.id)}
-                    className={`min-h-16 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                    className={`min-h-12 rounded-xl border px-3 py-2 text-left transition-all ${
                       isSelected
                         ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-blue-50'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
                       <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                           isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-blue-600'
                         }`}
                       >
                         {stage.id}
                       </span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`truncate text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
+                          {formatStageTitle(stage.title)}
+                        </div>
+                        <div className="truncate text-[11px] font-semibold text-slate-400">
+                          {formatStageSubtitle(stage.title)}
+                        </div>
+                      </div>
                       {isSelected ? (
-                        <CheckCircle2 className="text-emerald-600" size={16} />
+                        <CheckCircle2 className="shrink-0 text-emerald-600" size={15} />
                       ) : (
-                        <Circle className="text-slate-300" size={15} />
+                        <Circle className="shrink-0 text-slate-300" size={14} />
                       )}
-                    </div>
-                    <div className={`mt-2 text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
-                      {formatStageTitle(stage.title)}
-                    </div>
-                    <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">
-                      {formatStageSubtitle(stage.title)}
                     </div>
                   </button>
                 );
@@ -161,24 +163,23 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
                       key={resource.id}
                       type="button"
                       onClick={() => onResourceSelect?.(currentStage.id, resource)}
-                      className={`flex min-h-14 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2 text-left transition-all ${
+                      className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border bg-white px-3 py-1.5 text-left transition-all ${
                         active
                           ? 'border-blue-300 shadow-sm ring-2 ring-blue-100'
                           : 'border-slate-200 hover:border-blue-200 hover:shadow-sm'
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
                           active ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
                         }`}>
-                          <Icon size={16} />
+                          <Icon size={15} />
                         </span>
                         <span>
                           <span className="block text-sm font-black text-slate-900">{resource.title}</span>
-                          <span className="block text-[11px] font-semibold text-slate-400">点击查看</span>
                         </span>
                       </span>
-                      <ArrowRight size={16} className={active ? 'text-blue-600' : 'text-slate-300'} />
+                      <ArrowRight size={14} className={active ? 'text-blue-600' : 'text-slate-300'} />
                     </button>
                   );
                 })}
