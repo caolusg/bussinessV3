@@ -1,5 +1,5 @@
 import React from 'react';
-import { Circle, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Circle, Map } from 'lucide-react';
 import { STAGES } from '../constants';
 import type { Stage } from '../types';
 
@@ -14,48 +14,96 @@ const WorkflowMap: React.FC<WorkflowMapProps> = ({
   currentStageId,
   onStageSelect
 }) => {
+  const currentStage = stages.find((stage) => stage.id === currentStageId) ?? stages[0];
+  const nextStage = stages.find((stage) => stage.id === currentStageId + 1);
+  const formatStageTitle = (title: string) => title.split(' ')[0];
+  const formatStageSubtitle = (title: string) => {
+    const match = title.match(/\((.*?)\)/);
+    return match?.[1] ?? 'Business step';
+  };
+
   return (
-    <div className="mb-6 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-gray-500 sm:mb-6">
-        全景外贸工作流地图
-      </h2>
+    <div className="mb-6 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid gap-0 lg:grid-cols-[0.9fr_1.35fr]">
+        <section className="border-b border-slate-100 bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-200">
+            <Map size={15} />
+            练习流程
+          </div>
+          <h2 className="mt-4 text-2xl font-black">先选环节，再进入任务</h2>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+            每个环节都对应一个真实外贸沟通场景。先确认当前业务节点，再看任务目标和提示。
+          </p>
 
-      <div className="grid grid-cols-4 gap-3 md:relative md:flex md:min-w-[800px] md:items-center md:justify-between md:px-4">
-        <div className="absolute left-0 top-1/2 -z-0 hidden h-1 w-full -translate-y-1/2 rounded-full bg-gray-100 md:block" />
-
-        {stages.map((stage) => {
-          const isSelected = stage.id === currentStageId;
-
-          return (
-            <div
-              key={stage.id}
-              onClick={() => onStageSelect(stage.id)}
-              className="group relative z-10 flex cursor-pointer flex-col items-center"
-            >
-              {isSelected && (
-                <div className="absolute top-0 h-9 w-9 rounded-full ring-2 ring-emerald-500 ring-offset-2 sm:h-10 sm:w-10" />
+          <div className="mt-6 rounded-xl border border-white/10 bg-white/10 p-4">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-300">当前环节</div>
+            <div className="mt-3 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-3xl font-black">{currentStage?.id ?? currentStageId}</p>
+                <p className="mt-1 text-lg font-black">{formatStageTitle(currentStage?.title ?? '')}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-300">
+                  {formatStageSubtitle(currentStage?.title ?? '')}
+                </p>
+              </div>
+              {nextStage && (
+                <div className="hidden rounded-lg bg-white/10 px-3 py-2 text-right sm:block">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-300">下一环节</div>
+                  <div className="mt-1 text-sm font-black">{nextStage.id}. {formatStageTitle(nextStage.title)}</div>
+                </div>
               )}
-
-              <div
-                className={`flex h-9 w-9 items-center justify-center rounded-full border-4 transition-all duration-300 sm:h-10 sm:w-10 ${
-                  isSelected
-                    ? 'scale-110 border-emerald-500 bg-emerald-50 text-emerald-600 shadow-lg shadow-emerald-100'
-                    : 'border-blue-200 bg-white text-blue-500 shadow-sm shadow-blue-50'
-                }`}
-              >
-                {isSelected ? <CheckCircle2 size={20} /> : <Circle size={16} />}
-              </div>
-
-              <div
-                className={`mt-2 max-w-full truncate rounded px-1.5 py-1 text-[11px] font-semibold transition-colors sm:mt-3 sm:px-2 sm:text-xs md:whitespace-nowrap ${
-                  isSelected ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700'
-                }`}
-              >
-                {stage.id}. {stage.title.split(' ')[0]}
-              </div>
             </div>
-          );
-        })}
+          </div>
+        </section>
+
+        <section className="p-4 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">选择练习环节</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-400">按业务发生顺序排列，可随时切换。</p>
+            </div>
+            <ArrowRight className="hidden text-slate-300 sm:block" size={20} />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {stages.map((stage) => {
+              const isSelected = stage.id === currentStageId;
+
+              return (
+                <button
+                  key={stage.id}
+                  type="button"
+                  onClick={() => onStageSelect(stage.id)}
+                  className={`min-h-24 rounded-xl border p-3 text-left transition-all ${
+                    isSelected
+                      ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
+                      : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-blue-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                        isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-blue-600'
+                      }`}
+                    >
+                      {stage.id}
+                    </span>
+                    {isSelected ? (
+                      <CheckCircle2 className="text-emerald-600" size={18} />
+                    ) : (
+                      <Circle className="text-slate-300" size={16} />
+                    )}
+                  </div>
+                  <div className={`mt-3 text-sm font-black ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>
+                    {formatStageTitle(stage.title)}
+                  </div>
+                  <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">
+                    {formatStageSubtitle(stage.title)}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );
