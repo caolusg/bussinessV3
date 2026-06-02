@@ -365,6 +365,7 @@ type DataExportAuditResponse = {
   generatedAt: string;
   dateRange: 'today' | '7d' | '30d' | 'all';
   search: string;
+  status?: 'all' | 'pending' | 'approved' | 'rejected' | 'downloaded' | 'expired';
   total: number;
   pendingTotal?: number;
   page: number;
@@ -640,6 +641,22 @@ const formatValue = (value: unknown) => {
 const formatCell = (value: unknown) => {
   const text = formatValue(value);
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
+};
+
+const getDataExportStatusTone = (status: DataExportAuditRow['status']) => {
+  if (status === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  if (status === 'pending') return 'bg-amber-50 text-amber-700 border-amber-100';
+  if (status === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-100';
+  return 'bg-slate-100 text-slate-600 border-slate-200';
+};
+
+const getDataExportActionText = (status: DataExportAuditRow['status']) => {
+  if (status === 'pending') return '已提交，等待管理员审批';
+  if (status === 'approved') return '已批准，再点原下载按钮可下载一次';
+  if (status === 'rejected') return '已拒绝，不能下载，可重新提交';
+  if (status === 'downloaded') return '已下载，本次审批已用完';
+  if (status === 'expired') return '已过期，需要重新提交';
+  return '状态已更新';
 };
 
 const getManagedUserSearchText = (user: ManagedUser) => {
@@ -1053,6 +1070,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [researchOverview, setResearchOverview] = useState<ResearchOverview | null>(null);
   const [researchStudents, setResearchStudents] = useState<ResearchStudentDirectory | null>(null);
+  const [myDataExportAudits, setMyDataExportAudits] = useState<DataExportAuditResponse | null>(null);
   const [selectedResearchStudentId, setSelectedResearchStudentId] = useState('');
   const [selectedResearchStudentIds, setSelectedResearchStudentIds] = useState<string[]>([]);
   const [researchStudentActivity, setResearchStudentActivity] = useState<ResearchStudentActivity | null>(null);
@@ -1079,6 +1097,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingResearchStudents, setIsLoadingResearchStudents] = useState(false);
   const [isLoadingResearchStudentActivity, setIsLoadingResearchStudentActivity] = useState(false);
   const [isDownloadingResearchStudents, setIsDownloadingResearchStudents] = useState(false);
+  const [isLoadingMyDataExportAudits, setIsLoadingMyDataExportAudits] = useState(false);
   const [isLoadingSessionSummary, setIsLoadingSessionSummary] = useState(false);
   const [isLoadingStudentSummary, setIsLoadingStudentSummary] = useState(false);
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
@@ -1367,6 +1386,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   useEffect(() => {
     setResearchStudentPage(1);
   }, [researchDateRange, researchStudentSearch]);
+
+  useEffect(() => {
+    if (activeTab !== 'STUDENT_RESEARCH' && activeTab !== 'RECORDS') return;
+
+    let ignore = false;
+    setIsLoadingMyDataExportAudits(true);
+
+    apiRequest<DataExportAuditResponse>('/api/admin/audit/data-downloads/mine?dateRange=all&page=1&pageSize=8')
+      .then((data) => {
+        if (!ignore) setMyDataExportAudits(data);
+      })
+      .catch(() => {
+        if (!ignore) setMyDataExportAudits(null);
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingMyDataExportAudits(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, auditRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH' || !selectedResearchStudentId) {
@@ -3593,8 +3634,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     if (audit.status !== 'approved') {
       return false;
     }
-    createCsvDownload(csv, audit.fileName || fallbackFileName);
     await markDataExportDownloaded(audit.id);
+    createCsvDownload(csv, audit.fileName || fallbackFileName);
     setDataExportNotice({ tone: 'success', message: '下载已开始，本次批准已标记为已下载。' });
     return true;
   };
@@ -3611,7 +3652,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         fileName,
         rowCount: researchAiResult.rows.length,
         targets: [],
-        requestKey: buildDataExportRequestKey(['research_ai_result', researchAiResult.question, researchAiResult.sql, researchAiResult.rows.length]),
+        requestKey: buildDataExportRequestKey([
+          'research_ai_result',
+          researchAiResult.question,
+          researchAiResult.sql,
+          researchAiResult.rows.length,
+          csv.length
+        ]),
         filters: {
           question: researchAiResult.question,
           sql: researchAiResult.sql
@@ -3649,7 +3696,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         exportType: 'student_research_selected',
         fileName,
         rowCount: exportRows.length,
-        requestKey: buildDataExportRequestKey(['student_research_selected', researchDateRange, [...selectedResearchStudentIds].sort()]),
+        requestKey: buildDataExportRequestKey([
+          'student_research_selected',
+          researchDateRange,
+          [...selectedResearchStudentIds].sort(),
+          exportRows.length
+        ]),
         targets: activities.map((activity) => getResearchStudentAuditTarget(activity.user)),
         metadata: {
           messageRows: activities.reduce((sum, activity) => sum + activity.messages.length, 0),
@@ -3709,7 +3761,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         exportType: 'student_research_all',
         fileName,
         rowCount: exportRows.length,
-        requestKey: buildDataExportRequestKey(['student_research_all', researchDateRange, researchStudentSearch]),
+        requestKey: buildDataExportRequestKey([
+          'student_research_all',
+          researchDateRange,
+          researchStudentSearch,
+          rows.map((row) => row.user.id).sort(),
+          exportRows.length
+        ]),
         targets: rows.map((row) => getResearchStudentAuditTarget(row.user)),
         metadata: {
           directoryTotal: rows.length
@@ -3745,6 +3803,72 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     } finally {
       setReviewingDataExportId('');
     }
+  };
+
+  const renderMyDataExportRequests = () => {
+    const rows = myDataExportAudits?.rows ?? [];
+    if (!rows.length && !isLoadingMyDataExportAudits) return null;
+
+    return (
+      <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">My Download Requests</p>
+            <h4 className="mt-1 text-sm font-black text-slate-900">我的下载申请</h4>
+          </div>
+          {isLoadingMyDataExportAudits && <Loader2 size={15} className="animate-spin text-indigo-500" />}
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
+          <table className="w-full min-w-[760px] text-left text-xs">
+            <thead className="bg-white text-slate-400">
+              <tr>
+                <th className="px-3 py-2 font-black">申请时间</th>
+                <th className="px-3 py-2 font-black">下载内容</th>
+                <th className="px-3 py-2 font-black">范围</th>
+                <th className="px-3 py-2 font-black">状态</th>
+                <th className="px-3 py-2 font-black">下一步</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => {
+                const targets = Array.isArray(row.targetStudents) ? row.targetStudents : [];
+                const targetText = targets
+                  .slice(0, 3)
+                  .map((target) => target.displayName || target.username || target.anonymousUserCode || target.userId)
+                  .filter(Boolean)
+                  .join(' / ');
+                return (
+                  <tr key={row.id} className="align-top">
+                    <td className="px-3 py-2 font-mono text-[11px] text-slate-500">{formatValue(row.createdAt)}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-black text-slate-800">{row.exportTypeLabel || row.exportType}</div>
+                      <div className="mt-1 text-[11px] font-semibold text-slate-400">{row.fileName || '-'}</div>
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
+                      <div className="font-bold">{targetText || '当前分析结果'}</div>
+                      <div className="mt-1 text-[11px] text-slate-400">
+                        {row.studentCount ?? 0} 人 / {row.rowCount ?? 0} 行{targets.length > 3 ? `，另 ${targets.length - 3} 人` : ''}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 font-black ${getDataExportStatusTone(row.status)}`}>
+                        {row.statusLabel || row.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-bold text-slate-600">{getDataExportActionText(row.status)}</td>
+                  </tr>
+                );
+              })}
+              {!rows.length && (
+                <tr>
+                  <td className="px-3 py-5 text-center text-sm font-bold text-slate-400" colSpan={5}>暂无下载申请</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   const renderUserAudit = () => {
@@ -4162,6 +4286,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <span>{dataExportNotice.message}</span>
             </div>
           )}
+          {renderMyDataExportRequests()}
           <div className="mt-5 flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -4487,6 +4612,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <span>{dataExportNotice.message}</span>
             </div>
           )}
+          {renderMyDataExportRequests()}
 
           <div className="mt-2 flex flex-wrap gap-1">
             {AI_QUERY_TEMPLATES.map((tpl) => (

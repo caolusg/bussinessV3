@@ -1874,6 +1874,73 @@ router.get('/audit/data-downloads', requirePanel('user_audit'), async (req, res)
   }
 });
 
+router.get('/audit/data-downloads/mine', async (req, res) => {
+  try {
+    const parsed = auditQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+    if (!req.user?.id) {
+      return res.status(401).json(fail('UNAUTHORIZED', 'Unauthorized'));
+    }
+
+    await prisma.userDataExportAudit.updateMany({
+      where: {
+        actorUserId: req.user.id,
+        status: 'approved',
+        downloadedAt: null,
+        expiresAt: { lt: new Date() }
+      },
+      data: { status: 'expired' }
+    });
+
+    const { dateRange, search, status, page, pageSize } = parsed.data;
+    const dateFilter = buildCreatedAtWhere(dateRange);
+    const where: Prisma.UserDataExportAuditWhereInput = {
+      actorUserId: req.user.id,
+      ...(dateFilter ?? {}),
+      ...(status !== 'all' ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { exportType: { contains: search, mode: 'insensitive' } },
+              { sourcePanel: { contains: search, mode: 'insensitive' } },
+              { fileName: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        : {})
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.userDataExportAudit.count({ where }),
+      prisma.userDataExportAudit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          actor: { select: { username: true, email: true, studentProfile: true } },
+          approver: { select: { username: true, email: true, studentProfile: true } }
+        }
+      })
+    ]);
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      search,
+      status,
+      total,
+      page,
+      pageSize,
+      rows: rows.map((row) => enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>))
+    }));
+  } catch (error) {
+    console.error('Load my data download audits failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
 router.post('/audit/data-downloads', async (req, res) => {
   try {
     const parsed = dataExportAuditPayloadSchema.safeParse(req.body);
@@ -2029,17 +2096,35 @@ router.post('/audit/data-downloads/:auditId/downloaded', async (req, res) => {
       return res.status(409).json(fail('DOWNLOAD_NOT_APPROVED', 'Download request is not approved or has expired'));
     }
 
-    const row = await prisma.userDataExportAudit.update({
-      where: { id: audit.id },
+    const consumed = await prisma.userDataExportAudit.updateMany({
+      where: {
+        id: audit.id,
+        actorUserId: req.user?.id ?? null,
+        status: 'approved',
+        downloadedAt: null,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      },
       data: {
         status: 'downloaded',
         downloadedAt: new Date()
-      },
+      }
+    });
+
+    if (consumed.count !== 1) {
+      return res.status(409).json(fail('DOWNLOAD_NOT_APPROVED', 'Download request has already been used or expired'));
+    }
+
+    const row = await prisma.userDataExportAudit.findUnique({
+      where: { id: audit.id },
       include: {
         actor: { select: { username: true, email: true, studentProfile: true } },
         approver: { select: { username: true, email: true, studentProfile: true } }
       }
     });
+    if (!row) return res.status(404).json(fail('NOT_FOUND', 'Download request not found'));
 
     return res.status(200).json(ok(enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>)));
   } catch (error) {
