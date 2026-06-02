@@ -643,6 +643,14 @@ const formatCell = (value: unknown) => {
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
 };
 
+const formatIpAddress = (value: unknown) => {
+  const text = formatValue(value).trim();
+  if (!text) return '-';
+  if (text.startsWith('::ffff:')) return text.slice('::ffff:'.length);
+  if (text === '::1') return '127.0.0.1';
+  return text;
+};
+
 const getDataExportStatusTone = (status: DataExportAuditRow['status']) => {
   if (status === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
   if (status === 'pending') return 'bg-amber-50 text-amber-700 border-amber-100';
@@ -2355,16 +2363,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-4">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">学生档案属性</h3>
-              <p className="text-sm text-slate-500">这里维护 HSK 等级和专业方向；班级/组直接使用分组管理中的现有分组。</p>
+              <h3 className="text-base font-black text-slate-900">学生档案属性</h3>
+              <p className="text-xs text-slate-500">这里维护 HSK 等级和专业方向；班级/组直接使用分组管理中的现有分组。</p>
             </div>
-            <GraduationCap className="text-indigo-500" size={22} />
+            <GraduationCap className="text-indigo-500" size={20} />
           </div>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-3 xl:grid-cols-3">
             {[
               ['HSK 等级', hskProfileOptions],
               ['专业方向', majorProfileOptions]
@@ -2372,19 +2380,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               const category = title === 'HSK 等级' ? 'hsk_level' : 'major';
               const isActiveForm = profileOptionForm.category === category;
               return (
-              <div key={String(title)} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <div key={String(title)} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="text-sm font-black text-slate-900">{String(title)}</h4>
                   <button
                     type="button"
                     onClick={() => setProfileOptionForm({ ...emptyProfileOptionForm, category })}
-                    className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-600 hover:bg-indigo-50"
+                    className="rounded-lg bg-white px-2.5 py-1 text-xs font-black text-indigo-600 hover:bg-indigo-50"
                   >
                     + 新增
                   </button>
                 </div>
                 {isActiveForm && (
-                  <div className="mt-3 rounded-2xl border border-indigo-100 bg-white p-3">
+                  <div className="mt-2 rounded-xl border border-indigo-100 bg-white p-2.5">
                     <div className="grid gap-2">
                       <input
                         value={profileOptionForm.label}
@@ -2397,7 +2405,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           }));
                         }}
                         placeholder={category === 'major' ? '专业方向名称，如 商务汉语' : 'HSK 等级名称，如 HSK 6'}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
                       />
                       <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                         <input
@@ -2405,12 +2413,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           value={profileOptionForm.sortOrder}
                           onChange={(e) => setProfileOptionForm((current) => ({ ...current, sortOrder: Number(e.target.value) }))}
                           placeholder="排序"
-                          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                          className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
                         />
                         <select
                           value={profileOptionForm.isActive ? 'true' : 'false'}
                           onChange={(e) => setProfileOptionForm((current) => ({ ...current, isActive: e.target.value === 'true' }))}
-                          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                          className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
                         >
                           <option value="true">启用</option>
                           <option value="false">停用</option>
@@ -2419,7 +2427,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           type="button"
                           onClick={() => void saveProfileOption()}
                           disabled={savingProfileOption}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                          className="inline-flex items-center justify-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
                         >
                           {savingProfileOption ? <Loader2 className="animate-spin" size={13} /> : <Save size={13} />}
                           {profileOptionForm.id ? '保存' : '新增'}
@@ -2435,11 +2443,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                     </div>
                   </div>
                 )}
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
                   {(options as ProfileOption[]).map((option) => {
                     const protectedOption = isProtectedProfileOption(option);
                     return (
-                      <div key={option.id} className="flex min-w-[140px] flex-1 items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                      <div key={option.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-2.5 py-2">
                         <button
                           type="button"
                           disabled={protectedOption}
@@ -2457,30 +2465,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           className={`min-w-0 flex-1 text-left ${protectedOption ? 'cursor-default' : ''}`}
                           title={protectedOption ? '系统内置选项，只能查看' : '编辑选项'}
                         >
-                          <p className="truncate text-sm font-black text-slate-900">{option.label}</p>
-                          <p className="mt-0.5 text-xs font-bold text-slate-400">
+                          <p className="truncate text-xs font-black text-slate-900">{option.label}</p>
+                          <p className="mt-0.5 truncate text-[11px] font-bold text-slate-400">
                             {option.isActive ? '启用' : '已停用'} · 排序 {option.sortOrder}
                           </p>
                         </button>
                         {protectedOption ? (
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-400">
+                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-400">
                             内置
                           </span>
                         ) : option.isActive ? (
                           <button
                             type="button"
                             onClick={() => void disableProfileOption(option)}
-                            className="shrink-0 rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
+                            className="shrink-0 rounded-lg bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100"
                             title="停用"
                           >
-                            <X size={15} />
+                            <X size={13} />
                           </button>
                         ) : null}
                       </div>
                     );
                   })}
                   {(options as ProfileOption[]).length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-xs font-semibold text-slate-400">
+                    <div className="col-span-2 rounded-lg border border-dashed border-slate-200 bg-white p-3 text-xs font-semibold text-slate-400">
                       暂无选项。
                     </div>
                   )}
@@ -2489,23 +2497,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               );
             })}
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
               <h4 className="text-sm font-black text-slate-900">班级/组</h4>
               <p className="mt-1 text-xs font-semibold text-slate-400">来自分组管理，不在这里重复新建。</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <div className="min-w-[140px] flex-1 rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                  <p className="text-sm font-black text-slate-900">其他</p>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <div className="min-w-0 rounded-lg border border-slate-100 bg-white px-2.5 py-2">
+                  <p className="text-xs font-black text-slate-900">其他</p>
                   <p className="mt-0.5 text-xs font-bold text-slate-400">默认选项</p>
                 </div>
                 {managedGroups.map((group) => (
-                  <div key={group.id} className="min-w-[160px] flex-1 rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                  <div key={group.id} className="min-w-0 rounded-lg border border-slate-100 bg-white px-2.5 py-2">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-black text-slate-900">{group.name}</p>
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-500">
+                      <p className="truncate text-xs font-black text-slate-900">{group.name}</p>
+                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500">
                         {group.memberCount}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-xs font-bold text-slate-400">
+                    <p className="mt-0.5 truncate text-[11px] font-bold text-slate-400">
                       {group.isActive ? '启用' : '已停用'} · {group.description || '无说明'}
                     </p>
                   </div>
@@ -4264,7 +4272,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{row.failureReasonLabel || row.failureReason || '-'}</td>
-                      <td className="px-4 py-3 font-mono text-slate-500">{row.ipAddress || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-slate-500">{formatIpAddress(row.ipAddress)}</td>
                       <td className="max-w-xs px-4 py-3 text-[11px] leading-5 text-slate-500">
                         <span className="line-clamp-2 break-all">{row.userAgent || '-'}</span>
                       </td>

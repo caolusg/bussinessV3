@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { PDFParse } from 'pdf-parse';
 import * as mammoth from 'mammoth';
 import { prisma } from '../lib/prisma.js';
+import { getClientIp, normalizeIpAddress } from '../lib/requestIp.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   getDefaultRuntimeConfig,
@@ -700,6 +701,7 @@ function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   if (role.key) enhanced.roleKey = role.key;
   if (group.name) enhanced.groupName = group.name;
   if (assigner.username) enhanced.assignedByUsername = assigner.username;
+  if (row.ipAddress) enhanced.ipAddress = normalizeIpAddress(String(row.ipAddress)) ?? row.ipAddress;
   if (actor.username) enhanced.actorUsername = actor.username;
   if (actor.email) enhanced.actorEmail = actor.email;
   const actorName = getDisplayNameFromUser(actor);
@@ -1998,7 +2000,7 @@ router.post('/audit/data-downloads', async (req, res) => {
         targetStudents: payload.targetStudents as Prisma.InputJsonValue,
         filtersJson: payload.filters as Prisma.InputJsonValue,
         metadataJson: { ...payload.metadata, requestKey, requestedAt: new Date().toISOString() } as Prisma.InputJsonValue,
-        ipAddress: req.ip,
+        ipAddress: getClientIp(req),
         userAgent: req.header('user-agent') ?? null
       },
       include: {

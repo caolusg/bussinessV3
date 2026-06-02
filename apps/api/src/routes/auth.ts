@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { getClientIp } from '../lib/requestIp.js';
 import {
   APP_BASE_URL,
   BCRYPT_ROUNDS,
@@ -195,7 +196,7 @@ const recordLoginAudit = async (req: Request, input: {
         portal: input.portal,
         status: input.status,
         failureReason: input.failureReason ?? null,
-        ipAddress: req.ip,
+        ipAddress: getClientIp(req),
         userAgent: req.header('user-agent') ?? null
       }
     });

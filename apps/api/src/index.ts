@@ -13,6 +13,7 @@ import researchAiRoutes from './routes/researchAi.js';
 
 const app = express();
 
+app.set('trust proxy', true);
 app.use(express.json({ limit: '15mb' }));
 
 const defaultAllowedOrigins = [
