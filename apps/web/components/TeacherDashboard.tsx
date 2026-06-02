@@ -1090,6 +1090,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [researchRefreshKey, setResearchRefreshKey] = useState(0);
   const [adminError, setAdminError] = useState('');
+  const [dataExportNotice, setDataExportNotice] = useState<{
+    tone: 'info' | 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [clickFlowDateRange, setClickFlowDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('7d');
   const [clickFlowEventType, setClickFlowEventType] = useState<'all' | 'ui_click' | 'page_view'>('all');
   const [clickFlowStudentId, setClickFlowStudentId] = useState('all');
@@ -3591,11 +3595,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
     createCsvDownload(csv, audit.fileName || fallbackFileName);
     await markDataExportDownloaded(audit.id);
+    setDataExportNotice({ tone: 'success', message: '下载已开始，本次批准已标记为已下载。' });
     return true;
   };
 
   const downloadResearchAiResultCsv = async () => {
     if (!researchAiResult?.rows?.length) return;
+    setDataExportNotice({ tone: 'info', message: '正在提交自然语言分析结果下载申请...' });
     try {
       const csv = toCsv(researchAiResult.rows);
       const fileName = `research-ai-${Date.now()}.csv`;
@@ -3616,14 +3622,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         }
       });
       if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
-      setAdminError('已提交自然语言分析结果下载申请，管理员批准后再次点击即可下载。');
+      setDataExportNotice({
+        tone: 'success',
+        message: audit.status === 'pending'
+          ? '已提交自然语言分析结果下载申请，管理员批准后再次点击即可下载。'
+          : '下载申请状态已更新，请在用户行为审计中查看。'
+      });
     } catch (error) {
-      setResearchAiError(error instanceof Error ? error.message : '分析结果下载申请失败，已取消下载');
+      const message = error instanceof Error ? error.message : '分析结果下载申请失败，已取消下载';
+      setResearchAiError(message);
+      setDataExportNotice({ tone: 'error', message });
     }
   };
 
   const downloadResearchStudentCsv = async () => {
     if (!selectedResearchStudentIds.length) return;
+    setDataExportNotice({ tone: 'info', message: '正在整理选中学生数据并提交下载申请...' });
     setIsDownloadingResearchStudents(true);
     try {
       const activities = await Promise.all(selectedResearchStudentIds.map((id) => fetchResearchStudentActivity(id)));
@@ -3644,15 +3658,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         }
       });
       if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
-      setAdminError('已提交选中学生数据下载申请，管理员批准后再次点击即可下载。');
+      setDataExportNotice({
+        tone: 'success',
+        message: audit.status === 'pending'
+          ? '已提交选中学生数据下载申请，管理员批准后再次点击即可下载。'
+          : '下载申请状态已更新，请在用户行为审计中查看。'
+      });
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载');
+      const message = error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载';
+      setAdminError(message);
+      setDataExportNotice({ tone: 'error', message });
     } finally {
       setIsDownloadingResearchStudents(false);
     }
   };
 
   const downloadAllResearchStudentsCsv = async () => {
+    setDataExportNotice({ tone: 'info', message: '正在整理全部学生数据并提交下载申请...' });
     setIsDownloadingResearchStudents(true);
     try {
       const rows: ResearchStudentRow[] = [];
@@ -3694,9 +3716,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         }
       });
       if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
-      setAdminError('已提交全部学生数据下载申请，管理员批准后再次点击即可下载。');
+      setDataExportNotice({
+        tone: 'success',
+        message: audit.status === 'pending'
+          ? '已提交全部学生数据下载申请，管理员批准后再次点击即可下载。'
+          : '下载申请状态已更新，请在用户行为审计中查看。'
+      });
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载');
+      const message = error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载';
+      setAdminError(message);
+      setDataExportNotice({ tone: 'error', message });
     } finally {
       setIsDownloadingResearchStudents(false);
     }
@@ -4121,6 +4150,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               </button>
             </div>
           </div>
+          {dataExportNotice && (
+            <div className={`mt-4 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm font-bold leading-6 ${
+              dataExportNotice.tone === 'error'
+                ? 'border-rose-100 bg-rose-50 text-rose-600'
+                : dataExportNotice.tone === 'success'
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                  : 'border-blue-100 bg-blue-50 text-blue-700'
+            }`}>
+              {dataExportNotice.tone === 'info' ? <Loader2 size={16} className="mt-0.5 animate-spin" /> : <AlertCircle size={16} className="mt-0.5" />}
+              <span>{dataExportNotice.message}</span>
+            </div>
+          )}
           <div className="mt-5 flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -4434,6 +4475,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               ) : null}
             </div>
           </div>
+          {dataExportNotice && (
+            <div className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
+              dataExportNotice.tone === 'error'
+                ? 'border-rose-100 bg-rose-50 text-rose-600'
+                : dataExportNotice.tone === 'success'
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                  : 'border-blue-100 bg-blue-50 text-blue-700'
+            }`}>
+              {dataExportNotice.tone === 'info' ? <Loader2 size={14} className="mt-0.5 animate-spin" /> : <AlertCircle size={14} className="mt-0.5" />}
+              <span>{dataExportNotice.message}</span>
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap gap-1">
             {AI_QUERY_TEMPLATES.map((tpl) => (
