@@ -4,6 +4,7 @@ import {
   AlertCircle,
   BarChart3,
   BookOpen,
+  ChevronDown,
   ClipboardList,
   Code2,
   Copy,
@@ -46,6 +47,7 @@ type PasswordChangePayload = {
 
 type TeacherTab = 'USERS' | 'RESOURCES' | 'GROUPS' | 'STUDENT_RESEARCH' | 'RECORDS' | 'CLICK_FLOW' | 'USER_AUDIT' | 'PROMPT' | 'SYSTEM_DATA' | 'ACCOUNT';
 type PanelPermissionKey = 'users' | 'resources' | 'groups' | 'student_research' | 'research_ai' | 'click_flow' | 'user_audit' | 'prompt' | 'system_data' | 'system_admin';
+type UserManagementSectionKey = 'newUser' | 'rolePermissions' | 'profileAttributes' | 'userList';
 
 type ProfileOption = {
   id: string;
@@ -1036,6 +1038,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userManagerError, setUserManagerError] = useState('');
   const [userManagerMessage, setUserManagerMessage] = useState('');
+  const [expandedUserManagementSections, setExpandedUserManagementSections] = useState<Record<UserManagementSectionKey, boolean>>({
+    newUser: false,
+    rolePermissions: false,
+    profileAttributes: false,
+    userList: false
+  });
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | ManagedUser['status']>('all');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
@@ -2126,6 +2134,43 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     </div>
   );
 
+  const toggleUserManagementSection = (section: UserManagementSectionKey) => {
+    setExpandedUserManagementSections((current) => ({
+      ...current,
+      [section]: !current[section]
+    }));
+  };
+
+  const renderUserManagementSectionHeader = (
+    section: UserManagementSectionKey,
+    title: string,
+    description: React.ReactNode,
+    icon: React.ReactNode
+  ) => {
+    const isExpanded = expandedUserManagementSections[section];
+    return (
+      <button
+        type="button"
+        onClick={() => toggleUserManagementSection(section)}
+        aria-expanded={isExpanded}
+        className="flex w-full items-center justify-between gap-4 p-6 text-left transition hover:bg-slate-50/70"
+      >
+        <div className="min-w-0">
+          <h3 className="text-lg font-black text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3 text-indigo-500">
+          {icon}
+          <ChevronDown
+            size={18}
+            className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+    );
+  };
+
   const renderUserManagement = () => {
     if (!canAccessPanel('users')) {
       return (
@@ -2173,16 +2218,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         )}
 
-        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">新增用户</h3>
-              <p className="text-sm text-slate-500">为用户分配一个或多个角色，后台板块访问由角色权限决定。</p>
-            </div>
-            <UserPlus className="text-indigo-500" size={22} />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-4">
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          {renderUserManagementSectionHeader(
+            'newUser',
+            '新增用户',
+            '为用户分配一个或多个角色，后台板块访问由角色权限决定。',
+            <UserPlus size={22} />
+          )}
+          {expandedUserManagementSections.newUser && (
+          <div className="border-t border-slate-100 px-6 pb-6 pt-5">
+            <div className="grid gap-4 md:grid-cols-4">
             <input
               value={newUserForm.username}
               onChange={(e) => setNewUserForm((current) => ({ ...current, username: e.target.value }))}
@@ -2213,7 +2258,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             </select>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <div className="grid w-full gap-2 sm:grid-cols-5 xl:max-w-[680px]">
               {availableRoles.map((role) => {
                 const checked = getSelectedManagedRoleKey(newUserForm.roleKeys) === role.key;
@@ -2247,20 +2292,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
             >
               {savingUserId === 'new' ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
               创建用户
-            </button>
+              </button>
+            </div>
           </div>
+          )}
         </section>
 
-        <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">角色与板块权限</h3>
-              <p className="text-sm text-slate-500">系统管理员固定拥有所有权限；其他角色可以配置可访问板块。</p>
-            </div>
-            <ShieldCheck className="text-indigo-500" size={22} />
-          </div>
-
-          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          {renderUserManagementSectionHeader(
+            'rolePermissions',
+            '角色与板块权限',
+            '系统管理员固定拥有所有权限；其他角色可以配置可访问板块。',
+            <ShieldCheck size={22} />
+          )}
+          {expandedUserManagementSections.rolePermissions && (
+          <div className="border-t border-slate-100 px-6 pb-6 pt-5">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <div className="grid gap-3 xl:grid-cols-[180px_220px_minmax(0,1fr)_auto]">
               <input
                 value={newRoleForm.key}
@@ -2297,9 +2344,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 新增角色
               </button>
             </div>
-          </div>
+            </div>
 
-          <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-3">
             {availableRoles.map((role) => (
               <div key={role.id} className="rounded-2xl border border-slate-100 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2360,19 +2407,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 </div>
               </div>
             ))}
+            </div>
           </div>
+          )}
         </section>
 
-        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base font-black text-slate-900">学生档案属性</h3>
-              <p className="text-xs text-slate-500">这里维护 HSK 等级和专业方向；班级/组直接使用分组管理中的现有分组。</p>
-            </div>
-            <GraduationCap className="text-indigo-500" size={20} />
-          </div>
-
-          <div className="grid gap-3 xl:grid-cols-3">
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          {renderUserManagementSectionHeader(
+            'profileAttributes',
+            '学生档案属性',
+            '这里维护 HSK 等级和专业方向；班级/组直接使用分组管理中的现有分组。',
+            <GraduationCap size={22} />
+          )}
+          {expandedUserManagementSections.profileAttributes && (
+          <div className="border-t border-slate-100 px-4 pb-4 pt-4">
+            <div className="grid gap-3 xl:grid-cols-3">
             {[
               ['HSK 等级', hskProfileOptions],
               ['专业方向', majorProfileOptions]
@@ -2520,18 +2569,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 ))}
               </div>
             </div>
+            </div>
           </div>
+          )}
         </section>
 
-        <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-6">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">用户列表</h3>
-              <p className="text-sm text-slate-500">
-                可按用户名、邮箱、真实姓名搜索。当前显示 {filteredUsers.length} / {users.length} 个用户。
-              </p>
-            </div>
-            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          {renderUserManagementSectionHeader(
+            'userList',
+            '用户列表',
+            <>可按用户名、邮箱、真实姓名搜索。当前显示 {filteredUsers.length} / {users.length} 个用户。</>,
+            <Users size={22} />
+          )}
+          {expandedUserManagementSections.userList && (
+          <div className="border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-b border-slate-100 p-6">
               <select
                 value={userStatusFilter}
                 onChange={(event) => setUserStatusFilter(event.target.value as 'all' | ManagedUser['status'])}
@@ -2581,9 +2633,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 <RefreshCw size={14} /> 刷新
               </button>
             </div>
-          </div>
 
-          {isLoadingUsers && !userManager ? (
+            {isLoadingUsers && !userManager ? (
             <div className="flex items-center gap-3 p-6 text-sm font-semibold text-slate-500">
               <Loader2 className="animate-spin text-indigo-500" size={18} />
               正在加载用户...
@@ -2705,6 +2756,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 </tbody>
               </table>
             </div>
+            )}
+          </div>
           )}
         </section>
       </div>
