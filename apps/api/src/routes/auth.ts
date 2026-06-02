@@ -397,20 +397,47 @@ router.post('/student/register_or_login', async (req, res) => {
     const password = parsed.data.password;
     const existing = await findUserByIdentifier(username);
     if (!existing) {
+      await recordLoginAudit(req, {
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'USER_NOT_FOUND'
+      });
       return res.status(404).json(fail('USER_NOT_FOUND', 'User not found'));
     }
 
     const match = await bcrypt.compare(password, existing.passwordHash);
     if (!match) {
+      await recordLoginAudit(req, {
+        userId: existing.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'INVALID_PASSWORD'
+      });
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
     const roles = await getUserRoles(existing.id);
     if (!hasStudentPortalRole(roles)) {
+      await recordLoginAudit(req, {
+        userId: existing.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'ROLE_FORBIDDEN'
+      });
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
     if (!isValidUsername(existing.username)) {
+      await recordLoginAudit(req, {
+        userId: existing.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'USERNAME_CHANGE_REQUIRED'
+      });
       return res.status(409).json(
         failWithData('USERNAME_CHANGE_REQUIRED', 'Username change required', {
           identifier: existing.username
@@ -420,6 +447,13 @@ router.post('/student/register_or_login', async (req, res) => {
 
     if (shouldBlockUnverifiedLogin(existing)) {
       if (!existing.email) {
+        await recordLoginAudit(req, {
+          userId: existing.id,
+          identifier: username,
+          portal: 'student',
+          status: 'failed',
+          failureReason: 'EMAIL_REQUIRED'
+        });
         return res.status(403).json(
           failWithData('EMAIL_REQUIRED', 'Email required', {
             identifier: existing.username
@@ -427,6 +461,13 @@ router.post('/student/register_or_login', async (req, res) => {
         );
       }
 
+      await recordLoginAudit(req, {
+        userId: existing.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'EMAIL_NOT_VERIFIED'
+      });
       return res.status(403).json(
         failWithData('EMAIL_NOT_VERIFIED', 'Email verification required', {
           identifier: existing.username,
@@ -436,10 +477,23 @@ router.post('/student/register_or_login', async (req, res) => {
     }
 
     if (!ensureActiveUser(existing.status)) {
+      await recordLoginAudit(req, {
+        userId: existing.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'ACCOUNT_DISABLED'
+      });
       return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
     }
 
     const token = issueAuthToken(existing.id);
+    await recordLoginAudit(req, {
+      userId: existing.id,
+      identifier: username,
+      portal: 'student',
+      status: 'success'
+    });
     return res.status(200).json(ok({ token }));
   } catch (error) {
     console.error('Student register/login failed:', error);
