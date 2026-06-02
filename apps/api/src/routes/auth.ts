@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -178,6 +178,30 @@ const findUserByIdentifier = async (identifier: string) => {
       OR: [{ username: normalized }, { email }]
     }
   });
+};
+
+const recordLoginAudit = async (req: Request, input: {
+  userId?: string | null;
+  identifier: string;
+  portal: 'student' | 'teacher';
+  status: 'success' | 'failed';
+  failureReason?: string | null;
+}) => {
+  try {
+    await prisma.userLoginAudit.create({
+      data: {
+        userId: input.userId ?? null,
+        identifier: input.identifier.slice(0, 240),
+        portal: input.portal,
+        status: input.status,
+        failureReason: input.failureReason ?? null,
+        ipAddress: req.ip,
+        userAgent: req.header('user-agent') ?? null
+      }
+    });
+  } catch (error) {
+    console.error('Record login audit failed:', error);
+  }
 };
 
 const issueAuthToken = (userId: string) =>
@@ -486,20 +510,47 @@ router.post('/student/login', async (req, res) => {
 
     const user = await findUserByIdentifier(username);
     if (!user) {
+      await recordLoginAudit(req, {
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'USER_NOT_FOUND'
+      });
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'INVALID_PASSWORD'
+      });
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
     const roles = await getUserRoles(user.id);
     if (!hasStudentPortalRole(roles)) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'ROLE_FORBIDDEN'
+      });
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Student role required'));
     }
 
     if (!isValidUsername(user.username)) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'USERNAME_CHANGE_REQUIRED'
+      });
       return res.status(409).json(
         failWithData('USERNAME_CHANGE_REQUIRED', 'Username change required', {
           identifier: user.username
@@ -509,6 +560,13 @@ router.post('/student/login', async (req, res) => {
 
     if (shouldBlockUnverifiedLogin(user)) {
       if (!user.email) {
+        await recordLoginAudit(req, {
+          userId: user.id,
+          identifier: username,
+          portal: 'student',
+          status: 'failed',
+          failureReason: 'EMAIL_REQUIRED'
+        });
         return res.status(403).json(
           failWithData('EMAIL_REQUIRED', 'Email required', {
             identifier: user.username
@@ -516,6 +574,13 @@ router.post('/student/login', async (req, res) => {
         );
       }
 
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'EMAIL_NOT_VERIFIED'
+      });
       return res.status(403).json(
         failWithData('EMAIL_NOT_VERIFIED', 'Email verification required', {
           identifier: user.username,
@@ -525,10 +590,23 @@ router.post('/student/login', async (req, res) => {
     }
 
     if (!ensureActiveUser(user.status)) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'student',
+        status: 'failed',
+        failureReason: 'ACCOUNT_DISABLED'
+      });
       return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
     }
 
     const token = issueAuthToken(user.id);
+    await recordLoginAudit(req, {
+      userId: user.id,
+      identifier: username,
+      portal: 'student',
+      status: 'success'
+    });
     return res.status(200).json(ok({ user: { id: user.id, username: user.username }, token }));
   } catch (error) {
     console.error('Student login failed:', error);
@@ -844,25 +922,58 @@ router.post('/teacher/login', async (req, res) => {
 
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
+      await recordLoginAudit(req, {
+        identifier: username,
+        portal: 'teacher',
+        status: 'failed',
+        failureReason: 'USER_NOT_FOUND'
+      });
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
     if (!ensureActiveUser(user.status)) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'teacher',
+        status: 'failed',
+        failureReason: 'ACCOUNT_DISABLED'
+      });
       return res.status(403).json(fail('ACCOUNT_DISABLED', 'Account disabled'));
     }
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'teacher',
+        status: 'failed',
+        failureReason: 'INVALID_PASSWORD'
+      });
       return res.status(401).json(fail('INVALID_CREDENTIALS', 'Invalid credentials'));
     }
 
     const roles = await getUserRoles(user.id);
     const canUseTeacherPortal = roles.includes('teacher') || roles.includes('admin') || await userHasAnyPanelPermission(user.id);
     if (!canUseTeacherPortal) {
+      await recordLoginAudit(req, {
+        userId: user.id,
+        identifier: username,
+        portal: 'teacher',
+        status: 'failed',
+        failureReason: 'ROLE_FORBIDDEN'
+      });
       return res.status(403).json(fail('ROLE_FORBIDDEN', 'Teacher portal permission required'));
     }
 
     const token = issueAuthToken(user.id);
+    await recordLoginAudit(req, {
+      userId: user.id,
+      identifier: username,
+      portal: 'teacher',
+      status: 'success'
+    });
     return res.status(200).json(ok({ token }));
   } catch (error) {
     console.error('Teacher login failed:', error);

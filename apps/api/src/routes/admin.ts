@@ -59,7 +59,8 @@ const tableConfigs: TableConfig[] = [
   { key: 'roles', label: '角色', group: '用户与权限', delegate: 'role', idField: 'id', searchableFields: ['key', 'name'], summaryColumns: ['key', 'name'] },
   { key: 'user_roles', label: '用户角色', group: '用户与权限', delegate: 'userRole', include: { user: { select: { username: true, email: true } }, role: { select: { key: true, name: true } } }, summaryColumns: ['username', 'roleName', 'roleKey'] },
   { key: 'role_panel_permissions', label: '角色板块权限', group: '用户与权限', delegate: 'rolePanelPermission', include: { role: { select: { key: true, name: true } } }, searchableFields: ['panelKey'], summaryColumns: ['roleName', 'roleKey', 'panelLabel', 'panelKey', 'createdAt'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
-  { key: 'user_data_export_audits', label: '用户数据下载审计', group: '用户与权限', delegate: 'userDataExportAudit', include: { actor: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', searchableFields: ['exportType', 'sourcePanel', 'fileName'], summaryColumns: ['actorName', 'actorUsername', 'exportTypeLabel', 'sourcePanel', 'studentCount', 'rowCount', 'fileName', 'createdAt'], statusFields: ['exportType', 'sourcePanel'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'user_data_export_audits', label: '用户数据下载审计', group: '用户与权限', delegate: 'userDataExportAudit', include: { actor: { select: { username: true, email: true, studentProfile: true } }, approver: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', searchableFields: ['exportType', 'sourcePanel', 'fileName', 'status'], summaryColumns: ['actorName', 'actorUsername', 'statusLabel', 'exportTypeLabel', 'sourcePanel', 'studentCount', 'rowCount', 'fileName', 'createdAt'], statusFields: ['status', 'exportType', 'sourcePanel'], dateFields: ['createdAt', 'approvedAt', 'downloadedAt'], defaultOrderBy: { createdAt: 'desc' } },
+  { key: 'user_login_audits', label: '用户登录日志', group: '用户与权限', delegate: 'userLoginAudit', include: { user: { select: { username: true, email: true, studentProfile: true } } }, idField: 'id', searchableFields: ['identifier', 'portal', 'status', 'failureReason', 'ipAddress'], summaryColumns: ['createdAt', 'displayName', 'username', 'identifier', 'portalLabel', 'statusLabel', 'failureReasonLabel', 'ipAddress'], statusFields: ['portal', 'status', 'failureReason'], dateFields: ['createdAt'], defaultOrderBy: { createdAt: 'desc' } },
   { key: 'data_table_descriptions', label: '数据表说明', group: '系统语义', delegate: 'dataTableDescription', idField: 'id', searchableFields: ['tableKey', 'displayName', 'groupName', 'businessMeaning', 'dataGrain', 'agentGuidance', 'sensitivityLevel'], summaryColumns: ['tableKey', 'displayName', 'groupName', 'businessMeaning', 'sensitivityLevel', 'updatedAt'], statusFields: ['groupName', 'sensitivityLevel', 'isActive'], dateFields: ['createdAt', 'updatedAt'], defaultOrderBy: { groupName: 'asc' } },
   { key: 'student_auth', label: '学生登录身份', group: '学生档案', delegate: 'studentAuth', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['idOrName'], summaryColumns: ['username', 'idOrName'] },
   { key: 'student_profile', label: '学生资料', group: '学生档案', delegate: 'studentProfile', include: { user: { select: { username: true, email: true } } }, idField: 'userId', searchableFields: ['name', 'realName', 'studentNo', 'nationality', 'gender', 'hskLevel', 'major', 'classGroup'], summaryColumns: ['username', 'name', 'realName', 'studentNo', 'nationality', 'hskLevel', 'major', 'classGroup', 'completedAt'], dateFields: ['completedAt'] },
@@ -180,8 +181,26 @@ const clickFlowQuerySchema = z.object({
 const auditQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
   search: z.string().trim().max(120).optional().default(''),
+  status: z.enum(['all', 'pending', 'approved', 'rejected', 'downloaded', 'expired']).optional().default('all'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25)
+});
+
+const loginAuditQuerySchema = z.object({
+  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+  search: z.string().trim().max(120).optional().default(''),
+  status: z.enum(['all', 'success', 'failed']).optional().default('all'),
+  portal: z.enum(['all', 'student', 'teacher']).optional().default('all'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25)
+});
+
+const dataExportAuditParamsSchema = z.object({
+  auditId: z.string().uuid()
+});
+
+const dataExportReviewPayloadSchema = z.object({
+  note: z.string().trim().max(500).optional().default('')
 });
 
 const dataExportAuditPayloadSchema = z.object({
@@ -338,6 +357,9 @@ async function ensureTableAccess(req: Request, res: Response, tableKey: string) 
     return true;
   }
   if (tableKey === 'user_data_export_audits' && await userHasPanelPermission(req.user?.id, 'user_audit')) {
+    return true;
+  }
+  if (tableKey === 'user_login_audits' && await userHasPanelPermission(req.user?.id, 'user_audit')) {
     return true;
   }
   return ensurePanelAccess(req, res, 'system_data');
@@ -601,10 +623,71 @@ function getExportTypeLabel(exportType: unknown) {
   return String(exportType ?? '');
 }
 
+function getExportStatusLabel(status: unknown) {
+  if (status === 'pending') return '待审批';
+  if (status === 'approved') return '已批准';
+  if (status === 'rejected') return '已拒绝';
+  if (status === 'downloaded') return '已下载';
+  if (status === 'expired') return '已过期';
+  return String(status ?? '');
+}
+
+function getLoginPortalLabel(portal: unknown) {
+  if (portal === 'student') return '学习入口';
+  if (portal === 'teacher') return '管理入口';
+  return String(portal ?? '');
+}
+
+function getLoginStatusLabel(status: unknown) {
+  if (status === 'success') return '成功';
+  if (status === 'failed') return '失败';
+  return String(status ?? '');
+}
+
+function getLoginFailureReasonLabel(reason: unknown) {
+  if (!reason) return '';
+  if (reason === 'USER_NOT_FOUND') return '账号不存在';
+  if (reason === 'INVALID_PASSWORD') return '密码错误';
+  if (reason === 'ROLE_FORBIDDEN') return '入口权限不匹配';
+  if (reason === 'USERNAME_CHANGE_REQUIRED') return '需修改登录名';
+  if (reason === 'EMAIL_REQUIRED') return '需绑定邮箱';
+  if (reason === 'EMAIL_NOT_VERIFIED') return '邮箱未验证';
+  if (reason === 'ACCOUNT_DISABLED') return '账号停用';
+  return String(reason);
+}
+
+function getAuditRequestKey(row: { metadataJson: unknown }) {
+  const metadata = nestedRecord(row.metadataJson);
+  return typeof metadata.requestKey === 'string' ? metadata.requestKey : '';
+}
+
+function isApprovalStillValid(row: { status: string; expiresAt: Date | null; downloadedAt: Date | null }) {
+  return row.status === 'approved' && !row.downloadedAt && (!row.expiresAt || row.expiresAt > new Date());
+}
+
+async function isSystemAdmin(userId: string | undefined) {
+  if (!userId) return false;
+  const adminRole = await prisma.userRole.findFirst({
+    where: {
+      userId,
+      role: { key: 'admin' }
+    },
+    select: { userId: true }
+  });
+  return Boolean(adminRole);
+}
+
+async function ensureSystemAdmin(req: Request, res: Response) {
+  if (await isSystemAdmin(req.user?.id)) return true;
+  res.status(403).json(fail('FORBIDDEN', 'Only administrators can approve data downloads'));
+  return false;
+}
+
 function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   const enhanced = sanitizeRow(row, tableByKey.get(tableKey)?.hiddenFields);
   const user = nestedRecord(row.user);
   const actor = nestedRecord(row.actor);
+  const approver = nestedRecord(row.approver);
   const role = nestedRecord(row.role);
   const group = nestedRecord(row.group);
   const assigner = nestedRecord(row.assigner);
@@ -621,6 +704,10 @@ function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   if (actor.email) enhanced.actorEmail = actor.email;
   const actorName = getDisplayNameFromUser(actor);
   if (actorName) enhanced.actorName = actorName;
+  if (approver.username) enhanced.approverUsername = approver.username;
+  if (approver.email) enhanced.approverEmail = approver.email;
+  const approverName = getDisplayNameFromUser(approver);
+  if (approverName) enhanced.approverName = approverName;
 
   if (tableKey === 'role_panel_permissions') {
     const panel = PANEL_PERMISSIONS.find((item) => item.key === row.panelKey);
@@ -628,6 +715,12 @@ function enhanceDisplayRow(tableKey: string, row: Record<string, unknown>) {
   }
   if (tableKey === 'user_data_export_audits') {
     enhanced.exportTypeLabel = getExportTypeLabel(row.exportType);
+    enhanced.statusLabel = getExportStatusLabel(row.status);
+  }
+  if (tableKey === 'user_login_audits') {
+    enhanced.portalLabel = getLoginPortalLabel(row.portal);
+    enhanced.statusLabel = getLoginStatusLabel(row.status);
+    enhanced.failureReasonLabel = getLoginFailureReasonLabel(row.failureReason);
   }
 
   return enhanced;
@@ -1708,10 +1801,20 @@ router.get('/audit/data-downloads', requirePanel('user_audit'), async (req, res)
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
     }
 
-    const { dateRange, search, page, pageSize } = parsed.data;
+    await prisma.userDataExportAudit.updateMany({
+      where: {
+        status: 'approved',
+        downloadedAt: null,
+        expiresAt: { lt: new Date() }
+      },
+      data: { status: 'expired' }
+    });
+
+    const { dateRange, search, status, page, pageSize } = parsed.data;
     const dateFilter = buildCreatedAtWhere(dateRange);
     const where: Prisma.UserDataExportAuditWhereInput = {
       ...(dateFilter ?? {}),
+      ...(status !== 'all' ? { status } : {}),
       ...(search
         ? {
             OR: [
@@ -1734,17 +1837,35 @@ router.get('/audit/data-downloads', requirePanel('user_audit'), async (req, res)
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { actor: { select: { username: true, email: true, studentProfile: true } } }
+        include: {
+          actor: { select: { username: true, email: true, studentProfile: true } },
+          approver: { select: { username: true, email: true, studentProfile: true } }
+        }
       })
     ]);
+
+    const pendingRows = await prisma.userDataExportAudit.findMany({
+      where: { status: 'pending' },
+      orderBy: { createdAt: 'asc' },
+      take: 8,
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
+      }
+    });
+
+    const pendingTotal = await prisma.userDataExportAudit.count({ where: { status: 'pending' } });
 
     return res.status(200).json(ok({
       generatedAt: new Date().toISOString(),
       dateRange,
       search,
+      status,
+      pendingTotal,
       total,
       page,
       pageSize,
+      pendingRows: pendingRows.map((row) => enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>)),
       rows: rows.map((row) => enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>))
     }));
   } catch (error) {
@@ -1766,6 +1887,38 @@ router.post('/audit/data-downloads', async (req, res) => {
       : 'student_research';
     if (!await ensurePanelAccess(req, res, requiredPanel)) return;
 
+    const requestKey = typeof payload.metadata.requestKey === 'string'
+      ? payload.metadata.requestKey
+      : `${payload.exportType}:${payload.sourcePanel}:${JSON.stringify(payload.filters)}:${payload.targetStudents.map((target) => target.userId).sort().join(',')}`;
+
+    const reusableRequests = await prisma.userDataExportAudit.findMany({
+      where: {
+        actorUserId: req.user?.id ?? null,
+        exportType: payload.exportType,
+        sourcePanel: payload.sourcePanel,
+        status: { in: ['pending', 'approved'] },
+        downloadedAt: null
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
+      }
+    });
+
+    const existing = reusableRequests.find((row) => getAuditRequestKey(row) === requestKey);
+    if (existing) {
+      if (existing.status === 'approved' && existing.expiresAt && existing.expiresAt <= new Date()) {
+        await prisma.userDataExportAudit.update({
+          where: { id: existing.id },
+          data: { status: 'expired' }
+        });
+      } else {
+        return res.status(200).json(ok(enhanceDisplayRow('user_data_export_audits', existing as unknown as Record<string, unknown>)));
+      }
+    }
+
     const audit = await prisma.userDataExportAudit.create({
       data: {
         actorUserId: req.user?.id ?? null,
@@ -1774,17 +1927,181 @@ router.post('/audit/data-downloads', async (req, res) => {
         fileName: payload.fileName,
         rowCount: payload.rowCount,
         studentCount: payload.studentCount || payload.targetStudents.length,
+        status: 'pending',
         targetStudents: payload.targetStudents as Prisma.InputJsonValue,
         filtersJson: payload.filters as Prisma.InputJsonValue,
-        metadataJson: payload.metadata as Prisma.InputJsonValue,
+        metadataJson: { ...payload.metadata, requestKey, requestedAt: new Date().toISOString() } as Prisma.InputJsonValue,
         ipAddress: req.ip,
         userAgent: req.header('user-agent') ?? null
+      },
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
       }
     });
 
-    return res.status(201).json(ok({ id: audit.id, createdAt: audit.createdAt }));
+    return res.status(201).json(ok(enhanceDisplayRow('user_data_export_audits', audit as unknown as Record<string, unknown>)));
   } catch (error) {
     console.error('Create data download audit failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/audit/data-downloads/:auditId/approve', requirePanel('user_audit'), async (req, res) => {
+  try {
+    const params = dataExportAuditParamsSchema.safeParse(req.params);
+    const parsed = dataExportReviewPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid approval payload'));
+    }
+    if (!await ensureSystemAdmin(req, res)) return;
+
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const row = await prisma.userDataExportAudit.update({
+      where: { id: params.data.auditId },
+      data: {
+        status: 'approved',
+        approvedByUserId: req.user?.id ?? null,
+        approvedAt: new Date(),
+        rejectedAt: null,
+        reviewNote: parsed.data.note || null,
+        expiresAt
+      },
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
+      }
+    });
+
+    return res.status(200).json(ok(enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>)));
+  } catch (error) {
+    console.error('Approve data download failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/audit/data-downloads/:auditId/reject', requirePanel('user_audit'), async (req, res) => {
+  try {
+    const params = dataExportAuditParamsSchema.safeParse(req.params);
+    const parsed = dataExportReviewPayloadSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid rejection payload'));
+    }
+    if (!await ensureSystemAdmin(req, res)) return;
+
+    const row = await prisma.userDataExportAudit.update({
+      where: { id: params.data.auditId },
+      data: {
+        status: 'rejected',
+        approvedByUserId: req.user?.id ?? null,
+        approvedAt: null,
+        rejectedAt: new Date(),
+        reviewNote: parsed.data.note || null,
+        expiresAt: null
+      },
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
+      }
+    });
+
+    return res.status(200).json(ok(enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>)));
+  } catch (error) {
+    console.error('Reject data download failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.post('/audit/data-downloads/:auditId/downloaded', async (req, res) => {
+  try {
+    const params = dataExportAuditParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid audit id'));
+    }
+
+    const audit = await prisma.userDataExportAudit.findUnique({
+      where: { id: params.data.auditId }
+    });
+    if (!audit || audit.actorUserId !== req.user?.id) {
+      return res.status(404).json(fail('NOT_FOUND', 'Download request not found'));
+    }
+    if (!isApprovalStillValid(audit)) {
+      return res.status(409).json(fail('DOWNLOAD_NOT_APPROVED', 'Download request is not approved or has expired'));
+    }
+
+    const row = await prisma.userDataExportAudit.update({
+      where: { id: audit.id },
+      data: {
+        status: 'downloaded',
+        downloadedAt: new Date()
+      },
+      include: {
+        actor: { select: { username: true, email: true, studentProfile: true } },
+        approver: { select: { username: true, email: true, studentProfile: true } }
+      }
+    });
+
+    return res.status(200).json(ok(enhanceDisplayRow('user_data_export_audits', row as unknown as Record<string, unknown>)));
+  } catch (error) {
+    console.error('Mark data download as downloaded failed:', error);
+    return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
+  }
+});
+
+router.get('/audit/logins', requirePanel('user_audit'), async (req, res) => {
+  try {
+    const parsed = loginAuditQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
+    }
+
+    const { dateRange, search, status, portal, page, pageSize } = parsed.data;
+    const dateFilter = buildCreatedAtWhere(dateRange);
+    const where: Prisma.UserLoginAuditWhereInput = {
+      ...(dateFilter ?? {}),
+      ...(status !== 'all' ? { status } : {}),
+      ...(portal !== 'all' ? { portal } : {}),
+      ...(search
+        ? {
+            OR: [
+              { identifier: { contains: search, mode: 'insensitive' } },
+              { portal: { contains: search, mode: 'insensitive' } },
+              { status: { contains: search, mode: 'insensitive' } },
+              { failureReason: { contains: search, mode: 'insensitive' } },
+              { ipAddress: { contains: search, mode: 'insensitive' } },
+              { user: { username: { contains: search, mode: 'insensitive' } } },
+              { user: { email: { contains: search, mode: 'insensitive' } } },
+              { user: { studentProfile: { realName: { contains: search, mode: 'insensitive' } } } },
+              { user: { studentProfile: { name: { contains: search, mode: 'insensitive' } } } }
+            ]
+          }
+        : {})
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.userLoginAudit.count({ where }),
+      prisma.userLoginAudit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { user: { select: { username: true, email: true, studentProfile: true } } }
+      })
+    ]);
+
+    return res.status(200).json(ok({
+      generatedAt: new Date().toISOString(),
+      dateRange,
+      search,
+      status,
+      portal,
+      total,
+      page,
+      pageSize,
+      rows: rows.map((row) => enhanceDisplayRow('user_login_audits', row as unknown as Record<string, unknown>))
+    }));
+  } catch (error) {
+    console.error('Load login audits failed:', error);
     return res.status(500).json(fail('INTERNAL_ERROR', 'Internal error'));
   }
 });

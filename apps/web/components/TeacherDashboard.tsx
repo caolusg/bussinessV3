@@ -335,12 +335,16 @@ type DataExportAuditRow = Record<string, unknown> & {
   id: string;
   actorName?: string | null;
   actorUsername?: string | null;
+  approverName?: string | null;
+  approverUsername?: string | null;
   exportType: string;
   exportTypeLabel?: string;
   sourcePanel: string;
   fileName?: string | null;
   rowCount: number;
   studentCount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'downloaded' | 'expired';
+  statusLabel?: string;
   targetStudents?: Array<{
     userId: string;
     displayName?: string | null;
@@ -349,7 +353,12 @@ type DataExportAuditRow = Record<string, unknown> & {
     anonymousUserCode?: string | null;
   }> | null;
   filtersJson?: Record<string, unknown> | null;
+  reviewNote?: string | null;
   createdAt: string;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  downloadedAt?: string | null;
+  expiresAt?: string | null;
 };
 
 type DataExportAuditResponse = {
@@ -357,9 +366,40 @@ type DataExportAuditResponse = {
   dateRange: 'today' | '7d' | '30d' | 'all';
   search: string;
   total: number;
+  pendingTotal?: number;
   page: number;
   pageSize: number;
+  pendingRows?: DataExportAuditRow[];
   rows: DataExportAuditRow[];
+};
+
+type LoginAuditRow = Record<string, unknown> & {
+  id: string;
+  userId?: string | null;
+  displayName?: string | null;
+  username?: string | null;
+  identifier: string;
+  portal: 'student' | 'teacher';
+  portalLabel?: string;
+  status: 'success' | 'failed';
+  statusLabel?: string;
+  failureReason?: string | null;
+  failureReasonLabel?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+};
+
+type LoginAuditResponse = {
+  generatedAt: string;
+  dateRange: 'today' | '7d' | '30d' | 'all';
+  search: string;
+  status: 'all' | 'success' | 'failed';
+  portal: 'all' | 'student' | 'teacher';
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: LoginAuditRow[];
 };
 
 type DataExportAuditTarget = {
@@ -1021,6 +1061,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [aiLogSummary, setAiLogSummary] = useState<AiLogSummary | null>(null);
   const [clickFlowSummary, setClickFlowSummary] = useState<ClickFlowSummary | null>(null);
   const [dataExportAudits, setDataExportAudits] = useState<DataExportAuditResponse | null>(null);
+  const [loginAudits, setLoginAudits] = useState<LoginAuditResponse | null>(null);
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [tablePage, setTablePage] = useState(1);
   const [searchDraft, setSearchDraft] = useState('');
@@ -1043,6 +1084,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [isLoadingAiLogSummary, setIsLoadingAiLogSummary] = useState(false);
   const [isLoadingClickFlow, setIsLoadingClickFlow] = useState(false);
   const [isLoadingDataExportAudits, setIsLoadingDataExportAudits] = useState(false);
+  const [isLoadingLoginAudits, setIsLoadingLoginAudits] = useState(false);
+  const [reviewingDataExportId, setReviewingDataExportId] = useState('');
   const [rowsRefreshKey, setRowsRefreshKey] = useState(0);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [researchRefreshKey, setResearchRefreshKey] = useState(0);
@@ -1055,6 +1098,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [auditSearch, setAuditSearch] = useState('');
   const [auditPage, setAuditPage] = useState(1);
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
+  const [loginAuditStatus, setLoginAuditStatus] = useState<'all' | 'success' | 'failed'>('all');
+  const [loginAuditPortal, setLoginAuditPortal] = useState<'all' | 'student' | 'teacher'>('all');
+  const [loginAuditPage, setLoginAuditPage] = useState(1);
+  const [pendingDataExportApprovalCount, setPendingDataExportApprovalCount] = useState(0);
   const [researchStudentSearchDraft, setResearchStudentSearchDraft] = useState('');
   const [researchStudentSearch, setResearchStudentSearch] = useState('');
 
@@ -1409,6 +1456,53 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   }, [activeTab, isAdmin, user.panelPermissions, auditDateRange, auditSearch, auditPage, auditRefreshKey]);
 
   useEffect(() => {
+    if (activeTab !== 'USER_AUDIT' || !canAccessPanel('user_audit')) return;
+
+    let ignore = false;
+    setIsLoadingLoginAudits(true);
+    setAdminError('');
+
+    const params = new URLSearchParams({
+      dateRange: auditDateRange,
+      search: auditSearch,
+      status: loginAuditStatus,
+      portal: loginAuditPortal,
+      page: String(loginAuditPage),
+      pageSize: '25'
+    });
+
+    apiRequest<LoginAuditResponse>(`/api/admin/audit/logins?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) setLoginAudits(data);
+      })
+      .catch((error) => {
+        if (!ignore) setAdminError(error instanceof Error ? error.message : '登录日志加载失败');
+      })
+      .finally(() => {
+        if (!ignore) setIsLoadingLoginAudits(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, isAdmin, user.panelPermissions, auditDateRange, auditSearch, loginAuditStatus, loginAuditPortal, loginAuditPage, auditRefreshKey]);
+
+  useEffect(() => {
+    if (!canAccessPanel('user_audit')) return;
+    let ignore = false;
+    apiRequest<DataExportAuditResponse>('/api/admin/audit/data-downloads?dateRange=all&status=pending&page=1&pageSize=1')
+      .then((data) => {
+        if (!ignore) setPendingDataExportApprovalCount(data.pendingTotal ?? data.total ?? 0);
+      })
+      .catch(() => {
+        if (!ignore) setPendingDataExportApprovalCount(0);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [isAdmin, user.panelPermissions, auditRefreshKey]);
+
+  useEffect(() => {
     if (activeTab !== 'USER_AUDIT') return;
     const timer = window.setTimeout(() => {
       setAuditSearch(auditSearchDraft.trim());
@@ -1418,7 +1512,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
   useEffect(() => {
     setAuditPage(1);
-  }, [auditDateRange, auditSearch]);
+    setLoginAuditPage(1);
+  }, [auditDateRange, auditSearch, loginAuditStatus, loginAuditPortal]);
 
   useEffect(() => {
     if (activeTab !== 'SYSTEM_DATA' || !canAccessPanel('system_data') || !selectedTable) return;
@@ -3446,16 +3541,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     URL.revokeObjectURL(url);
   };
 
-  const recordDataExportAudit = async (payload: {
+  const buildDataExportRequestKey = (parts: unknown[]) =>
+    JSON.stringify(parts);
+
+  const requestDataExportApproval = async (payload: {
     exportType: 'student_research_selected' | 'student_research_all' | 'research_ai_result';
     sourcePanel?: 'student_research' | 'research_ai';
     fileName: string;
     rowCount: number;
     targets: DataExportAuditTarget[];
+    requestKey: string;
     filters?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
-  }) => {
-    await apiRequest('/api/admin/audit/data-downloads', {
+  }): Promise<DataExportAuditRow> => {
+    const audit = await apiRequest<DataExportAuditRow>('/api/admin/audit/data-downloads', {
       method: 'POST',
       body: JSON.stringify({
         exportType: payload.exportType,
@@ -3468,10 +3567,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           dateRange: researchDateRange,
           search: researchStudentSearch
         },
-        metadata: payload.metadata ?? {}
+        metadata: {
+          ...(payload.metadata ?? {}),
+          requestKey: payload.requestKey
+        }
       })
     });
     setAuditRefreshKey((value) => value + 1);
+    return audit;
+  };
+
+  const markDataExportDownloaded = async (auditId: string) => {
+    await apiRequest(`/api/admin/audit/data-downloads/${auditId}/downloaded`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    setAuditRefreshKey((value) => value + 1);
+  };
+
+  const finalizeApprovedCsvDownload = async (audit: DataExportAuditRow, csv: string, fallbackFileName: string) => {
+    if (audit.status !== 'approved') {
+      return false;
+    }
+    createCsvDownload(csv, audit.fileName || fallbackFileName);
+    await markDataExportDownloaded(audit.id);
+    return true;
   };
 
   const downloadResearchAiResultCsv = async () => {
@@ -3479,12 +3599,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     try {
       const csv = toCsv(researchAiResult.rows);
       const fileName = `research-ai-${Date.now()}.csv`;
-      await recordDataExportAudit({
+      const audit = await requestDataExportApproval({
         exportType: 'research_ai_result',
         sourcePanel: 'research_ai',
         fileName,
         rowCount: researchAiResult.rows.length,
         targets: [],
+        requestKey: buildDataExportRequestKey(['research_ai_result', researchAiResult.question, researchAiResult.sql, researchAiResult.rows.length]),
         filters: {
           question: researchAiResult.question,
           sql: researchAiResult.sql
@@ -3494,9 +3615,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           sqlRisk: researchAiResult.sqlRisk
         }
       });
-      createCsvDownload(csv, fileName);
+      if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
+      setAdminError('已提交自然语言分析结果下载申请，管理员批准后再次点击即可下载。');
     } catch (error) {
-      setResearchAiError(error instanceof Error ? error.message : '分析结果下载审计记录失败，已取消下载');
+      setResearchAiError(error instanceof Error ? error.message : '分析结果下载申请失败，已取消下载');
     }
   };
 
@@ -3509,10 +3631,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       const csv = toCsv(exportRows);
       if (!csv) return;
       const fileName = `student-research-selected-${selectedResearchStudentIds.length}-${Date.now()}.csv`;
-      await recordDataExportAudit({
+      const audit = await requestDataExportApproval({
         exportType: 'student_research_selected',
         fileName,
         rowCount: exportRows.length,
+        requestKey: buildDataExportRequestKey(['student_research_selected', researchDateRange, [...selectedResearchStudentIds].sort()]),
         targets: activities.map((activity) => getResearchStudentAuditTarget(activity.user)),
         metadata: {
           messageRows: activities.reduce((sum, activity) => sum + activity.messages.length, 0),
@@ -3520,9 +3643,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           practiceEventRows: activities.reduce((sum, activity) => sum + activity.practiceEvents.length, 0)
         }
       });
-      createCsvDownload(csv, fileName);
+      if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
+      setAdminError('已提交选中学生数据下载申请，管理员批准后再次点击即可下载。');
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : '学生数据下载审计记录失败，已取消下载');
+      setAdminError(error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载');
     } finally {
       setIsDownloadingResearchStudents(false);
     }
@@ -3559,26 +3683,47 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       const csv = toCsv(exportRows);
       if (!csv) return;
       const fileName = `student-research-all-${researchDateRange}-${Date.now()}.csv`;
-      await recordDataExportAudit({
+      const audit = await requestDataExportApproval({
         exportType: 'student_research_all',
         fileName,
         rowCount: exportRows.length,
+        requestKey: buildDataExportRequestKey(['student_research_all', researchDateRange, researchStudentSearch]),
         targets: rows.map((row) => getResearchStudentAuditTarget(row.user)),
         metadata: {
           directoryTotal: rows.length
         }
       });
-      createCsvDownload(csv, fileName);
+      if (await finalizeApprovedCsvDownload(audit, csv, fileName)) return;
+      setAdminError('已提交全部学生数据下载申请，管理员批准后再次点击即可下载。');
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : '学生数据下载审计记录失败，已取消下载');
+      setAdminError(error instanceof Error ? error.message : '学生数据下载申请失败，已取消下载');
     } finally {
       setIsDownloadingResearchStudents(false);
     }
   };
 
+  const reviewDataExportRequest = async (auditId: string, action: 'approve' | 'reject') => {
+    setReviewingDataExportId(auditId);
+    setAdminError('');
+    try {
+      await apiRequest(`/api/admin/audit/data-downloads/${auditId}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      setAuditRefreshKey((value) => value + 1);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : '下载申请审批失败');
+    } finally {
+      setReviewingDataExportId('');
+    }
+  };
+
   const renderUserAudit = () => {
     const rows = dataExportAudits?.rows ?? [];
+    const pendingRows = dataExportAudits?.pendingRows ?? [];
+    const loginRows = loginAudits?.rows ?? [];
     const totalPages = dataExportAudits ? Math.max(1, Math.ceil(dataExportAudits.total / dataExportAudits.pageSize)) : 1;
+    const loginTotalPages = loginAudits ? Math.max(1, Math.ceil(loginAudits.total / loginAudits.pageSize)) : 1;
 
     return (
       <div className="space-y-6">
@@ -3589,7 +3734,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">User Behavior Audit</p>
                 <h3 className="mt-1 text-xl font-black text-slate-900">用户行为审计</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  记录后台用户下载学生数据的行为，包括操作者、下载时间、下载范围、学生清单和筛选条件。
+                  下载用户数据需要管理员批准；这里记录申请、审批、下载时间、数据范围和筛选条件。
                 </p>
               </div>
               <button
@@ -3631,6 +3776,75 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="p-6">
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Download Approvals</p>
+                  <h4 className="mt-1 text-base font-black text-slate-900">
+                    待审批下载申请 {dataExportAudits?.pendingTotal ? `(${dataExportAudits.pendingTotal})` : ''}
+                  </h4>
+                </div>
+                {!isAdmin && <span className="text-xs font-bold text-amber-700">只有管理员可以批准或拒绝</span>}
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {pendingRows.map((row) => {
+                  const targets = Array.isArray(row.targetStudents) ? row.targetStudents : [];
+                  const targetText = targets
+                    .slice(0, 3)
+                    .map((target) => target.displayName || target.username || target.anonymousUserCode || target.userId)
+                    .filter(Boolean)
+                    .join(' / ');
+                  return (
+                    <article key={row.id} className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-slate-900">{row.exportTypeLabel || row.exportType}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            申请人：{row.actorName || row.actorUsername || '未知用户'} · {formatValue(row.createdAt)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-700">待审批</span>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
+                        <div className="rounded-lg bg-slate-50 px-3 py-2">学生数：{row.studentCount}</div>
+                        <div className="rounded-lg bg-slate-50 px-3 py-2">行数：{row.rowCount}</div>
+                        <div className="rounded-lg bg-slate-50 px-3 py-2">文件：{row.fileName || '-'}</div>
+                      </div>
+                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
+                        范围：{targetText || '当前分析结果'}{targets.length > 3 ? ` 等 ${targets.length} 人` : ''}
+                      </p>
+                      {isAdmin && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={reviewingDataExportId === row.id}
+                            onClick={() => void reviewDataExportRequest(row.id, 'approve')}
+                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {reviewingDataExportId === row.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                            批准
+                          </button>
+                          <button
+                            type="button"
+                            disabled={reviewingDataExportId === row.id}
+                            onClick={() => void reviewDataExportRequest(row.id, 'reject')}
+                            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                          >
+                            <X size={14} />
+                            拒绝
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+                {!pendingRows.length && (
+                  <div className="rounded-xl border border-dashed border-amber-200 bg-white/60 px-4 py-6 text-center text-sm font-bold text-amber-700 lg:col-span-2">
+                    暂无待审批下载申请
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs font-black text-slate-500">
                 下载审计 {dataExportAudits ? `(${dataExportAudits.total})` : ''}
@@ -3641,8 +3855,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               <table className="min-w-[980px] w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-4 py-3 font-black">下载时间</th>
+                    <th className="px-4 py-3 font-black">申请时间</th>
                     <th className="px-4 py-3 font-black">操作者</th>
+                    <th className="px-4 py-3 font-black">状态</th>
                     <th className="px-4 py-3 font-black">下载类型</th>
                     <th className="px-4 py-3 font-black">学生数</th>
                     <th className="px-4 py-3 font-black">数据行数</th>
@@ -3666,6 +3881,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                           <div className="mt-1 font-mono text-[11px] text-slate-400">{row.actorUsername || '-'}</div>
                         </td>
                         <td className="px-4 py-3">
+                          <span className={`rounded-full px-2.5 py-1 font-black ${
+                            row.status === 'approved'
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : row.status === 'pending'
+                                ? 'bg-amber-50 text-amber-600'
+                                : row.status === 'rejected'
+                                  ? 'bg-rose-50 text-rose-600'
+                                  : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {row.statusLabel || row.status}
+                          </span>
+                          {row.approverName || row.approverUsername ? (
+                            <div className="mt-1 text-[11px] text-slate-400">审批：{row.approverName || row.approverUsername}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
                           <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-black text-indigo-600">
                             {row.exportTypeLabel || row.exportType}
                           </span>
@@ -3685,7 +3916,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   })}
                   {!rows.length && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
                         暂无下载审计记录
                       </td>
                     </tr>
@@ -3707,6 +3938,135 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 type="button"
                 disabled={auditPage >= totalPages}
                 onClick={() => setAuditPage((page) => Math.min(totalPages, page + 1))}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        </section>
+        <section className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Login Audit</p>
+                <h3 className="mt-1 text-xl font-black text-slate-900">用户登录记录</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  查看登录入口、成功/失败状态、失败原因、IP 和浏览器信息；上方搜索框可搜索账号、姓名、IP 或失败原因。
+                </p>
+              </div>
+              {isLoadingLoginAudits && <Loader2 className="animate-spin text-indigo-500" size={18} />}
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {[
+                ['all', '全部状态'],
+                ['success', '成功'],
+                ['failed', '失败']
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLoginAuditStatus(value as 'all' | 'success' | 'failed')}
+                  className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                    loginAuditStatus === value
+                      ? 'bg-indigo-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {[
+                ['all', '全部入口'],
+                ['student', '学习入口'],
+                ['teacher', '管理入口']
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLoginAuditPortal(value as 'all' | 'student' | 'teacher')}
+                  className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                    loginAuditPortal === value
+                      ? 'bg-slate-900 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-black text-slate-500">
+                登录记录 {loginAudits ? `(${loginAudits.total})` : ''}
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-100">
+              <table className="min-w-[980px] w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-black">登录时间</th>
+                    <th className="px-4 py-3 font-black">用户</th>
+                    <th className="px-4 py-3 font-black">入口</th>
+                    <th className="px-4 py-3 font-black">状态</th>
+                    <th className="px-4 py-3 font-black">失败原因</th>
+                    <th className="px-4 py-3 font-black">IP</th>
+                    <th className="px-4 py-3 font-black">浏览器</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loginRows.map((row) => (
+                    <tr key={row.id} className="align-top hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-slate-500">{formatValue(row.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-black text-slate-800">{row.displayName || row.username || row.identifier || '未知用户'}</div>
+                        <div className="mt-1 font-mono text-[11px] text-slate-400">{row.username || row.identifier || '-'}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 font-black text-slate-600">
+                          {row.portalLabel || row.portal}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-1 font-black ${
+                          row.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                        }`}>
+                          {row.statusLabel || row.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{row.failureReasonLabel || row.failureReason || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-slate-500">{row.ipAddress || '-'}</td>
+                      <td className="max-w-xs px-4 py-3 text-[11px] leading-5 text-slate-500">
+                        <span className="line-clamp-2 break-all">{row.userAgent || '-'}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!loginRows.length && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                        暂无登录记录
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                type="button"
+                disabled={loginAuditPage <= 1}
+                onClick={() => setLoginAuditPage((page) => Math.max(1, page - 1))}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span className="text-xs font-black text-slate-500">第 {loginAuditPage} / {loginTotalPages} 页</span>
+              <button
+                type="button"
+                disabled={loginAuditPage >= loginTotalPages}
+                onClick={() => setLoginAuditPage((page) => Math.min(loginTotalPages, page + 1))}
                 className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 disabled:opacity-40"
               >
                 下一页
@@ -3748,7 +4108,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
                 {isDownloadingResearchStudents ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                下载选中学生 CSV{selectedResearchStudentIds.length ? `（${selectedResearchStudentIds.length}）` : ''}
+                申请下载选中学生 CSV{selectedResearchStudentIds.length ? `（${selectedResearchStudentIds.length}）` : ''}
               </button>
               <button
                 type="button"
@@ -3757,7 +4117,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
                 {isDownloadingResearchStudents ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                下载全部学生 CSV
+                申请下载全部学生 CSV
               </button>
             </div>
           </div>
@@ -4069,7 +4429,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   onClick={() => void downloadResearchAiResultCsv()}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-600 hover:bg-slate-50"
                 >
-                  导出 CSV
+                  申请导出 CSV
                 </button>
               ) : null}
             </div>
@@ -4359,7 +4719,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                 onClick={() => void downloadResearchAiResultCsv()}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
               >
-                导出 CSV
+                申请导出 CSV
               </button>
             ) : null}
             {researchAiError && <span className="text-xs text-rose-500">{researchAiError}</span>}
@@ -5013,7 +5373,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               onClick={() => setActiveTab(item.tab)}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${activeTab === item.tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
             >
-              {item.icon} {item.label}
+              {item.icon}
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.tab === 'USER_AUDIT' && pendingDataExportApprovalCount > 0 && (
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-slate-950">
+                  {pendingDataExportApprovalCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -5040,6 +5406,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {canAccessPanel('user_audit') && pendingDataExportApprovalCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('USER_AUDIT')}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-black text-amber-700 hover:bg-amber-100"
+              >
+                <ShieldCheck size={16} />
+                {pendingDataExportApprovalCount} 个下载申请待审批
+              </button>
+            )}
             {canAccessPanel('system_admin') && (
               <Link
                 to="/admin/system"
@@ -5073,6 +5449,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               }`}
             >
               {item.mobileLabel}
+              {item.tab === 'USER_AUDIT' && pendingDataExportApprovalCount > 0 ? ` ${pendingDataExportApprovalCount}` : ''}
             </button>
           ))}
         </nav>

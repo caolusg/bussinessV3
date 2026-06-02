@@ -43,6 +43,8 @@ model User {
   teachingGroupMemberships TeachingGroupMember[] @relation("TeachingGroupMemberStudent")
   assignedTeachingGroupMemberships TeachingGroupMember[] @relation("TeachingGroupMemberAssigner")
   dataExportAudits UserDataExportAudit[] @relation("UserDataExportAuditActor")
+  approvedDataExportAudits UserDataExportAudit[] @relation("UserDataExportAuditApprover")
+  loginAudits UserLoginAudit[]
 
   @@map("users")
 }
@@ -219,23 +221,52 @@ model DataTableDescription {
 model UserDataExportAudit {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   actorUserId     String?  @map("actor_user_id") @db.Uuid
+  approvedByUserId String? @map("approved_by_user_id") @db.Uuid
   exportType      String   @map("export_type")
   sourcePanel     String   @map("source_panel")
   fileName        String?  @map("file_name")
   rowCount        Int      @default(0) @map("row_count")
   studentCount    Int      @default(0) @map("student_count")
+  status          String   @default("pending")
   targetStudents  Json?    @map("target_students")
   filtersJson     Json?    @map("filters_json")
   metadataJson    Json?    @map("metadata_json")
+  reviewNote      String?  @map("review_note")
   ipAddress       String?  @map("ip_address")
   userAgent       String?  @map("user_agent")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedAt      DateTime? @map("approved_at") @db.Timestamptz(6)
+  rejectedAt      DateTime? @map("rejected_at") @db.Timestamptz(6)
+  downloadedAt    DateTime? @map("downloaded_at") @db.Timestamptz(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
 
   actor User? @relation("UserDataExportAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approver User? @relation("UserDataExportAuditApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([actorUserId, createdAt], map: "user_data_export_audits_actor_created_idx")
+  @@index([actorUserId, status, createdAt], map: "user_data_export_audits_actor_status_created_idx")
   @@index([exportType, createdAt], map: "user_data_export_audits_type_created_idx")
+  @@index([status, createdAt], map: "user_data_export_audits_status_created_idx")
   @@map("user_data_export_audits")
+}
+
+model UserLoginAudit {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  identifier    String   @default("")
+  portal        String
+  status        String
+  failureReason String?  @map("failure_reason")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, createdAt], map: "user_login_audits_user_created_idx")
+  @@index([portal, createdAt], map: "user_login_audits_portal_created_idx")
+  @@index([status, createdAt], map: "user_login_audits_status_created_idx")
+  @@map("user_login_audits")
 }
 
 model StudentAuth {
