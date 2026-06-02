@@ -5,10 +5,16 @@ const ISSUED_AT_KEY = 'access_token_issued_at';
 const LAST_ACTIVE_AT_KEY = 'access_token_last_active_at';
 
 const storageMode: TokenStorageMode =
-  import.meta.env.VITE_AUTH_TOKEN_STORAGE === 'local' ? 'local' : 'session';
+  (import.meta.env.VITE_SESSION_STORAGE ?? import.meta.env.VITE_AUTH_TOKEN_STORAGE) === 'local' ? 'local' : 'session';
 
-const idleTimeoutMs = minutesToMs(import.meta.env.VITE_AUTH_IDLE_TIMEOUT_MINUTES, 120);
-const absoluteTimeoutMs = hoursToMs(import.meta.env.VITE_AUTH_ABSOLUTE_TIMEOUT_HOURS, 8);
+const idleTimeoutMs = minutesToMs(
+  import.meta.env.VITE_SESSION_IDLE_TIMEOUT_MINUTES ?? import.meta.env.VITE_AUTH_IDLE_TIMEOUT_MINUTES,
+  120
+);
+const absoluteTimeoutMs = hoursToMs(
+  import.meta.env.VITE_SESSION_ABSOLUTE_TIMEOUT_HOURS ?? import.meta.env.VITE_AUTH_ABSOLUTE_TIMEOUT_HOURS,
+  8
+);
 
 function minutesToMs(value: string | undefined, fallbackMinutes: number) {
   const minutes = Number(value ?? fallbackMinutes);
