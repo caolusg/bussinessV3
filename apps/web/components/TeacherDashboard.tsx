@@ -1368,6 +1368,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH') return;
+    if (!canAccessPanel('research_ai')) {
+      setResearchOverview(null);
+      return;
+    }
 
     let ignore = false;
     setIsLoadingResearch(true);
@@ -1390,7 +1394,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, researchDateRange, researchStartDate, researchEndDate, researchRefreshKey]);
+  }, [activeTab, isAdmin, user.panelPermissions, researchDateRange, researchStartDate, researchEndDate, researchRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH') return;
@@ -4556,6 +4560,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   清除日期
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setResearchRefreshKey((key) => key + 1)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-100"
+              >
+                <RefreshCw size={14} className={isLoadingResearchStudents ? 'animate-spin' : ''} />
+                刷新列表
+              </button>
             </div>
           </div>
         </div>
@@ -4587,7 +4599,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               {isLoadingResearchStudents && <Loader2 className="animate-spin text-indigo-500" size={16} />}
             </div>
             <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
-              {visibleResearchRows.map((row) => {
+              {isLoadingResearchStudents && !researchStudents ? (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-8 text-center text-xs font-bold text-slate-400">
+                  <Loader2 className="mx-auto mb-3 animate-spin text-indigo-500" size={22} />
+                  正在加载学生列表...
+                </div>
+              ) : visibleResearchRows.map((row) => {
                 const profile = row.user.studentProfile ?? {};
                 const active = selectedResearchStudentId === row.user.id;
                 const selectedForExport = selectedResearchStudentIds.includes(row.user.id);
