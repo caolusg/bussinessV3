@@ -161,16 +161,46 @@ function isProtectedProfileOption(option: { category: string; value: string; lab
   );
 }
 
+const dateOnlySchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .optional()
+  .default('');
+
+const refineDateBounds = <T extends { startDate: string; endDate: string }>(data: T, ctx: z.RefinementCtx) => {
+  if (data.startDate && data.endDate && data.startDate > data.endDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: 'endDate must be greater than or equal to startDate'
+    });
+  }
+};
+
 const researchQuerySchema = z.object({
-  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d')
-});
+    dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema
+  })
+  .superRefine(refineDateBounds);
 
 const researchStudentsQuerySchema = z.object({
-  dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
-  search: z.string().trim().max(120).optional().default(''),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(500).default(20)
-});
+    dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema,
+    search: z.string().trim().max(120).optional().default(''),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(500).default(20)
+  })
+  .superRefine(refineDateBounds);
+
+const researchStudentActivityQuerySchema = z.object({
+    dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('30d'),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema
+  })
+  .superRefine(refineDateBounds);
 
 const clickFlowQuerySchema = z.object({
   dateRange: z.enum(['today', '7d', '30d', 'all']).optional().default('7d'),
@@ -432,7 +462,23 @@ function parseStatusValue(value: string) {
   return value;
 }
 
-function buildDateFilter(dateRange: 'today' | '7d' | '30d' | 'all') {
+function parseDateOnly(value: string | undefined, endOfDay = false) {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+  return endOfDay
+    ? new Date(year, month - 1, day, 23, 59, 59, 999)
+    : new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function buildDateFilter(dateRange: 'today' | '7d' | '30d' | 'all', startDate = '', endDate = '') {
+  if (startDate || endDate) {
+    return {
+      ...(startDate ? { gte: parseDateOnly(startDate) } : {}),
+      ...(endDate ? { lte: parseDateOnly(endDate, true) } : {})
+    };
+  }
+
   if (dateRange === 'all') return undefined;
   const since = new Date();
   if (dateRange === 'today') {
@@ -563,8 +609,8 @@ async function countSince(delegate: TableDelegate, dateField: string, since: Dat
   return delegate.count({ where: { [dateField]: { gte: since } } });
 }
 
-function buildCreatedAtWhere(dateRange: 'today' | '7d' | '30d' | 'all') {
-  const filter = buildDateFilter(dateRange);
+function buildCreatedAtWhere(dateRange: 'today' | '7d' | '30d' | 'all', startDate = '', endDate = '') {
+  const filter = buildDateFilter(dateRange, startDate, endDate);
   return filter ? { createdAt: filter } : undefined;
 }
 
@@ -1266,8 +1312,8 @@ router.get('/research/overview', requirePanel('research_ai'), async (req, res) =
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
     }
 
-    const dateRange = parsed.data.dateRange;
-    const createdAtWhere = buildCreatedAtWhere(dateRange);
+    const { dateRange, startDate, endDate } = parsed.data;
+    const createdAtWhere = buildCreatedAtWhere(dateRange, startDate, endDate);
     const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
 
     const [
@@ -1468,6 +1514,8 @@ router.get('/research/overview', requirePanel('research_ai'), async (req, res) =
     return res.status(200).json(ok({
       generatedAt: new Date().toISOString(),
       dateRange,
+      startDate,
+      endDate,
       metrics: {
         studentCount,
         sessionCount,
@@ -1496,8 +1544,8 @@ router.get('/research/students', requirePanel('student_research'), async (req, r
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid query'));
     }
 
-    const { dateRange, search, page, pageSize } = parsed.data;
-    const createdAtWhere = buildCreatedAtWhere(dateRange);
+    const { dateRange, startDate, endDate, search, page, pageSize } = parsed.data;
+    const createdAtWhere = buildCreatedAtWhere(dateRange, startDate, endDate);
     const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
     const keyword = search.trim();
     const searchWhere: Prisma.UserWhereInput = keyword
@@ -1637,6 +1685,8 @@ router.get('/research/students', requirePanel('student_research'), async (req, r
     return res.status(200).json(ok({
       generatedAt: new Date().toISOString(),
       dateRange,
+      startDate,
+      endDate,
       search,
       total,
       page,
@@ -1652,12 +1702,12 @@ router.get('/research/students', requirePanel('student_research'), async (req, r
 router.get('/research/students/:userId/activity', requirePanel('student_research'), async (req, res) => {
   try {
     const params = userParamsSchema.safeParse(req.params);
-    const query = researchStudentsQuerySchema.pick({ dateRange: true }).safeParse(req.query);
+    const query = researchStudentActivityQuerySchema.safeParse(req.query);
     if (!params.success || !query.success) {
       return res.status(400).json(fail('INVALID_REQUEST', 'Invalid request'));
     }
 
-    const createdAtWhere = buildCreatedAtWhere(query.data.dateRange);
+    const createdAtWhere = buildCreatedAtWhere(query.data.dateRange, query.data.startDate, query.data.endDate);
     const dateScopedWhere = createdAtWhere ? { createdAt: createdAtWhere.createdAt } : {};
     const userId = params.data.userId;
 
@@ -1765,6 +1815,8 @@ router.get('/research/students/:userId/activity', requirePanel('student_research
     return res.status(200).json(ok({
       generatedAt: new Date().toISOString(),
       dateRange: query.data.dateRange,
+      startDate: query.data.startDate,
+      endDate: query.data.endDate,
       user: {
         id: user.id,
         anonymousUserCode: anonymousCode(user.id),

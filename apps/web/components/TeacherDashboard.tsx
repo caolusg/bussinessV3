@@ -111,6 +111,8 @@ type AdminOverview = {
 type ResearchOverview = {
   generatedAt: string;
   dateRange: 'today' | '7d' | '30d' | 'all';
+  startDate?: string;
+  endDate?: string;
   metrics: {
     studentCount: number;
     sessionCount: number;
@@ -195,6 +197,8 @@ type ResearchStudentRow = {
 type ResearchStudentDirectory = {
   generatedAt: string;
   dateRange: 'today' | '7d' | '30d' | 'all';
+  startDate?: string;
+  endDate?: string;
   search: string;
   total: number;
   page: number;
@@ -205,6 +209,8 @@ type ResearchStudentDirectory = {
 type ResearchStudentActivity = {
   generatedAt: string;
   dateRange: 'today' | '7d' | '30d' | 'all';
+  startDate?: string;
+  endDate?: string;
   user: ResearchStudentRow['user'];
   stats: ResearchStudentRow['stats'];
   sessions: Array<Record<string, unknown>>;
@@ -1105,6 +1111,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
   const [dateField, setDateField] = useState('');
   const [dateRange, setDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('all');
   const [researchDateRange, setResearchDateRange] = useState<(typeof DATE_RANGES)[number]['value']>('30d');
+  const [researchStartDate, setResearchStartDate] = useState('');
+  const [researchEndDate, setResearchEndDate] = useState('');
   const [researchStudentPage, setResearchStudentPage] = useState(1);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
@@ -1256,6 +1264,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     }
   };
 
+  const appendResearchDateParams = (
+    params: URLSearchParams,
+    dateRangeOverride = researchDateRange,
+    startDateOverride = researchStartDate,
+    endDateOverride = researchEndDate
+  ) => {
+    params.set('dateRange', dateRangeOverride);
+    if (startDateOverride) params.set('startDate', startDateOverride);
+    if (endDateOverride) params.set('endDate', endDateOverride);
+  };
+
+  const getResearchDateFilters = () => ({
+    dateRange: researchDateRange,
+    startDate: researchStartDate || null,
+    endDate: researchEndDate || null
+  });
+
+  const selectResearchPresetRange = (range: (typeof DATE_RANGES)[number]['value']) => {
+    setResearchDateRange(range);
+    setResearchStartDate('');
+    setResearchEndDate('');
+  };
+
   useEffect(() => {
     if (activeTab !== 'USERS') return;
     void loadUserManager();
@@ -1342,7 +1373,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     setIsLoadingResearch(true);
     setAdminError('');
 
-    apiRequest<ResearchOverview>(`/api/admin/research/overview?dateRange=${researchDateRange}`)
+    const params = new URLSearchParams();
+    appendResearchDateParams(params);
+
+    apiRequest<ResearchOverview>(`/api/admin/research/overview?${params.toString()}`)
       .then((data) => {
         if (!ignore) setResearchOverview(data);
       })
@@ -1356,7 +1390,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, researchDateRange, researchRefreshKey]);
+  }, [activeTab, researchDateRange, researchStartDate, researchEndDate, researchRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH') return;
@@ -1366,11 +1400,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     setAdminError('');
 
     const params = new URLSearchParams({
-      dateRange: researchDateRange,
       search: researchStudentSearch,
       page: String(researchStudentPage),
       pageSize: String(RESEARCH_STUDENT_PAGE_SIZE)
     });
+    appendResearchDateParams(params);
 
     apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`)
       .then((data) => {
@@ -1390,7 +1424,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, researchDateRange, researchRefreshKey, researchStudentSearch, researchStudentPage]);
+  }, [activeTab, researchDateRange, researchStartDate, researchEndDate, researchRefreshKey, researchStudentSearch, researchStudentPage]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH') return;
@@ -1402,7 +1436,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
 
   useEffect(() => {
     setResearchStudentPage(1);
-  }, [researchDateRange, researchStudentSearch]);
+  }, [researchDateRange, researchStartDate, researchEndDate, researchStudentSearch]);
 
   useEffect(() => {
     if (activeTab !== 'STUDENT_RESEARCH' && activeTab !== 'RECORDS') return;
@@ -1436,8 +1470,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     setIsLoadingResearchStudentActivity(true);
     setAdminError('');
 
+    const params = new URLSearchParams();
+    appendResearchDateParams(params);
+
     apiRequest<ResearchStudentActivity>(
-      `/api/admin/research/students/${selectedResearchStudentId}/activity?dateRange=${researchDateRange}`
+      `/api/admin/research/students/${selectedResearchStudentId}/activity?${params.toString()}`
     )
       .then((data) => {
         if (!ignore) setResearchStudentActivity(data);
@@ -1452,7 +1489,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return () => {
       ignore = true;
     };
-  }, [activeTab, selectedResearchStudentId, researchDateRange, researchRefreshKey]);
+  }, [activeTab, selectedResearchStudentId, researchDateRange, researchStartDate, researchEndDate, researchRefreshKey]);
 
   useEffect(() => {
     if (activeTab !== 'CLICK_FLOW') return;
@@ -3549,10 +3586,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     return formatValue(profile.realName ?? profile.name) || formatValue(userRecord?.username) || '未知学生';
   };
 
-  const fetchResearchStudentActivity = (studentId: string, dateRangeOverride = researchDateRange) =>
-    apiRequest<ResearchStudentActivity>(
-      `/api/admin/research/students/${studentId}/activity?dateRange=${dateRangeOverride}`
+  const fetchResearchStudentActivity = (
+    studentId: string,
+    dateRangeOverride = researchDateRange,
+    startDateOverride = researchStartDate,
+    endDateOverride = researchEndDate
+  ) => {
+    const params = new URLSearchParams();
+    appendResearchDateParams(params, dateRangeOverride, startDateOverride, endDateOverride);
+    return apiRequest<ResearchStudentActivity>(
+      `/api/admin/research/students/${studentId}/activity?${params.toString()}`
     );
+  };
 
   const toggleResearchStudentSelection = (studentId: string, checked: boolean) => {
     setSelectedResearchStudentIds((current) => {
@@ -3671,7 +3716,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         studentCount: payload.targets.length,
         targetStudents: payload.targets,
         filters: payload.filters ?? {
-          dateRange: researchDateRange,
+          ...getResearchDateFilters(),
           search: researchStudentSearch
         },
         metadata: {
@@ -3761,6 +3806,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         requestKey: buildDataExportRequestKey([
           'student_research_selected',
           researchDateRange,
+          researchStartDate,
+          researchEndDate,
           [...selectedResearchStudentIds].sort(),
           exportRows.length
         ]),
@@ -3796,11 +3843,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       let total = Number.POSITIVE_INFINITY;
       while (rows.length < total) {
         const params = new URLSearchParams({
-          dateRange: researchDateRange,
           search: researchStudentSearch,
           page: String(page),
           pageSize: '500'
         });
+        appendResearchDateParams(params);
         const data = await apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`);
         rows.push(...data.rows);
         total = data.total;
@@ -3810,6 +3857,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
       const exportRows = buildResearchStudentDirectoryExportRows({
         generatedAt: new Date().toISOString(),
         dateRange: researchDateRange,
+        startDate: researchStartDate,
+        endDate: researchEndDate,
         search: researchStudentSearch,
         total: rows.length,
         page: 1,
@@ -3826,6 +3875,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         requestKey: buildDataExportRequestKey([
           'student_research_all',
           researchDateRange,
+          researchStartDate,
+          researchEndDate,
           researchStudentSearch,
           rows.map((row) => row.user.id).sort(),
           exportRows.length
@@ -3874,12 +3925,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
     try {
       const filters = audit.filtersJson ?? {};
       const dateRangeForAudit = typeof filters.dateRange === 'string' ? filters.dateRange : researchDateRange;
+      const startDateForAudit = typeof filters.startDate === 'string' ? filters.startDate : '';
+      const endDateForAudit = typeof filters.endDate === 'string' ? filters.endDate : '';
       let csv = '';
 
       if (audit.exportType === 'student_research_selected') {
         const targets = Array.isArray(audit.targetStudents) ? audit.targetStudents : [];
         const ids = targets.map((target) => target.userId).filter(Boolean);
-        const activities = await Promise.all(ids.map((id) => fetchResearchStudentActivity(id, dateRangeForAudit)));
+        const activities = await Promise.all(ids.map((id) => fetchResearchStudentActivity(id, dateRangeForAudit, startDateForAudit, endDateForAudit)));
         csv = toCsv(activities.flatMap((activity) => buildResearchStudentExportRows(activity)));
       } else if (audit.exportType === 'student_research_all') {
         const rows: ResearchStudentRow[] = [];
@@ -3888,11 +3941,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         const searchForAudit = typeof filters.search === 'string' ? filters.search : '';
         while (rows.length < total) {
           const params = new URLSearchParams({
-            dateRange: dateRangeForAudit,
             search: searchForAudit,
             page: String(page),
             pageSize: '500'
           });
+          appendResearchDateParams(params, dateRangeForAudit, startDateForAudit, endDateForAudit);
           const data = await apiRequest<ResearchStudentDirectory>(`/api/admin/research/students?${params.toString()}`);
           rows.push(...data.rows);
           total = data.total;
@@ -3902,6 +3955,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
         csv = toCsv(buildResearchStudentDirectoryExportRows({
           generatedAt: new Date().toISOString(),
           dateRange: dateRangeForAudit as ResearchStudentDirectory['dateRange'],
+          startDate: startDateForAudit,
+          endDate: endDateForAudit,
           search: searchForAudit,
           total: rows.length,
           page: 1,
@@ -4452,6 +4507,59 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
           </div>
         </div>
 
+        <div className="border-b border-slate-100 px-6 pb-6">
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {DATE_RANGES.map((range) => (
+                <button
+                  key={range.value}
+                  type="button"
+                  onClick={() => selectResearchPresetRange(range.value)}
+                  className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                    !researchStartDate && !researchEndDate && researchDateRange === range.value
+                      ? 'bg-indigo-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                开始日期
+                <input
+                  type="date"
+                  value={researchStartDate}
+                  onChange={(event) => setResearchStartDate(event.target.value)}
+                  className="mt-1 block rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold tracking-normal text-slate-700 outline-none focus:border-indigo-300"
+                />
+              </label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                结束日期
+                <input
+                  type="date"
+                  value={researchEndDate}
+                  onChange={(event) => setResearchEndDate(event.target.value)}
+                  className="mt-1 block rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold tracking-normal text-slate-700 outline-none focus:border-indigo-300"
+                />
+              </label>
+              {(researchStartDate || researchEndDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResearchStartDate('');
+                    setResearchEndDate('');
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-100"
+                >
+                  清除日期
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="border-b border-slate-100 p-4 xl:border-b-0 xl:border-r">
             <div className="mb-3 flex items-center justify-between">
@@ -4686,9 +4794,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
               {DATE_RANGES.map((range) => (
                 <button
                   key={range.value}
-                  onClick={() => setResearchDateRange(range.value)}
+                  onClick={() => selectResearchPresetRange(range.value)}
                   className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
-                    researchDateRange === range.value
+                    !researchStartDate && !researchEndDate && researchDateRange === range.value
                       ? 'bg-indigo-600 text-white'
                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
@@ -4696,6 +4804,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onP
                   {range.label}
                 </button>
               ))}
+              <input
+                type="date"
+                value={researchStartDate}
+                onChange={(event) => setResearchStartDate(event.target.value)}
+                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300"
+                title="开始日期"
+              />
+              <input
+                type="date"
+                value={researchEndDate}
+                onChange={(event) => setResearchEndDate(event.target.value)}
+                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600 outline-none focus:border-indigo-300"
+                title="结束日期"
+              />
+              {(researchStartDate || researchEndDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResearchStartDate('');
+                    setResearchEndDate('');
+                  }}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-500 hover:bg-slate-50"
+                >
+                  清除日期
+                </button>
+              )}
               <button
                 onClick={() => setResearchRefreshKey((key) => key + 1)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-black text-slate-500 hover:bg-slate-50"
