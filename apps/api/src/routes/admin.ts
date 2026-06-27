@@ -164,7 +164,7 @@ function isProtectedProfileOption(option: { category: string; value: string; lab
 const dateOnlySchema = z
   .string()
   .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value))
   .optional()
   .default('');
 
